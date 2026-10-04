@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "energy-price"
+version = "0.1.0"
+description = "CDS1 Balance Energy Price Prediction Challenge"
+requires-python = ">=3.11"
+# Lower bounds: oldest versions the tests passed with (Python 3.11).
+# The versions installed by `make venv` are pinned in requirements.lock.
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pyarrow>=17",
+]
+
+[project.optional-dependencies]
+notebooks = [
+    "ipykernel>=6.29",
+    "jupyter>=1.1",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "realdata: tests against the downloaded Swissgrid files in data/ausgleichpreis",
+]
