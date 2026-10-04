@@ -219,3 +219,26 @@ Ein gutes Ergebnis liefert für klar definierte Horizonte reproduzierbare Progno
 - **[S3]** [SFOE-Hackathons – Energy Data Hackdays 2024, Balance Energy Prices](https://github.com/SFOE-Hackathons/EnergyDataHackdays2024-BalanceEnergyPrices), ältere Daten- und Modellbeispiele.
 
 *Hinweis zur Quellenlogik:* Die [S]-Quellen belegen allgemeine und aktuelle öffentliche Aussagen: Kennzahlen für Mai 2026 stammen aus [A3]. Vereinfachungen und Modellhypothesen sind ausdrücklich als solche markiert. Bei Widersprüchen hat die für den jeweiligen Lieferzeitraum gültige Swissgrid-Abrechnungsregel Vorrang.
+
+# Offene Fragen
+
+1. Wie funktioniert die neue Preisberechnung?
+
+Anhand von einem beispiel:
+┌────────────────────────────────┬────────────────────────────────────────┬──────────────────────────────┐
+│           Situation            │               Alt (2025)               │          Neu (2026)          │
+├────────────────────────────────┼────────────────────────────────────────┼──────────────────────────────┤
+│ System short, eigene BG long   │ erhält (80 − 5) × 0.9 = 67.5 €/MWh,    │ erhält A = 180 €/MWh         │
+│ (hilft)                        │ also unter Spot                        │                              │
+├────────────────────────────────┼────────────────────────────────────────┼──────────────────────────────┤
+│ System short, eigene BG short  │ zahlt (180 + 5) × 1.1 = 203.5 €/MWh    │ zahlt 180 €/MWh              │
+│ (schadet)                      │                                        │                              │
+├────────────────────────────────┼────────────────────────────────────────┼──────────────────────────────┤
+│ System long, eigene BG short   │ –                                      │ "zahlt" B = −60, erhält also │
+│ (hilft)                        │                                        │  60 €/MWh                    │
+├────────────────────────────────┼────────────────────────────────────────┼──────────────────────────────┤
+│ System long, eigene BG long    │ –                                      │ "erhält" B = −60, zahlt also │
+│ (schadet)                      │                                        │  60 €/MWh                    │
+└────────────────────────────────┴────────────────────────────────────────┴──────────────────────────────┘
+
+2. 
