@@ -1,0 +1,6 @@
+{
+  "source": "https://data.geo.admin.ch/ch.bfe.elektrizitaetsproduktionsanlagen/csv/2056/ch.bfe.elektrizitaetsproduktionsanlagen.zip",
+  "pv_plants": 337455,
+  "pv_mw": 8829.2,
+  "share_of_capacity_without_coordinates": 0.0174
+}

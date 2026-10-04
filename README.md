@@ -6,6 +6,8 @@ CDS1 Balance Energy Price Prediction Challenge
 | Path | Content |
 |---|---|
 | [`docs/overview.md`](docs/overview.md) | Domain wiki: actors, how balance energy prices are formed, open questions |
+| [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
+| [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
 
 ## Setup
@@ -14,7 +16,8 @@ Requires Python 3.14 and `make`.
 
 ```bash
 make venv        # create .venv with the exact versions from requirements.lock
-make data        # build data/processed/balance_prices.parquet from the raw files
+make data        # build all tables in data/processed/ from the raw files
+make fetch       # download new Swissgrid and weather data (network)
 make test        # run the unit tests
 make help        # list all targets
 ```
@@ -28,7 +31,13 @@ make help        # list all targets
 | Folder | Content |
 |---|---|
 | `data/ausgleichpreis/<year>/` | Raw Swissgrid balance energy prices, monthly XML and XLSX, unchanged as downloaded |
+| `data/control_area_balance/snapshots/` | Swissgrid control area balance, every downloaded version plus `manifest.csv` (`make fetch-cab`) |
+| `data/weather/ecmwf_ifs/` | Archived ECMWF weather forecasts for six sites, one JSON per model run (`make fetch-weather`) |
+| `data/meta/` | Weather sites, PV capacity per canton, cantonal holidays (`make sites`, `make holidays`) |
+| `data/external/` | Large third-party downloads (BFE plant register), not in git |
 | `data/processed/` | Generated, not in git. Rebuild with `make data` |
+
+See [`docs/data.md`](docs/data.md) for what each source means and why it is available at forecast time.
 
 `balance_prices.parquet` has one row per quarter hour:
 

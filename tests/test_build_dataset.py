@@ -47,3 +47,12 @@ def test_checksums_change_with_content_not_with_modification_time(tmp_path):
 
 def test_checksums_of_empty_directory_is_empty(tmp_path):
     assert checksums.checksums(tmp_path) == []
+
+
+def test_checksums_only_cover_files_matching_the_pattern(tmp_path):
+    (tmp_path / "run_2026-01-14T18.json").write_text("{}")
+    (tmp_path / "manifest.csv").write_text("x")
+
+    lines = checksums.checksums(tmp_path, pattern="run_*.json")
+
+    assert len(lines) == 1 and lines[0].endswith("run_2026-01-14T18.json")

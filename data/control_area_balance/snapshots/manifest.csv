@@ -1,0 +1,2 @@
+file,url,fetched_at_utc,last_modified,sha256,rows,first_timestamp_utc,last_timestamp_utc
+control-area-balance-2026_2026-10-04T13-47-09Z.csv,https://www.swissgrid.ch/dam/jcr:aeff36d3-9538-4d0c-b369-fc22172b8374/control-area-balance-2026.csv,2026-10-04T13:47:09+00:00,"Sun, 04 Oct 2026 01:21:00 GMT",82e7bc861ae4d01c01ec18eed25492539dde599f2a0669d30cf4bbfe385cf751,26492,2025-12-31T23:00:00+00:00,2026-10-03T21:45:00+00:00
