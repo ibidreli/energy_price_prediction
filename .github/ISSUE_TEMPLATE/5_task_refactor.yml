@@ -1,0 +1,47 @@
+name: "🔨 Task / Story / Refactoring"
+description: "General engineering tasks, refactoring, test additions, or documentation improvements"
+title: "[TASK]: "
+labels: ["type: task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for tasks, architectural refactoring, documentation additions, or infrastructure setup.
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Context & Motivation
+      description: Why is this work needed and what problem does it solve?
+      placeholder: "e.g. Refactor weather parsing logic into a modular transformer to allow pluggable feature extractors."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed Implementation / Scope
+      description: What specific files, modules, or documentation sections will be touched?
+      placeholder: "e.g. Move parsing code from src/data/ to src/features/weather.py and add unit test."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria (Definition of Ready to Close)
+      description: List measurable criteria that define when this task is complete.
+      placeholder: |
+        - [ ] All new functions have type hints and docstrings
+        - [ ] Unit tests added with >80% branch coverage
+        - [ ] `make test` runs green
+        - [ ] Documentation in `docs/` updated
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "Medium - Routine enhancement"
+        - "High - Blocks critical modeling or team progress"
+        - "Low - Nice to have / clean up"
+    validations:
+      required: true

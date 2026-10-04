@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 # Lower bounds: oldest versions the tests passed with (Python 3.11).
 # The versions installed by `make venv` are pinned in requirements.lock.
 dependencies = [
+    "holidays>=0.105",
     "numpy>=1.26",
     "pandas>=2.2",
     "pyarrow>=17",

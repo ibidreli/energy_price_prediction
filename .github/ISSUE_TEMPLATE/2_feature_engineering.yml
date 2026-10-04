@@ -1,0 +1,67 @@
+name: "⚙️ Feature Engineering & Preprocessing"
+description: "Propose, design, or implement new features or data transformations"
+title: "[FEAT]: "
+labels: ["type: feature", "area: features"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this issue template when adding new feature transformers, calendar features, weather aggregations, or lag features.
+        *Strict Leakage Rule:* All features for day D must be derivable from information published before D-1 11:00 (Swissgrid <= D-2 24:00, Weather <= D-2 18 UTC).
+  - type: input
+    id: feature_name
+    attributes:
+      label: Feature Name(s) / Identifier
+      description: Name of the feature(s) or transformer module.
+      placeholder: "e.g. pv_weighted_solar_ghi_d_minus_2_lag, rolling_cab_mean_48h"
+    validations:
+      required: true
+  - type: dropdown
+    id: feature_category
+    attributes:
+      label: Feature Category
+      options:
+        - "Calendar & Holiday (cyclical hour/dow, cantonal holidays, DST)"
+        - "Weather Forecast (ECMWF solar radiation, wind, temp, cloud cover)"
+        - "Swissgrid Historical CAB (Control Area Balance lags & rolling stats)"
+        - "Swissgrid Historical Prices (AEP lags, volatility, price regime)"
+        - "Interaction / Non-linear combination"
+        - "External / Macro / Commodity"
+    validations:
+      required: true
+  - type: textarea
+    id: domain_rationale
+    attributes:
+      label: Domain Rationale & Intuition
+      description: Why is this feature expected to improve predictive power for balance energy prices or uncertainty?
+      placeholder: "e.g. High forecasted solar generation in cantons with large PV capacity increases risk of grid surplus (positive balance) driving prices down or negative."
+    validations:
+      required: true
+  - type: textarea
+    id: calculation_logic
+    attributes:
+      label: Mathematical / Transformation Logic
+      description: Describe the exact calculation, window sizes, aggregations, or scaling methods.
+      placeholder: "e.g. Weighted mean of GHI across 6 ECMWF stations using cantonal MW capacity as weights, shifted to D-2 18 UTC run."
+    validations:
+      required: true
+  - type: checkboxes
+    id: leakage_audit
+    attributes:
+      label: Strict Leakage Audit (D-1 11:00 Constraint)
+      description: Mandatory checks to guarantee zero look-ahead bias
+      options:
+        - label: "Swissgrid boundary: Uses only Swissgrid data up to D-2 24:00"
+          required: true
+        - label: "Weather boundary: Uses only ECMWF runs from D-2 18 UTC or earlier"
+          required: true
+        - label: "Pipeline fit inside folds: Any fit/transform logic (imputation, scaling) is fit ONLY on training folds"
+          required: true
+  - type: textarea
+    id: verification_plan
+    attributes:
+      label: Testing & Verification Plan
+      description: How will the feature transformation be tested in `tests/`?
+      placeholder: "e.g. Unit test in tests/test_features.py verifying output shape, null handling, and cutoff boundary."
+    validations:
+      required: true

@@ -1,0 +1,2 @@
+fetched_at_utc,fetched_at_local,last_modified,sha256,last_timestamp_local,days_behind,changed,snapshot
+2026-10-04T15:21:08+00:00,2026-10-04T17:21:08+02:00,"Sun, 04 Oct 2026 01:21:00 GMT",82e7bc861ae4d01c01ec18eed25492539dde599f2a0669d30cf4bbfe385cf751,2026-10-03T23:45:00+02:00,1,False,

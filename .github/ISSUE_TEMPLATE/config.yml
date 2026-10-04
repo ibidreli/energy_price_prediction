@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Project Domain Wiki & Leakage Rules
+    url: https://github.com/OWNER/REPO/blob/main/docs/overview.md
+    about: Read domain overview, price formation, and the D-1 11:00 data leakage rules.
+  - name: Kanban & Project Management Guidelines
+    url: https://github.com/OWNER/REPO/blob/main/docs/project_management.md
+    about: Guidelines for Kanban WIP limits, Definition of Ready (DoR), and Definition of Done (DoD).

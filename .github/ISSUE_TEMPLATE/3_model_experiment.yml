@@ -1,0 +1,75 @@
+name: "🧪 Modeling & Experimentation"
+description: "Plan, track, and document model training, tuning, or benchmarking experiments"
+title: "[EXP]: "
+labels: ["type: experiment", "area: modeling"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for training models, comparing architectures, running hyperparameter optimization, and evaluating uncertainty bounds.
+        *Challenge Requirement:* Point forecast + uncertainty measure per forecast (e.g. 10th/90th percentiles or prediction intervals).
+  - type: input
+    id: model_name
+    attributes:
+      label: Model Architecture / Strategy Name
+      description: Short name for the model family or approach.
+      placeholder: "e.g. LightGBM Quantile Regressor, Conformal Ridge, Temporal Fusion Transformer baseline"
+    validations:
+      required: true
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Experiment Hypothesis
+      description: What are we testing and what performance or uncertainty calibration improvement do we expect?
+      placeholder: "e.g. Tree-based gradient boosting using lagged CAB and PV forecast features will reduce pinball loss on extreme price spikes compared to the persistence baseline."
+    validations:
+      required: true
+  - type: dropdown
+    id: uncertainty_method
+    attributes:
+      label: Uncertainty Quantification Approach
+      description: How is the required uncertainty measure generated?
+      options:
+        - "Quantile Regression (e.g. Pinball loss for 0.1, 0.5, 0.9)"
+        - "Conformal Prediction (distribution-free coverage guarantee)"
+        - "Probabilistic / Residual Modeling (heteroskedastic variance estimation)"
+        - "Ensemble / Bootstrapping"
+        - "Other / Baseline Point Prediction"
+    validations:
+      required: true
+  - type: textarea
+    id: validation_strategy
+    attributes:
+      label: Cross-Validation & Split Strategy
+      description: How is the time-series cross-validation configured? (Never random k-fold on temporal data!)
+      placeholder: "e.g. Expanding window / Purged rolling time-series CV with 1-day embargo matching D-1 11:00 cutoff."
+    validations:
+      required: true
+  - type: textarea
+    id: evaluation_metrics
+    attributes:
+      label: Evaluation Metrics & Baseline Comparison
+      description: What metrics will decide if this model beats the baseline?
+      placeholder: "e.g. Point metrics: MAE, RMSE, WAPE. Uncertainty metrics: Pinball loss, Coverage error (at nominal 80%), Interval width (Winkler score). Baseline: Previous best or persistence."
+    validations:
+      required: true
+  - type: checkboxes
+    id: experiment_rigor
+    attributes:
+      label: Rigor & Reproducibility Checklist
+      description: Ensure honest and reproducible findings
+      options:
+        - label: "Leakage guard: No features use information after D-1 11:00"
+          required: true
+        - label: "Determinism: Fixed random seeds logged and reproducibility verified"
+          required: true
+        - label: "Baseline benchmark: Compared against naive persistence or current benchmark"
+          required: true
+        - label: "Artifact tracking: Model weights, metrics summary, and residual plots saved or logged"
+          required: true
+  - type: textarea
+    id: outcome_summary
+    attributes:
+      label: Results & Decision (Fill upon completion)
+      description: Document final validation metrics and whether this model is adopted.
+      placeholder: "Fill before closing issue: MAE = ..., 80% Coverage = ...%, Decision: Promoted to benchmark / Rejected."

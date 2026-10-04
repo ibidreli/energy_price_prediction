@@ -1,0 +1,63 @@
+name: "🐛 Bug Report & Pipeline Failure"
+description: "Report a bug, pipeline error, data fetch failure, or data discrepancy"
+title: "[BUG]: "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report broken pipelines, failing tests, data ingestion errors, or calculation inconsistencies.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      options:
+        - "Data Ingestion (`make fetch`, Swissgrid / Weather APIs)"
+        - "Data Processing (`make data`, Parquet generation)"
+        - "Feature Engineering (`src/features`)"
+        - "Modeling / Training Pipeline (`src/models`)"
+        - "Evaluation & Metrics"
+        - "Tests / CI (`make test`)"
+        - "Documentation / Notebooks"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Clear explanation of what went wrong.
+      placeholder: "A clear and concise description of the bug or unexpected behavior."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Exact commands executed from repo root.
+      placeholder: |
+        1. Run `make fetch-cab`
+        2. Run `make data`
+        3. See error ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs_traceback
+    attributes:
+      label: Relevant Log Output or Stack Trace
+      description: Paste any error messages or stack traces.
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Python / Environment Details
+      description: OS, Python version (`python --version`), and git commit hash.
+      placeholder: "macOS, Python 3.14.6, git rev-parse HEAD: ..."
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Initial Troubleshooting Checks
+      options:
+        - label: "Verified that virtual environment was activated (`source .venv/bin/activate`)"
+        - label: "Checked whether running `make clean` or rebuilding data fixes the problem"
