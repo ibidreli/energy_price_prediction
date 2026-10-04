@@ -1,0 +1,60 @@
+name: "📊 Exploratory Data Analysis & Data Quality"
+description: "Propose or document exploratory data analysis, data quality checks, or distribution findings"
+title: "[EDA]: "
+labels: ["type: eda", "area: data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this issue template for exploratory data analysis (EDA), assessing data quality, analyzing distributions, or investigating anomalies.
+        *Remember:* Check [docs/data.md](file:///Users/lucamanna/Documents/00_Coding/fhnw/11_Praxismodule/energy_price_prediction/docs/data.md) for data availability cutoffs (D-1 11:00).
+  - type: dropdown
+    id: dataset
+    attributes:
+      label: Dataset / Data Source
+      description: Which dataset or table is the subject of this analysis?
+      options:
+        - "Swissgrid Balance Prices (aep_ct_kwh / regime)"
+        - "Swissgrid Control Area Balance (CAB / snapshots)"
+        - "ECMWF Weather Forecasts (6 sites)"
+        - "Cantonal Solar PV Capacity & Holidays"
+        - "Cross-dataset / Combined Feature Matrix"
+        - "New / External Data Source"
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Analysis Objective & Hypothesis
+      description: What specific questions or hypotheses are being investigated?
+      placeholder: "e.g. Investigate how solar radiation forecasts at Mittelland sites correlate with negative balance energy prices across seasons."
+    validations:
+      required: true
+  - type: textarea
+    id: methodology
+    attributes:
+      label: Methodology & Planned Visualizations
+      description: What statistical techniques, profiling tools, or plots will be used?
+      placeholder: "e.g. Rank correlation matrix, seasonal decomposition, missingness heatmap, quantile distribution by hour-of-day."
+    validations:
+      required: true
+  - type: checkboxes
+    id: data_integrity_checks
+    attributes:
+      label: Data Integrity & Leakage Verification
+      description: Confirm compliance with project rules
+      options:
+        - label: "Temporal integrity: Verified no data points beyond the D-1 11:00 forecast cutoff are used"
+          required: true
+        - label: "Reconciliation: Checked missing values, timestamp alignments (UTC vs Europe/Zurich), and duplicates"
+          required: true
+        - label: "Reproducibility: Analysis will be documented as an executable notebook or script with fixed seeds"
+          required: true
+  - type: textarea
+    id: expected_deliverables
+    attributes:
+      label: Expected Deliverables & Insights
+      description: What will be committed or added to docs/figures upon completion?
+      placeholder: "e.g. Notebook in notebooks/eda/, plot saved to docs/figures/, summary added to docs/data.md."
+    validations:
+      required: true
