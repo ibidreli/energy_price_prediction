@@ -1,0 +1,2 @@
+year,url,fetched_at_utc,last_modified,sha256,changed,snapshot
+2026,https://www.energy-charts.info/charts/filling_level/data/ch/year_storage_2026.json,2026-10-08T15:36:12.947780+00:00,"Thu, 08 Oct 2026 01:05:31 GMT",6604a9d19f001fb588289ac07c16e1fbd43380772fa191dce48415a854c7238b,True,filling-level-2026_2026-10-08T15-36-12-947780Z.json

@@ -22,10 +22,13 @@ REGISTER     := data/external/bfe_anlagen.zip
 REGISTER_URL := https://data.geo.admin.ch/ch.bfe.elektrizitaetsproduktionsanlagen/csv/2056/ch.bfe.elektrizitaetsproduktionsanlagen.zip
 CAB_DATA     := $(OUT_DIR)/control_area_balance.parquet
 WEATHER_DATA := $(OUT_DIR)/weather_forecasts.parquet
+RESERVOIR_DIR := data/reservoirs/snapshots
+RESERVOIR_YEARS := 2026
+RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv lock data fetch fetch-cab fetch-weather sites holidays figures test test-all clean-data
+.PHONY: help venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures test test-all clean-data
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-11s %s\n", $$1, $$2}'
@@ -48,9 +51,12 @@ lock: ## Write the package versions installed in .venv to requirements.lock
 	$(PY) -m pip freeze --exclude-editable >> $(LOCK).tmp
 	@mv $(LOCK).tmp $(LOCK)
 
-data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) ## Build all processed tables (only if inputs changed)
+data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) $(RESERVOIR_DATA) ## Build all processed tables (only if inputs changed)
 
-fetch: fetch-cab fetch-weather ## Download new Swissgrid and weather data (network)
+fetch: fetch-cab fetch-weather fetch-reservoirs ## Download new Swissgrid, weather and reservoir data (network)
+
+fetch-reservoirs: venv ## Store Swiss Energy-Charts reservoir snapshots if they changed
+	$(PY) -m energy_price.fetch_reservoirs --out $(RESERVOIR_DIR) --years $(RESERVOIR_YEARS)
 
 fetch-cab: venv ## Store a new Swissgrid control area balance snapshot if it changed
 	$(PY) -m energy_price.fetch_swissgrid --out $(CAB_DIR)
@@ -73,6 +79,15 @@ holidays: venv ## Write the legal holidays of all cantons
 # the same second as the last build would otherwise go unnoticed and leave the table stale for good.
 CAB_STAMP     := $(OUT_DIR)/.cab_checksums
 WEATHER_STAMP := $(OUT_DIR)/.weather_checksums
+RESERVOIR_STAMP := $(OUT_DIR)/.reservoir_checksums
+
+$(RESERVOIR_STAMP): FORCE | $(VENV)/.installed
+	@mkdir -p $(OUT_DIR)
+	@$(PY) -m energy_price.checksums $(RESERVOIR_DIR) --pattern 'filling-level-*.json' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(RESERVOIR_DATA); fi
+
+$(RESERVOIR_DATA): $(RESERVOIR_STAMP) $(SOURCES) | $(VENV)/.installed
+	$(PY) -m energy_price.build_sources reservoirs --src $(RESERVOIR_DIR) --out $@
 
 $(CAB_STAMP): FORCE | $(VENV)/.installed
 	@mkdir -p $(OUT_DIR)
