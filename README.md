@@ -9,6 +9,7 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
+| [`notebooks/reservoir_demo.ipynb`](notebooks/reservoir_demo.ipynb) | Executable walkthrough: reservoir snapshots, Parquet and selection at forecast time |
 
 ## Setup
 
@@ -17,7 +18,7 @@ Requires Python 3.14 and `make`.
 ```bash
 make venv        # create .venv with the exact versions from requirements.lock
 make data        # build all tables in data/processed/ from the raw files
-make fetch       # download new Swissgrid and weather data (network)
+make fetch       # download new Swissgrid, weather and reservoir data (network)
 make test        # run the unit tests
 make help        # list all targets
 ```
@@ -33,6 +34,7 @@ make help        # list all targets
 | `data/ausgleichpreis/<year>/` | Raw Swissgrid balance energy prices, monthly XML and XLSX, unchanged as downloaded |
 | `data/control_area_balance/snapshots/` | Swissgrid control area balance, every downloaded version plus `manifest.csv` (`make fetch-cab`) |
 | `data/weather/ecmwf_ifs/` | Archived ECMWF weather forecasts for six sites, one JSON per model run (`make fetch-weather`) |
+| `data/reservoirs/snapshots/` | Swiss reservoir filling levels from Energy-Charts/BFE, every distinct JSON version with fetch time and checksum (`make fetch-reservoirs`) |
 | `data/meta/` | Weather sites, PV capacity per canton, cantonal holidays (`make sites`, `make holidays`) |
 | `data/external/` | Large third-party downloads (BFE plant register), not in git |
 | `data/processed/` | Generated, not in git. Rebuild with `make data` |
@@ -47,3 +49,34 @@ See [`docs/data.md`](docs/data.md) for what each source means and why it is avai
 | `aep_ct_kwh` | Single balance energy price `BG-AEP` in ct/kWh. Valid since 2026, published in parallel from 2025-07 |
 | `long_ct_kwh`, `short_ct_kwh` | Two-price system `BG-long` / `BG-short` until 2025-12-31 |
 | `regime` | `two_price` before 2026-01-01, `single_price` from then on |
+
+`reservoir_filling.parquet` contains weekly energy content (`stored_twh`), capacity
+(`capacity_twh`) and filling level (`filling_pct`) for four Swiss regions and the
+Swiss total, retaining every snapshot version. Use `latest_reservoir_report` to select
+the latest report actually observed by D-1 11:00. Historical publication times
+are unknown; a snapshot downloaded today cannot establish availability earlier
+in 2026. See [reservoir data and availability](docs/data.md#6-stauseen-energy-chartsbfe).
+
+```bash
+make fetch-reservoirs                  # fetch the 2026 JSON (network)
+make data                              # rebuild all four processed tables
+# Optional: include the previous year's reservoir history
+make fetch-reservoirs RESERVOIR_YEARS="2025 2026"
+```
+
+On Windows, the same reservoir steps can be run directly from PowerShell after
+creating `.venv` and installing the project (`python -m venv .venv`, then
+`.venv/Scripts/python.exe -m pip install -e ".[dev]"`). This uses the supported
+Python >=3.11 environment; the `make venv` lock workflow above requires 3.14.
+
+```powershell
+.venv/Scripts/python.exe -m energy_price.fetch_reservoirs --out data/reservoirs/snapshots --years 2026
+.venv/Scripts/python.exe -m energy_price.build_sources reservoirs --src data/reservoirs/snapshots --out data/processed/reservoir_filling.parquet
+.venv/Scripts/python.exe -m pytest
+```
+
+Open `notebooks/reservoir_demo.ipynb` with the project's `.venv` kernel and run the
+cells in order. The notebook calls the existing pipeline modules; by default it
+uses the stored snapshots. Set `DOWNLOAD_NEW_DATA = True` in its download cell to
+fetch new data deliberately. Historical forecast selection is demonstrated with
+both real snapshots and an explicitly synthetic revision example.
