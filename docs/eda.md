@@ -1,6 +1,6 @@
-# Erste explorative Analyse
+# Explorative Analyse
 
-> Stand: 2026-10-06. Auftrag: [Issue #3](https://github.com/ibidreli/energy_price_prediction/issues/3). Alle Zahlen stammen aus [`notebooks/01_eda.ipynb`](../notebooks/01_eda.ipynb) und lassen sich mit `make data` und `make notebook` reproduzieren. Der automatische Überblick pro Tabelle entsteht mit `make profile` (HTML in `reports/`, nicht versioniert). Deutungen sind ausdrücklich als Vermutung markiert.
+> Stand: 2026-10-07. Erste Runde (H1 bis H8): [Issue #3](https://github.com/ibidreli/energy_price_prediction/issues/3), [`notebooks/01_eda.ipynb`](../notebooks/01_eda.ipynb). Zweite Runde (H9 bis H12): [`notebooks/02_eda.ipynb`](../notebooks/02_eda.ipynb). Alle Zahlen lassen sich mit `make data` und `make notebook` reproduzieren. Der automatische Überblick pro Tabelle entsteht mit `make profile` (HTML in `reports/`, nicht versioniert). Deutungen sind ausdrücklich als Vermutung markiert.
 
 ## Kurzfassung
 
@@ -9,6 +9,8 @@
 3. **Die Sonne bestimmt das Preisniveau, nicht die Richtung.** Die Strahlungsprognose hängt mit der TSI praktisch nicht zusammen (Rangkorrelation −0.07), mit dem Preis bei long aber stark (−0.58).
 4. **Die Owner-Entscheidung „nur Daten ab 2026“ wird gestützt.** Die parallel gerechneten Preise von 2025 sind deutlich anders verteilt (Juli und August: 36 % gegenüber 11 % negativ).
 5. **Extreme und Unsicherheit hängen von Uhrzeit und Saison ab.** Tiefe Extreme gibt es nur mittags bei long, die Streuung ist am Nachmittag dreimal so gross wie in der Nacht.
+6. **Ausser Strahlung und Bewölkung bringt das Wetter wenig.** Bewölkung macht die Systembilanz unruhiger (mittags 62 gegenüber 106 MW |TSI| bei klar und bedeckt), das Preisband aber nicht breiter (H9). Temperatur, Wind, Feuchte und Niederschlag tragen bei gleicher Uhrzeit und Strahlung nichts bei (H10).
+7. **Vergangene Preise sagen wenig, und es gibt einen Bruch im Frühling.** Die Rangkorrelation mit dem Preis derselben Viertelstunde 2 Tage zuvor ist 0.16; Quantile der Vergangenheit decken höchstens 75 % statt 80 % ab (H11). Von Februar bis April ändert sich die Preisverteilung stark, ab April ist sie stabil (H12).
 
 ## Hypothesen
 
@@ -22,6 +24,10 @@
 | H6 | Preis und TSI unterscheiden sich an Feiertagen und Brückentagen von normalen Werktagen und Wochenenden. | Feiertage sind kantonal; nur 4 von 24 gelten überall. | **Preis: Hinweis ja**, nicht abgesichert (5 Tage); **TSI: nein**; Brückentage: keine Aussage |
 | H7 | Der Preis hat ein typisches Tagesprofil über die 96 Viertelstunden, und seine Streuung hängt von der Viertelstunde ab. | Grundlage für Baseline und Unsicherheitsbänder. | **bestätigt**, zusätzlich stark abhängig von der Saison |
 | H8 | Die TSI kippt innerhalb jeder Stunde, weil Fahrpläne zur vollen Stunde in Stufen wechseln, Verbrauch und PV aber gleitend. Die Richtung folgt der Steigung der Residuallast (Verbrauch minus PV). *Neu aus dem Review: Warum ist die erste Viertelstunde öfter short?* | Erklärt das Muster aus H1 und liefert Merkmale, die um 11:00 bekannt sind. | **bestätigt** (mit den Daten vereinbar; Fahrpläne und Verbrauch selbst sind nicht in den Daten) |
+| H9 | Wechselhaftes Wetter macht die Systembilanz unruhiger, und der Preis streut breiter. Gemessen über Bewölkung, Streuung der Strahlungsprognose zwischen den Standorten und Sprünge von Stunde zu Stunde. *Zweite Runde.* | Ein Merkmal für die **Breite** des Unsicherheitsbands. | **teilweise:** \|TSI\| ja, Preisband nein |
+| H10 | Temperatur, Wind, Niederschlag, Feuchte und Bewölkung nach Höhe tragen zusätzlich zur Strahlung bei, auch bei gleicher Uhrzeit und Strahlung. *Zweite Runde.* | Entscheidet, welche Wettervariablen ins Modell kommen. | **widerlegt** |
+| H11 | Das Preisniveau bis D−2 sagt etwas über den Liefertag (gleiche Viertelstunde 2 bis 28 Tage zuvor, Quantile der letzten Wochen). *Zweite Runde.* | Grundlage und Fenster der naiven Baseline. | **schwach**; Quantile der Vergangenheit sind zu schmal |
+| H12 | Die Zusammenhänge sind über die Monate stabil. *Zweite Runde.* | Bestimmt die Länge des Trainingsfensters. | **Bruch im Frühling**, ab April stabil |
 
 ## Vorgehen
 
@@ -29,7 +35,7 @@
 2. **Manuelle Analyse** nach dem Skill `exploratory-data-analysis`: Typen, Fehlwerte, Duplikate, Verteilungen, Ausreisser, Zusammenhänge, Zeitmuster. Danach die Hypothesen H1 bis H7.
 3. **Wiederverwendete Berechnungen** liegen getestet in `src/energy_price/eda.py` (`tests/test_eda.py`): Viertelstunde der Lokalzeit, Feiertagsanteil nach PV-Leistung, Tagtypen, Vergleich der Richtung über Tage, Extremereignisse, Wetter von Stunden auf Viertelstunden.
 
-**Zeiträume:** Preise gibt es bis 31.08.2026, die TSI bis 03.10.2026. Alles, was TSI und Preis zusammen zeigt (H1, H3, H4, H6, H7, H8), nutzt Januar bis August. H2 betrachtet nur die TSI und nutzt den ganzen Zeitraum.
+**Zeiträume:** Preise gibt es bis 31.08.2026, die TSI in der ersten Runde bis 03.10.2026 (Snapshot vom 04.10.). Alles, was TSI und Preis zusammen zeigt (H1, H3, H4, H6, H7, H8), nutzt Januar bis August. H2 betrachtet nur die TSI und nutzt den ganzen Zeitraum. Die zweite Runde (H9 bis H12) nutzt nur Januar bis August und hängt deshalb nicht davon ab, welcher Snapshot der neueste ist. Ein erneuter Lauf von `01_eda.ipynb` mit einem neueren Snapshot verschiebt die Zahlen zu H2 leicht.
 
 ## Datenqualität
 
@@ -42,6 +48,7 @@
 | Wetterlücken 24.06.2026 (Strahlung, Sonnenscheindauer, Wind 10 m, Luftfeuchte) und 12.06.2026 (Luftfeuchte) | Archivlücke, unabhängig vom Wetter; leer lassen |
 | **Wetter: Jeder Wert um 00:00 Lokalzeit steht zweimal in der Tabelle**, als letzte Stunde des Laufs für D−1 und als erste des Laufs für D | Wer nach Zeitstempel mittelt, mischt den Lauf für D in D−1 23:00 bis 23:45 ein. Dieser Lauf erscheint erst nach der Prognose für D−1: ein Datenleck. `eda.weather_to_quarter_hours` nimmt nur die Zeile des passenden Liefertags (getestet) |
 | Preis stark linksschief (−688 bis +172 ct/kWh), rund 5 % Ausreisser nach IQR-Regel | echte Werte, nicht entfernen; robuste Verluste und Quantile verwenden |
+| **Swissgrid überschreibt ältere Werte:** Zwischen den Snapshots vom 04.10. und 07.10. hat sich genau eine Viertelstunde geändert: Die Lücke vom 02.10. 14:00 wurde gefüllt, die TSI dort um 0.1 MW korrigiert. Preise (auch die provisorischen vom September) blieben gleich | beobachten; die grosse Korrektur kommt mit den finalen Septemberpreisen bis 21.10.2026 |
 | Knappheitsschwellen −1200 / +1000 MW wurden nie erreicht (TSI −1072 bis +792 MW) | geklärt: ohne Wirkung auf unsere Daten, siehe [`overview.md`](overview.md#preisformel-seit-2026-einpreissystem) |
 
 Zuordnung von Wetter zu Viertelstunden: Die Viertelstunden h−1:00 bis h−1:45 erhalten den Wert mit Zeitstempel h:00. Das passt genau zu Strahlung und Niederschlag (Wert der vorangehenden Stunde); Momentwerte wie Bewölkung liegen dann höchstens 45 Minuten neben ihrem Zeitstempel. Mittel über die sechs Standorte gewichtet nach PV-Anteil.
@@ -190,6 +197,73 @@ Feiertag heisst: Montag bis Freitag, an dem Kantone mit mindestens 50 % der PV-L
 - **Der Preis folgt:** In Stunden, die von short nach long kippen, ist der Median-Preis um :00 16.9 und um :45 8.0 ct/kWh; in den anderen Stunden umgekehrt (8.8 und 16.5).
 - **Nicht prüfbar mit unseren Daten:** der Anteil des Verbrauchs. Dafür bräuchte es Last- oder Fahrplandaten, siehe Teamfrage zu ENTSO-E unten.
 
+## Zweite Runde: Ergebnisse H9 bis H12
+
+Zeitraum: Viertelstunden mit finalem Preis, 01.01. bis 31.08.2026. Wetter aus dem Lauf D−2 18 UTC, vergangene Preise über `known_at_issue()`. Neue, getestete Funktionen in `src/energy_price/eda.py`: `site_spread`, `daily_mean_abs_change`, `same_slot_pairs`, `past_slot_quantiles`, `ks_distance`.
+
+### H9: Wetter als Unsicherheitssignal
+
+**Hypothese:** Wechselhaftes Wetter macht die Systembilanz unruhiger, und der Preis streut breiter.
+**Ergebnis: teilweise.** Die Systembilanz ja, das Preisband nicht.
+
+![Bewölkung, |TSI| und Preisband](figures/eda2_weather_uncertainty.png)
+
+- **Bewölkung:** Zwischen 10 und 14 Uhr ist das mittlere |TSI| 62 MW bei klarem Himmel, 93 MW bei wechselnder und 106 MW bei bedeckter Bewölkung. Von März bis August ist |TSI| bei klarem Himmel in jedem Monat am kleinsten (Juli: 53, 83 und 117 MW); im Januar und Februar nicht. Anders als erwartet ist im Sommer „bedeckt“ unruhiger als „wechselnd“; eine Erklärung ist nicht geprüft.
+- **Streuung zwischen den Standorten** (relativ zur Strahlung): im obersten Drittel zu jeder Tageszeit grösseres |TSI| als im untersten (mittags 63 gegenüber 107 MW).
+- **Sprünge über den Tag:** schwach, innerhalb der Monate im Median +0.22 mit |TSI|.
+- **Preisband (P90 − P10):** keine durchgehende Ordnung nach Bewölkung. Die Breite folgt vor allem der Saison.
+
+### H10: weitere Wettervariablen
+
+**Hypothese:** Temperatur, Wind, Niederschlag, Feuchte und Bewölkung nach Höhe tragen zusätzlich zur Strahlung bei.
+**Ergebnis: widerlegt.**
+
+![Weitere Wettervariablen](figures/eda2_weather_variables.png)
+
+- Innerhalb gleicher Stunde und gleichen Strahlungsdrittels liegen alle Mediane der Rangkorrelation nahe null: mit |TSI| −0.04 bis +0.09, mit dem Preis −0.02 bis +0.07. Zum Vergleich die Strahlung innerhalb derselben Stunden: −0.16 mit dem Preis.
+- Nachts ebenso: Temperatur +0.05, Wind 100 m −0.04, Feuchte −0.03.
+- Die fünf Strahlungsvariablen hängen paarweise mit 0.92 bis 0.99 zusammen; eine genügt.
+- **Vorbehalt:** Im Herbst und Winter könnte die Temperatur (Heizlast) wichtiger werden; Herbstmonate fehlen in den Daten.
+
+### H11: vergangene Preise
+
+**Hypothese:** Das Preisniveau bis D−2 sagt etwas über den Liefertag.
+**Ergebnis: nur schwach.**
+
+![Quantile der Vergangenheit](figures/eda2_past_windows.png)
+
+| Abstand zur gleichen Viertelstunde | 2 Tage | 3 Tage | 7 Tage | 14 Tage | 28 Tage |
+|---|---|---|---|---|---|
+| Rangkorrelation mit dem Liefertag | 0.16 | 0.13 | 0.12 | 0.13 | 0.11 |
+
+| Fenster für P10, P50, P90 je Viertelstunde | Abdeckung (Ziel 80 %) | mittlere Breite [ct/kWh] | MAE des Medians [ct/kWh] |
+|---|---|---|---|
+| 7 Tage | 61 % | 22.9 | 10.48 |
+| 14 Tage | 68 % | 24.2 | 9.99 |
+| 28 Tage | 72 % | 25.0 | 9.85 |
+| **56 Tage** | **75 %** | 24.7 | **9.72** |
+| alles seit 01.01. | 73 % | 22.3 | 9.73 |
+
+Verglichen auf denselben 186 Liefertagen ab 27.02.2026. Das ist eine Vorschau auf die naive Baseline, keine Modellbewertung. Quantile der Vergangenheit sind zu schmal; „alles“ ist schmaler als 56 Tage, weil es die ruhigen Wintermonate einmischt. **Vorbehalt:** finale statt provisorischer Preise.
+
+### H12: Stabilität über die Monate
+
+**Hypothese:** Die Zusammenhänge sind über die Monate stabil.
+**Ergebnis: Bruch im Frühling, ab April weitgehend stabil.**
+
+![Stabilität über die Monate](figures/eda2_stability.png)
+
+- **Preisverteilung:** KS-Abstand zum Vormonat 0.24 bis 0.27 von Februar bis April, ab Mai 0.09 bis 0.16. Das Rauschen zwischen den Hälften eines Monats liegt bei 0.08 bis 0.18, im März bei 0.28 (Übergang mitten im März). Negative Preise: 4 bis 7 % von Januar bis März, 13 bis 17 % von April bis Juli.
+- **Strahlung und Preis (H3):** bei long Januar −0.21, März −0.46, ab April −0.54 bis −0.64.
+- **Kippen in der Stunde (H8):** nachmittags stabil (−96 bis −141 MW), abends und nachts von Januar bis August abnehmend (+104 auf +45 MW).
+- **Tagesprofil (H7):** Januar hängt mit den Sommermonaten nur zu 0.29 bis 0.45 zusammen, Juli mit April bis August zu 0.57 bis 0.66.
+
+### Empfehlungen für Baseline und Merkmale
+
+- **Wettervariablen:** `shortwave_radiation` (Niveau und Steigung über die Stunde) und `cloud_cover` oder die Standort-Streuung. Die übrigen vier Strahlungsvariablen, Temperatur, Wind, Feuchte, Niederschlag und Schneefall vorerst weglassen.
+- **Trainingsfenster:** Baseline mit gleitenden 8 Wochen; Modelle mit allen Daten seit Januar plus Saisonsignal (Strahlung, Tageslänge oder Monat); beide im Backtest vergleichen. Die Wintermonate nicht wegwerfen: Ab Oktober bewegen sich die Liefertage auf den Winter zu, und Januar bis März sind dann die einzigen ähnlichen Monate unter dem neuen Preissystem.
+- **Unsicherheitsband:** Quantile der Vergangenheit allein sind zu schmal (höchstens 75 % Abdeckung); Kalibrierung einplanen und die Abdeckung je Monat prüfen ([`evaluation.md`](evaluation.md)).
+
 ## Merkmals-Kandidaten
 
 Nur Merkmale, die um **11:00 an D−1** bekannt sind. Swissgrid-Merkmale gelten als vorläufig, bis die Grenze D−2 bestätigt ist (ca. 18.10.2026), und beruhen auf finalen statt provisorischen Werten (messbar ab ca. 21.10.2026).
@@ -205,7 +279,9 @@ Nur Merkmale, die um **11:00 an D−1** bekannt sind. Swissgrid-Merkmale gelten 
 | Saison (Monat oder Tageslänge) | Kalender | immer | mittel, mit Risiko | H7: Profil hängt stark von der Saison ab; nur 8 Monate Daten, darum eher über die Strahlung abbilden |
 | Mittlere TSI bzw. short-Anteil an D−2 | Swissgrid über `known_at_issue()` | vermutlich (Annahme D−2) | gering | H2: Autokorrelation 0.15 nach 2 Tagen |
 | Richtung zur gleichen Uhrzeit an D−2 oder D−7 | Swissgrid über `known_at_issue()` | vermutlich (Annahme D−2) | gering | H2: 54 % gegenüber 50.5 % Zufall |
-| Preisniveau der Vergangenheit (z.B. Median je Viertelstunde bis D−2) | Swissgrid über `known_at_issue()` | vermutlich; um 11:00 nur provisorische Werte | **nicht untersucht** | in dieser EDA nicht gemessen; eigenes Issue |
+| Preisniveau der Vergangenheit (Quantile je Viertelstunde über 8 Wochen bis D−2) | Swissgrid über `known_at_issue()` | vermutlich; um 11:00 nur provisorische Werte | gering, als Ausgangspunkt der Baseline | H11: Rangkorrelation 0.16 nach 2 Tagen; Quantile über 56 Tage decken 75 % statt 80 % ab |
+| Bewölkung bzw. Streuung der Strahlungsprognose zwischen den Standorten | ECMWF, Lauf D−2 18 UTC | ja | mittel für die Grösse von \|TSI\|, gering für das Preisband | H9: mittags 62 gegenüber 106 MW \|TSI\| bei klar und bedeckt, ab März in jedem Monat |
+| Temperatur, Wind, Feuchte, Niederschlag, übrige Strahlungsvariablen | ECMWF, Lauf D−2 18 UTC | ja | **keiner**, vorerst weglassen | H10: bei gleicher Uhrzeit und Strahlung alle Mediane nahe null; Strahlungsvariablen untereinander 0.92 bis 0.99 |
 | Steigung der Lastprognose über die Stunde | ENTSO-E (nicht erhoben) | **unbelegt**, siehe Teamfrage | vermutlich hoch für Abend, Nacht und Morgen | H8: dort kippt die TSI ohne Sonne; die Strahlung erklärt diese Stunden nicht |
 
 **Verboten**, auch wenn sie den Preis gut erklären: TSI, Abrufe und Preis der Zielviertelstunde oder von D−1 (Rangkorrelation TSI und Preis −0.77, aber um 11:00 unbekannt), jeder feste Lag statt `known_at_issue()`, der Day-Ahead-Spotpreis des Liefertags (erst ab 11:10 publiziert).
