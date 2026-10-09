@@ -13,8 +13,13 @@ from energy_price.eda import (
     clock_slot,
     day_types,
     direction_matches,
+    daily_mean_abs_change,
     extreme_events,
     holiday_pv_share,
+    ks_distance,
+    past_slot_quantiles,
+    same_slot_pairs,
+    site_spread,
     weather_to_quarter_hours,
     within_hour_trend,
 )
@@ -245,3 +250,119 @@ def test_within_hour_trend_drops_incomplete_and_repeated_hours():
     out = within_hour_trend(frame)
 
     assert out["hour"].tolist() == [1, 3]
+
+
+def test_site_spread_is_the_standard_deviation_over_the_sites():
+    rows = weather_frame(["2026-07-16"] * 3, ["2026-07-16 10:00"] * 3, ["A", "B", "C"], [100.0, 300.0, np.nan])
+
+    out = site_spread(rows, ["radiation"])
+
+    assert out["radiation"].tolist() == [100.0] * 4  # std of 100 and 300; C has no value
+
+
+def test_site_spread_needs_two_sites_and_keeps_the_own_delivery_day_at_midnight():
+    # 22:00 UTC is 00:00 local, in the runs for 16.07. and 17.07.; only the run for 16.07. may describe 16.07. 23:xx
+    rows = weather_frame(["2026-07-16", "2026-07-16", "2026-07-17", "2026-07-17"], ["2026-07-16 22:00"] * 4,
+                         ["A", "B", "A", "B"], [0.0, 10.0, 500.0, 900.0])
+
+    assert site_spread(rows, ["radiation"])["radiation"].tolist() == [5.0] * 4
+    assert site_spread(rows.iloc[[0]], ["radiation"])["radiation"].isna().all()
+
+
+def test_daily_mean_abs_change_stays_within_the_local_day():
+    stamps = pd.date_range("2026-07-15 22:00", "2026-07-16 01:00", freq="15min", inclusive="left", tz="UTC")
+    # 15.07. 22:00 UTC = 16.07. 00:00 local; hourly values 0, 100, 300; 21:00 UTC belongs to 15.07. local
+    values = pd.Series(np.repeat([0.0, 100.0, 300.0], 4), index=stamps)
+    before = pd.Series([50.0] * 4, index=pd.date_range("2026-07-15 21:00", periods=4, freq="15min", tz="UTC"))
+
+    out = daily_mean_abs_change(pd.concat([before, values]))
+
+    assert out[dt.date(2026, 7, 16)] == pytest.approx(150.0)  # mean of 100 and 200, not the step from 50
+    assert dt.date(2026, 7, 15) not in out.index  # a single hour has no change
+
+
+def test_same_slot_pairs_match_the_clock_time_lag_days_earlier():
+    stamps = quarter_hours("2026-07-01 00:00", "2026-07-04 00:00")
+    frame = pd.DataFrame({"timestamp_local": stamps, "aep_ct_kwh": stamps.dt.day * 10.0})
+
+    pairs = same_slot_pairs(frame, [2])
+
+    assert len(pairs) == 96  # only 03.07. has a value two days earlier
+    assert (pairs["value"] == 30.0).all() and (pairs["earlier"] == 10.0).all()
+
+
+def test_past_slot_quantiles_use_only_the_window_up_to_d_minus_2():
+    stamps = quarter_hours("2026-07-01 00:00", "2026-07-17 00:00")
+    frame = pd.DataFrame({"timestamp_local": stamps, "aep_ct_kwh": stamps.dt.day.astype(float)})
+
+    out = past_slot_quantiles(frame, dt.date(2026, 7, 16), window_days=7, quantiles=(0.0, 1.0))
+
+    # days 8 to 14 July: nothing from 15 or 16 July (D-1 and D), nothing before the window
+    assert out.loc[0, 0.0] == 8.0
+    assert out.loc[95, 1.0] == 14.0
+    assert list(out.index) == list(range(96))
+
+
+@pytest.mark.parametrize(("start", "end", "hours"), [
+    ("2026-10-25 00:00", "2026-10-26 00:00", 25),  # switch to winter time: 25 hours
+    ("2026-03-29 00:00", "2026-03-30 00:00", 23),  # switch to summer time: 23 hours
+])
+def test_daily_mean_abs_change_works_on_switch_days_with_a_local_index(start, end, hours):
+    stamps = pd.date_range(pd.Timestamp(start, tz=TZ), pd.Timestamp(end, tz=TZ), freq="15min", inclusive="left")
+    values = pd.Series(np.repeat(np.arange(hours) * 10.0, 4), index=stamps)  # +10 per hour
+
+    out = daily_mean_abs_change(values)
+
+    assert out[pd.Timestamp(start).date()] == pytest.approx(10.0)
+
+
+def test_daily_mean_abs_change_does_not_bridge_a_missing_hour():
+    stamps = pd.date_range("2026-07-16 06:00", periods=4 * 4, freq="15min", tz=TZ)
+    values = pd.Series(np.repeat([0.0, 10.0, 20.0, 30.0], 4), index=stamps)
+    values = values[values.index.hour != 8]  # 08:00 to 08:45 missing
+
+    out = daily_mean_abs_change(values)
+
+    assert out[dt.date(2026, 7, 16)] == pytest.approx(10.0)  # only 06->07; 07->09 is not one hour
+
+
+def test_same_slot_pairs_average_the_repeated_hour_and_refuse_bad_lags():
+    stamps = quarter_hours("2026-10-24 00:00", "2026-10-27 00:00")
+    frame = pd.DataFrame({"timestamp_local": stamps, "aep_ct_kwh": 1.0})
+
+    pairs = same_slot_pairs(frame, [1])
+
+    assert pairs.groupby("date").size().to_dict() == {dt.date(2026, 10, 25): 96, dt.date(2026, 10, 26): 96}
+    for bad in ([], [0], [-1]):
+        with pytest.raises(ValueError, match="lags_days"):
+            same_slot_pairs(frame, bad)
+
+
+def test_past_slot_quantiles_across_the_switch_to_winter_time():
+    stamps = quarter_hours("2026-10-23 00:00", "2026-10-28 00:00")
+    frame = pd.DataFrame({"timestamp_local": stamps, "aep_ct_kwh": stamps.dt.day.astype(float)})
+
+    out = past_slot_quantiles(frame, dt.date(2026, 10, 27), window_days=2, quantiles=(0.0, 1.0))
+
+    assert list(out.index) == list(range(96))
+    assert out[0.0].min() == 24.0 and out[1.0].max() == 25.0  # 24. and 25.10. only, nothing from 26.10. (D-1)
+
+
+def test_past_slot_quantiles_refuse_an_empty_or_invalid_window():
+    frame = pd.DataFrame({"timestamp_local": quarter_hours("2026-07-01", "2026-07-02"), "aep_ct_kwh": 1.0})
+
+    with pytest.raises(ValueError, match="no values known"):
+        past_slot_quantiles(frame, dt.date(2026, 9, 1), window_days=7)
+    with pytest.raises(ValueError, match="at least 1"):
+        past_slot_quantiles(frame, dt.date(2026, 7, 5), window_days=0)
+
+
+def test_ks_distance_drops_missing_values_and_refuses_empty_samples():
+    assert ks_distance(pd.Series([1.0, np.nan]), pd.Series([1.0])) == 0.0
+    with pytest.raises(ValueError, match="at least one value"):
+        ks_distance(pd.Series([np.nan]), pd.Series([1.0]))
+
+
+def test_ks_distance_is_zero_for_equal_and_one_for_disjoint_samples():
+    assert ks_distance(pd.Series([1.0, 2.0, 3.0]), pd.Series([3.0, 2.0, 1.0])) == 0.0
+    assert ks_distance(pd.Series([1.0, 2.0]), pd.Series([5.0, 6.0])) == 1.0

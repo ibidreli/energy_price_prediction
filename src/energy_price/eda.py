@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import datetime as dt
 
+import numpy as np
 import pandas as pd
+
+from energy_price.availability import known_at_issue
 
 WORKDAY = "Werktag"
 SATURDAY = "Samstag"
@@ -183,18 +186,120 @@ def weather_to_quarter_hours(weather: pd.DataFrame, weights: pd.Series, columns:
     unknown = set(weather["site"]) - set(weights.index)
     if unknown:
         raise ValueError(f"no weight for sites {sorted(unknown)}")
-    covered_day = (weather["valid_time_local"] - pd.Timedelta(hours=1)).dt.tz_localize(None).dt.normalize()
-    weather = weather[covered_day == pd.to_datetime(weather["delivery_day"])]
-    if weather.duplicated(["site", "valid_time_utc"]).any():
-        raise ValueError("more than one value per site and hour after selecting the delivery day")
+    weather = _rows_of_own_delivery_day(weather)
     w = weather["site"].map(weights)
     values = weather[columns]
     numerator = values.mul(w, axis=0).groupby(weather["valid_time_utc"]).sum(min_count=1)
     denominator = values.notna().mul(w, axis=0).groupby(weather["valid_time_utc"]).sum()
-    hourly = numerator / denominator.where(denominator > 0)
+    return _hours_to_quarter_hours(numerator / denominator.where(denominator > 0))
 
+
+def _rows_of_own_delivery_day(weather: pd.DataFrame) -> pd.DataFrame:
+    """Keep the stamp D 00:00 only in the run of the delivery day whose last hour it describes.
+
+    Reason in the docstring of ``weather_to_quarter_hours``.
+    """
+    covered_day = (weather["valid_time_local"] - pd.Timedelta(hours=1)).dt.tz_localize(None).dt.normalize()
+    weather = weather[covered_day == pd.to_datetime(weather["delivery_day"])]
+    if weather.duplicated(["site", "valid_time_utc"]).any():
+        raise ValueError("more than one value per site and hour after selecting the delivery day")
+    return weather
+
+
+def _hours_to_quarter_hours(hourly: pd.DataFrame) -> pd.DataFrame:
+    """The quarter hours h-1:00 to h-1:45 take the value stamped h:00 (index ``timestamp_utc``)."""
     start = hourly.index.min() - pd.Timedelta(hours=1)
     stamps = pd.date_range(start, hourly.index.max(), freq="15min", inclusive="left", name="timestamp_utc")
     out = hourly.reindex(stamps.floor("h") + pd.Timedelta(hours=1))
     out.index = stamps
     return out
+
+
+def site_spread(weather: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """Standard deviation over the sites per hour (unweighted, ddof=0), spread to quarter hours.
+
+    A measure of how differently the forecast sees the regions. Missing if fewer than two sites have a
+    value. Same delivery-day selection and mapping as ``weather_to_quarter_hours``, so it is known at the
+    issue time as well.
+    """
+    weather = _rows_of_own_delivery_day(weather)
+    grouped = weather.groupby("valid_time_utc")[columns]
+    return _hours_to_quarter_hours(grouped.std(ddof=0).where(grouped.count() >= 2))
+
+
+def daily_mean_abs_change(values: pd.Series, tz: str = "Europe/Zurich") -> pd.Series:
+    """Mean absolute change between consecutive hours, per local calendar day.
+
+    ``values`` is quarter-hourly with a timezone-aware index, as from ``weather_to_quarter_hours``; the
+    four quarter hours of an hour share one value, so the first one stands for the hour. Changes across
+    midnight are left out, so each day only uses its own hours.
+    """
+    if values.index.tz is None:
+        raise TypeError("values must have a timezone-aware index")
+    # Floor in UTC: flooring a local index fails on the repeated hour of the switch to winter time.
+    utc = values.index.tz_convert("UTC")
+    hourly = values.groupby(utc.floor("h")).first()
+    local_day = pd.Series(hourly.index.tz_convert(tz).date, index=hourly.index)
+    consecutive = hourly.index.to_series().diff() == pd.Timedelta(hours=1)  # no bridging over missing hours
+    change = hourly.diff().abs()[local_day.eq(local_day.shift()) & consecutive]
+    return change.groupby(local_day[change.index]).mean().rename("mean_abs_change")
+
+
+def same_slot_pairs(frame: pd.DataFrame, lags_days: list[int], value: str = "aep_ct_kwh",
+                    time_column: str = "timestamp_local") -> pd.DataFrame:
+    """Each quarter hour next to the value at the same local clock time ``lag`` days earlier.
+
+    Columns ``date``, ``slot``, ``lag_days``, ``value`` and ``earlier``; only pairs where both exist. The two
+    passes of the repeated hour on the switch to winter time are averaged. A lag of at least 2 days is known
+    at the issue time for every target quarter hour (end of D-2); a lag of 1 day is not.
+    """
+    _require_tz(frame[time_column], time_column)
+    if not lags_days or any(lag < 1 for lag in lags_days):
+        raise ValueError(f"lags_days must be a non-empty list of lags of at least 1 day, got {lags_days}")
+    data = pd.DataFrame({
+        "date": pd.to_datetime(frame[time_column].dt.date),
+        "slot": clock_slot(frame[time_column]),
+        "value": frame[value],
+    })
+    wide = data.groupby(["date", "slot"])["value"].mean().unstack().asfreq("D")
+    rows = []
+    for lag in lags_days:
+        pairs = pd.DataFrame({"value": wide.stack(), "earlier": wide.shift(lag).stack()}).dropna()
+        rows.append(pairs.assign(lag_days=lag).reset_index())
+    out = pd.concat(rows, ignore_index=True)
+    out["date"] = out["date"].dt.date
+    return out[["date", "slot", "lag_days", "value", "earlier"]]
+
+
+def past_slot_quantiles(frame: pd.DataFrame, day: dt.date, window_days: int,
+                        quantiles: tuple[float, ...] = (0.1, 0.5, 0.9), value: str = "aep_ct_kwh",
+                        time_column: str = "timestamp_local") -> pd.DataFrame:
+    """Quantiles of ``value`` per local clock slot over the last ``window_days`` days known for ``day``.
+
+    Uses ``known_at_issue``: the window ends with D-2 and covers the calendar days D-1-window_days to D-2.
+    Index: slot (0 to 95), columns: the quantiles. Every quarter hour counts once, so on the switch to
+    winter time both passes of the repeated hour enter (unlike ``same_slot_pairs``, which averages them).
+    """
+    if window_days < 1:
+        raise ValueError(f"window_days must be at least 1, got {window_days}")
+    known = known_at_issue(frame, day, time_column)
+    first = day - dt.timedelta(days=1 + window_days)
+    known = known[known[time_column].dt.date >= first]
+    if known.empty:
+        raise ValueError(f"no values known for {day} in the {window_days} days up to D-2")
+    return known.groupby(clock_slot(known[time_column]))[value].quantile(list(quantiles)).unstack()
+
+
+def ks_distance(a: pd.Series, b: pd.Series) -> float:
+    """Kolmogorov-Smirnov distance: largest gap between the two empirical distribution functions (0 to 1).
+
+    No p-value on purpose: neighbouring quarter hours are strongly dependent, a standard test would be far
+    too confident. Missing values are dropped; an empty sample is an error.
+    """
+    x, y = (np.sort(v[~np.isnan(v)]) for v in (np.asarray(a, dtype=float), np.asarray(b, dtype=float)))
+    if len(x) == 0 or len(y) == 0:
+        raise ValueError("both samples need at least one value")
+    grid = np.concatenate([x, y])
+    cdf_x = np.searchsorted(x, grid, side="right") / len(x)
+    cdf_y = np.searchsorted(y, grid, side="right") / len(y)
+    return float(np.max(np.abs(cdf_x - cdf_y)))
