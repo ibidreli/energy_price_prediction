@@ -7,6 +7,7 @@ CDS1 Balance Energy Price Prediction Challenge
 |---|---|
 | [`docs/overview.md`](docs/overview.md) | Domain wiki: actors, how balance energy prices are formed, open questions |
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
+| [`docs/metric.md`](docs/metric.md) | Evaluation metric (MAE, pinball loss, coverage) and baseline |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
 
