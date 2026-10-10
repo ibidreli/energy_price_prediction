@@ -25,7 +25,7 @@ WEATHER_DATA := $(OUT_DIR)/weather_forecasts.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv lock data fetch fetch-cab fetch-weather sites holidays figures test test-all clean-data
+.PHONY: help venv lock data fetch fetch-cab fetch-weather sites holidays figures profile notebook test test-all clean-data
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-11s %s\n", $$1, $$2}'
@@ -102,6 +102,34 @@ $(RAW_STAMP): FORCE | $(VENV)/.installed
 
 $(DATASET): $(RAW_STAMP) $(SOURCES) | $(VENV)/.installed
 	$(PY) -m energy_price.build_dataset --raw $(RAW_DIR) --out $@
+
+# fg-data-profiling requires pandas < 3, the project pins pandas 3. The profile therefore runs in its own
+# environment, pinned by requirements-profile.lock (same first-line format as requirements.lock).
+PROFILE_VENV := .venv-profile
+PROFILE_PY   := $(PROFILE_VENV)/bin/python
+PROFILE_LOCK := requirements-profile.lock
+
+PROFILE_LOCK_PY := $(shell sed -n '1s/^\# python //p' $(PROFILE_LOCK) 2>/dev/null)
+
+$(PROFILE_VENV)/.installed: $(PROFILE_LOCK)
+	test -d $(PROFILE_VENV) || $(PYTHON) -m venv $(PROFILE_VENV)
+	@$(PROFILE_PY) -c 'import sys; have = "%d.%d" % sys.version_info[:2]; want = "$(PROFILE_LOCK_PY)"; \
+		sys.exit(f"$(PROFILE_VENV) uses Python {have}, but $(PROFILE_LOCK) was created with Python {want}.\nDelete $(PROFILE_VENV) and run: make profile PYTHON=python{want}") if want and have != want else None'
+	$(PROFILE_PY) -m pip install --upgrade pip
+	$(PROFILE_PY) -m pip install -r $(PROFILE_LOCK)
+	touch $@
+
+profile: data $(PROFILE_VENV)/.installed ## Automated HTML profile per table in reports/ (fg-data-profiling)
+	PYTHONPATH=src $(PROFILE_PY) -m energy_price.profile_data --out reports
+
+# The default kernel starts a bare `python`; .venv/bin comes first on PATH so that it is the one from .venv.
+# JUPYTER_CONFIG_DIR skips the personal ~/.jupyter, so the run is the same on every machine.
+# NB selects the notebooks, e.g. `make notebook NB=notebooks/02_eda.ipynb`. Outputs depend on the newest
+# control area balance snapshot, so re-running an older notebook can change its stored numbers.
+NB ?= notebooks/01_eda.ipynb notebooks/02_eda.ipynb
+
+notebook: data ## Run the EDA notebooks (or NB=...) top to bottom and store the outputs in place
+	PATH="$(abspath $(VENV))/bin:$$PATH" JUPYTER_CONFIG_DIR="$(abspath $(VENV))/etc/jupyter" $(PY) -m jupyter nbconvert --to notebook --execute --inplace $(NB)
 
 test: venv ## Run unit tests
 	$(PY) -m pytest -m "not realdata"

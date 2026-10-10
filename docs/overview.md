@@ -84,7 +84,30 @@ flowchart TD
 | **Ausgleichsenergiepreis** | Nach geltender Swissgrid-Methodik aus der Abrechnungssituation ermittelt, einschliesslich relevanter System-/Marktgrössen und ggf. Knappheitskomponente.   | Anwendung auf BG-Abweichungen. Ein negativer Zahlenwert bedeutet nicht automatisch „negative Ausgleichsenergie“. [S2] |
 | **Endkunden-Stromtarif**   | Energie, Netznutzung und Abgaben/Zuschläge, Swissgrid nennt auch die Stromreserve als Tarifbestandteil.                                                    | Haushalte bezahlen ihren Lieferanten/Netzbetreiber gemäss Tarif und Vertrag, kein direkter AE-Spotpreis. [A2]         |
 
-**Knappheitskomponente:** Swissgrid nennt auf ihrer Ausgleichsenergieseite Systemschwellen von −1200 MW beziehungsweise +1000 MW und bei Überschreitung eine zusätzliche Komponente von 10 €/MWh mit preisabhängigem Vorzeichen. Für die Modellierung sind Anwendungsdatum, Definition des zugrunde liegenden Saldos und tatsächliche Datenverfügbarkeit separat zu prüfen. 10 €/MWh entsprechen 1 Euro-Cent/kWh. [S2]
+### Preisformel seit 2026 (Einpreissystem)
+
+Laut den Allgemeinen Bilanzgruppenvorschriften v3.2, Ziffer 7.1 [S4], gilt pro Viertelstunde **ein** Preis für alle Bilanzgruppen. Welcher, hängt von der Systembilanz ab:
+
+| Systembilanz | Preis | Bedeutung |
+|---|---|---|
+| unterdeckt (short) | **A = max(Psek+; Pter+)** | der höhere der gewichteten Durchschnittspreise der in positiver Richtung abgerufenen Sekundär- (aFRR) und Tertiärregelenergie (mFRR) |
+| überdeckt (long) | **B = min(Psek−; Pter−)** | der tiefere der gewichteten Durchschnittspreise der in negativer Richtung abgerufenen aFRR und mFRR |
+
+- Psek bzw. Pter zählt nur, wenn in dieser Richtung tatsächlich abgerufen wurde.
+- Gibt es keine aFRR- und mFRR-Preise oder genau gleich viele positive wie negative Abrufe, gilt der **Swissix-Day-Ahead-Spotpreis**.
+- Ist A oder B negativ, kehrt sich die Zahlungsrichtung um.
+- **Gültigkeit:** Version 3.2 gilt ab 01.04.2026. Für Januar bis März galt eine frühere Version; ob Ziffer 7.1 dort gleich lautete, ist nicht geprüft.
+
+**Folge in den Daten (gemessen, Deutung als Vermutung):** Bei short war der Preis 2026 nie negativ (Minimum 0.00 ct/kWh), bei long nie über 27.6 ct/kWh, aber bis −688 ct/kWh. Das passt zur Formel: A ist ein Maximum über die Preise fürs Hochregeln, die praktisch nie negativ sind; B ist ein Minimum über die Preise fürs Runterregeln. Daher die zwei getrennten Preiswolken in [`data.md`](data.md#3-swissgrid-regelzonenbilanz).
+
+**Knappheitskomponente:**
+
+- **Regel [S4, Ziffer 7.1]:** zusätzlicher „linearer Aufschlag von 10 EUR pro 1 MW“, nur bei sehr hohen Ungleichgewichten der Regelzone, d.h. wenn die gesamte vorgehaltene Sekundär- und Tertiärregelenergie samt einem Anteil freier Gebote überschritten ist. Die aktuellen Schwellen veröffentlicht Swissgrid auf der Webseite; die Bilanzgruppen werden mindestens einen Monat vor jeder Anpassung informiert.
+- **Aktuelle Schwellen [S2, abgerufen 06.10.2026]:** −1200 MW bzw. +1000 MW. Die Webseite nennt „zusätzliche 10 €/MWh“ (= 1 Euro-Cent/kWh), bei negativem Preis wird die Komponente ebenfalls negativ.
+- **Unklar:** Die Vorschrift spricht von einem linearen Aufschlag „pro 1 MW“, die Webseite von pauschal 10 €/MWh. Ob der Aufschlag mit jedem MW über der Schwelle wächst, geht aus beiden Texten nicht eindeutig hervor.
+- **Für unsere Daten ohne Wirkung:** Die TSI lag vom 01.01. bis 03.10.2026 zwischen −1072 und +792 MW und hat die Schwellen nie erreicht. Dass sich die Schwellen auf die TSI beziehen, ist die naheliegende Lesart, steht aber nicht ausdrücklich da. Die Extrempreise kommen aus A und B, nicht aus der Knappheitskomponente. Ein eigenes Merkmal lohnt darum nicht.
+
+**Fahrplanrampen [S4, Ziffer 7.2]:** Bei einem Fahrplanwechsel ist die Leistungsänderung möglichst linear über 5 Minuten vor bis 5 Minuten nach dem Wechsel vorzunehmen (10-Minuten-Rampe), und so wird auch abgerechnet. Zusammen mit Fahrplänen, die zur vollen Stunde in Stufen wechseln, erklärt das, warum die Systembilanz innerhalb jeder Stunde kippt ([`eda.md`](eda.md), H8; [S5]).
 
 **Preisvorzeichen sorgfältig lesen:** Der AEP kann als numerischer Wert unter null liegen. Bei negativem Preis kann etwa die Aufnahme zusätzlicher Energie wirtschaftlich attraktiv sein. Die Zahlung im einzelnen BG-Fall folgt jedoch aus der verbindlichen Abrechnungsformel. Die grobe Tabelle unten ist ein Richtungsschema, keine Rechnungsanweisung.
 
@@ -217,12 +240,16 @@ Ein gutes Ergebnis liefert für klar definierte Horizonte reproduzierbare Progno
 - **[S1]** [Swissgrid – Balancing Roadmap / Funktionsweise der Balancing-Märkte](https://www.swissgrid.ch/de/home/operation/market/control-energy.html), insbesondere Rolle von Swissgrid, Reserven, Handel und 2026-Anreizbeschreibung.
 - **[S2]** [Swissgrid – Ausgleichsenergie und monatliche Preise](https://www.swissgrid.ch/de/home/customers/topics/bgm/balance-energy.html), Einheit, Veröffentlichung und Knappheitskomponente.
 - **[S3]** [SFOE-Hackathons – Energy Data Hackdays 2024, Balance Energy Prices](https://github.com/SFOE-Hackathons/EnergyDataHackdays2024-BalanceEnergyPrices), ältere Daten- und Modellbeispiele.
+- **[S4]** [Swissgrid, Allgemeine Bilanzgruppenvorschriften, Version 3.2 vom 01.04.2026](https://www.swissgrid.ch/dam/jcr:ff03169a-44db-43b4-9cdf-7770700b4e89/01-Appendix-1-General-BG-Regulations-V3-2-de.pdf), Ziffer 7.1 (Preismechanismus, Knappheitskomponente, Publikation) und 7.2 (Abrechnung, 10-Minuten-Rampen). Abgerufen 06.10.2026.
+- **[S5]** [EURELECTRIC und ENTSO-E, „Deterministic frequency deviations: root causes and proposals for potential solutions“, Dezember 2011](https://www.entsoe.eu/fileadmin/user_upload/_library/publications/entsoe/120222_Deterministic_Frequency_Deviations_joint_ENTSOE_Eurelectric_Report__Final_.pdf): Kraftwerke ändern ihre Einspeisung zur vollen Stunde „almost step-wise“, der Verbrauch langsamer; dadurch entstehen regelmässige Ungleichgewichte in einem Fenster von etwa zehn Minuten um den Stundenwechsel, am stärksten um 6, 7, 8, 21, 22 und 23 Uhr.
 
 *Hinweis zur Quellenlogik:* Die [S]-Quellen belegen allgemeine und aktuelle öffentliche Aussagen: Kennzahlen für Mai 2026 stammen aus [A3]. Vereinfachungen und Modellhypothesen sind ausdrücklich als solche markiert. Bei Widersprüchen hat die für den jeweiligen Lieferzeitraum gültige Swissgrid-Abrechnungsregel Vorrang.
 
 # Offene Fragen
 
 1. Wie funktioniert die neue Preisberechnung?
+
+**Beantwortet am 06.10.2026:** siehe [Preisformel seit 2026](#preisformel-seit-2026-einpreissystem) in Abschnitt 4, belegt mit den Bilanzgruppenvorschriften v3.2 [S4].
 
 Anhand von einem beispiel:
 ┌────────────────────────────────┬────────────────────────────────────────┬──────────────────────────────┐
