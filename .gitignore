@@ -14,3 +14,8 @@ data/processed/
 
 # Large third-party downloads, fetched again by make (e.g. `make sites`)
 data/external/
+
+# Local settings and W&B run files, never commit (see docs/experiment_tracking.md)
+.env
+wandb/
+artifacts/

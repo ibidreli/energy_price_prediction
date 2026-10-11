@@ -26,6 +26,10 @@ notebooks = [
 dev = [
     "pytest>=8.3",
 ]
+tracking = [
+    "python-dotenv>=1.2.4",
+    "wandb>=0.30",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

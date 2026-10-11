@@ -25,10 +25,10 @@ WEATHER_DATA := $(OUT_DIR)/weather_forecasts.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv lock data fetch fetch-cab fetch-weather sites holidays figures test test-all clean-data
+.PHONY: help venv lock data fetch fetch-cab fetch-weather sites holidays figures test test-all tracking-check clean-data
 
 help: ## Show available targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-11s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
 
 venv: $(VENV)/.installed ## Create .venv with the exact versions from requirements.lock
 
@@ -39,7 +39,7 @@ $(VENV)/.installed: pyproject.toml $(wildcard $(LOCK))
 	@$(PY) -c 'import sys; have = "%d.%d" % sys.version_info[:2]; want = "$(LOCK_PY)"; \
 		sys.exit(f"$(VENV) uses Python {have}, but $(LOCK) was created with Python {want}.\nDelete $(VENV) and run: make venv PYTHON=python{want}") if want and have != want else None'
 	$(PY) -m pip install --upgrade pip
-	$(PY) -m pip install $(if $(wildcard $(LOCK)),-c $(LOCK)) -e ".[notebooks,dev]"
+	$(PY) -m pip install $(if $(wildcard $(LOCK)),-c $(LOCK)) -e ".[notebooks,dev,tracking]"
 	touch $@
 
 lock: ## Write the package versions installed in .venv to requirements.lock
@@ -108,6 +108,9 @@ test: venv ## Run unit tests
 
 test-all: venv ## Run unit tests and checks against the real data
 	$(PY) -m pytest
+
+tracking-check: venv ## Check the W&B login and team entity (network, see docs/experiment_tracking.md)
+	$(PY) -m energy_price.tracking
 
 clean-data: ## Delete the processed data (raw data stays untouched)
 	rm -rf $(OUT_DIR)
