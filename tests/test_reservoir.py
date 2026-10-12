@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import pytest
 
-from energy_price import build_sources, fetch_reservoirs
+from energy_price import build_sources, reservoir
 from energy_price.reservoir import (
     SERIES, ReservoirFormatError, load_reservoirs, parse_payload, read_snapshot, latest_reservoir_report,
 )
@@ -26,7 +26,7 @@ def payload():
 
 
 def snapshot(tmp_path, fetched="2026-01-14T08:00:00Z", data=None, name="a", year=2026):
-    path = tmp_path / f"filling-level-{year}_{name}.json"
+    path = tmp_path / f"reservoirs-{year}_{name}.json"
     path.write_text(json.dumps(dict(year=year, fetched_at_utc=fetched, data=payload() if data is None else data)))
     return path
 
@@ -102,8 +102,8 @@ def test_revisions_are_used_only_after_their_fetch_time(tmp_path):
     after = latest_reservoir_report(frame, dt.date(2026, 1, 17)).set_index("region")
     assert before.loc["switzerland", "stored_twh"] == 4.0
     assert after.loc["switzerland", "stored_twh"] == 4.5
-    assert before.snapshot.unique().tolist() == ["filling-level-2026_a.json"]
-    assert after.snapshot.unique().tolist() == ["filling-level-2026_b.json"]
+    assert before.snapshot.unique().tolist() == ["reservoirs-2026_a.json"]
+    assert after.snapshot.unique().tolist() == ["reservoirs-2026_b.json"]
 
 
 @pytest.mark.parametrize("day, fetched", [
@@ -128,31 +128,72 @@ def test_wrong_year_is_rejected(tmp_path):
 
 
 def test_fetch_archives_changes_and_logs_unchanged_downloads(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    out = tmp_path / "data/reservoirs/snapshots"
     first = json.dumps(payload()).encode()
     revised = payload()
     revised[0]["data"][1] = 1.5
     second = json.dumps(revised).encode()
     downloads = iter([(first, "first"), (first, "same"), (second, "second")])
-    monkeypatch.setattr(fetch_reservoirs, "download", lambda year: next(downloads))
+    monkeypatch.setattr(reservoir, "download", lambda year: next(downloads))
     clock = iter(pd.Timestamp(day, tz="UTC") for day in ["2026-01-14", "2026-01-15", "2026-01-16"])
-    monkeypatch.setattr(fetch_reservoirs.pd.Timestamp, "now", lambda tz: next(clock))
+    monkeypatch.setattr(reservoir.pd.Timestamp, "now", lambda tz: next(clock))
     for _ in range(3):
-        fetch_reservoirs.main(["--out", str(tmp_path), "--years", "2026"])
-    assert len(list(tmp_path.glob("filling-level-*.json"))) == 2
-    manifest = pd.read_csv(tmp_path / "manifest.csv")
+        reservoir.main(["--years", "2026"])
+    snapshots = sorted(out.glob("reservoirs-*.json"))
+    assert len(snapshots) == 2
+    manifest = pd.read_csv(out / "manifest.csv")
+    assert manifest.file.tolist() == [path.name for path in snapshots]
     assert manifest.weeks.tolist() == [2, 2]
-    assert pd.read_csv(tmp_path / "fetch_log.csv").changed.tolist() == [True, False, True]
+    assert manifest.fetched_at_utc.tolist() == [
+        "2026-01-14T00:00:00+00:00", "2026-01-16T00:00:00+00:00",
+    ]
+    assert manifest.first_timestamp_utc.tolist() == ["2026-01-05T00:00:00+00:00"] * 2
+    assert manifest.last_timestamp_utc.tolist() == ["2026-01-12T00:00:00+00:00"] * 2
+    for path, checksum in zip(snapshots, manifest.sha256):
+        assert json.loads(path.read_text())["sha256"] == checksum
+    assert pd.read_csv(out / "fetch_log.csv").changed.tolist() == [True, False, True]
     # An unchanged download preserves the first observed time for this version.
-    assert load_reservoirs(tmp_path).fetched_at_utc.unique().tolist() == [
+    assert load_reservoirs(out).fetched_at_utc.unique().tolist() == [
         pd.Timestamp("2026-01-14", tz="UTC"), pd.Timestamp("2026-01-16", tz="UTC")
     ]
-    assert first.decode() in (tmp_path / manifest.file.iloc[0]).read_text()
+    assert first.decode() in snapshots[0].read_text()
+
+
+@pytest.mark.parametrize("calendar_year, args, source_year", [
+    (2026, [], 2026),
+    (2027, [], 2027),
+    (2027, ["--years", "2026"], 2026),
+])
+def test_fetch_uses_current_swiss_year_unless_overridden(tmp_path, monkeypatch, calendar_year, args, source_year):
+    monkeypatch.chdir(tmp_path)
+    # At the Swiss New Year, UTC still belongs to the previous calendar year.
+    now = pd.Timestamp(f"{calendar_year}-01-01 00:30", tz="Europe/Zurich")
+    data = payload()
+    data[0]["xAxisValues"] = [int(stamp.timestamp() * 1000)
+                             for stamp in pd.date_range(f"{source_year}-01-01", periods=2, freq="W-MON", tz="UTC")]
+    requested = []
+
+    def download(year):
+        requested.append(year)
+        return json.dumps(data).encode(), ""
+
+    monkeypatch.setattr(reservoir, "download", download)
+    monkeypatch.setattr(reservoir.pd.Timestamp, "now", lambda tz: now.tz_convert(tz))
+    reservoir.main(args)
+
+    out = tmp_path / "data/reservoirs/snapshots"
+    assert requested == [source_year]
+    assert pd.read_csv(out / "manifest.csv").year.tolist() == [source_year]
+    frame = load_reservoirs(out)
+    assert frame.source_year.unique().tolist() == [source_year]
+    assert frame.fetched_at_utc.unique().tolist() == [now.tz_convert("UTC")]
 
 
 def test_invalid_download_does_not_write_any_files(tmp_path, monkeypatch):
-    monkeypatch.setattr(fetch_reservoirs, "download", lambda year: (b"[]", ""))
+    monkeypatch.setattr(reservoir, "download", lambda year: (b"[]", ""))
     with pytest.raises(ReservoirFormatError):
-        fetch_reservoirs.main(["--out", str(tmp_path), "--years", "2026"])
+        reservoir.main(["--out", str(tmp_path), "--years", "2026"])
     assert list(tmp_path.iterdir()) == []
 
 

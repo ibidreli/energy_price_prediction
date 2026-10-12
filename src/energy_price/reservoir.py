@@ -3,20 +3,32 @@
 Keep every downloaded version: BFE can revise historical values. Chart timestamps
 are retained verbatim; reference_date denotes the Sunday reported as 'Sunday 24h'.
 Availability is established by the snapshot's fetch time, never the chart date.
+
+Download: python -m energy_price.reservoir
 """
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
+import hashlib
 import json
+import urllib.request
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from energy_price.availability import issue_time
+from energy_price.fetch_swissgrid import append_row
 
 TZ = "Europe/Zurich"
+URL_TEMPLATE = "https://www.energy-charts.info/charts/filling_level/data/ch/year_storage_{year}.json"
+MANIFEST_COLUMNS = [
+    "file", "year", "url", "fetched_at_utc", "last_modified", "sha256",
+    "weeks", "first_timestamp_utc", "last_timestamp_utc",
+]
+FETCH_LOG_COLUMNS = ["year", "url", "fetched_at_utc", "last_modified", "sha256", "changed", "snapshot"]
 REGIONS = {
     "Wallis": "valais",
     "Grisons": "grisons",
@@ -38,6 +50,59 @@ OUTPUT_COLUMNS = [
 
 class ReservoirFormatError(ValueError):
     """The JSON does not match the expected Swiss weekly reservoir data."""
+
+
+def download(year: int) -> tuple[bytes, str]:
+    """Download the source response and its Last-Modified header."""
+    request = urllib.request.Request(
+        URL_TEMPLATE.format(year=year),
+        headers={"User-Agent": "Mozilla/5.0 (energy-price research project)"},
+    )
+    with urllib.request.urlopen(request, timeout=120) as response:
+        return response.read(), response.headers.get("Last-Modified", "")
+
+
+def fetch_year(year: int, out: Path) -> Path:
+    """Validate and archive changed data; log every successful download."""
+    content, last_modified = download(year)
+    fetched = pd.Timestamp.now(tz="UTC")
+    payload = json.loads(content)
+    frame = parse_payload(payload)
+    if not (frame["timestamp_utc"].dt.year == year).all():
+        raise ReservoirFormatError(f"response does not contain the requested year {year}")
+    sha = hashlib.sha256(content).hexdigest()
+    files = sorted(out.glob(f"reservoirs-{year}_*.json"))
+    previous = json.loads(files[-1].read_text(encoding="utf-8")) if files else None
+    changed = previous is None or previous["sha256"] != sha
+    out.mkdir(parents=True, exist_ok=True)
+    if changed:
+        path = out / f"reservoirs-{year}_{fetched.strftime('%Y-%m-%dT%H-%M-%S-%fZ')}.json"
+        metadata = dict(year=year, url=URL_TEMPLATE.format(year=year), fetched_at_utc=fetched.isoformat(),
+                        last_modified=last_modified, sha256=sha)
+        # Preserve the original response bytes as JSON text inside the envelope.
+        header = json.dumps(metadata, ensure_ascii=False)
+        tmp = path.with_suffix(".json.tmp")
+        try:
+            tmp.write_text(header[:-1] + ', "data": ' + content.decode("utf-8") + '}\n', encoding="utf-8")
+            tmp.replace(path)
+        finally:
+            tmp.unlink(missing_ok=True)
+        append_row(out / "manifest.csv", MANIFEST_COLUMNS, {
+            **metadata,
+            "file": path.name, "weeks": frame["timestamp_utc"].nunique(),
+            "first_timestamp_utc": frame["timestamp_utc"].min().isoformat(),
+            "last_timestamp_utc": frame["timestamp_utc"].max().isoformat(),
+        })
+    else:
+        path = files[-1]
+    append_row(out / "fetch_log.csv", FETCH_LOG_COLUMNS, {
+        "year": year, "url": URL_TEMPLATE.format(year=year), "fetched_at_utc": fetched.isoformat(),
+        "last_modified": last_modified, "sha256": sha, "changed": changed, "snapshot": path.name,
+    })
+    print(f"reservoirs {year}: {'new snapshot' if changed else 'unchanged'}, "
+          f"{frame['timestamp_utc'].nunique()} weeks, last reference Sunday "
+          f"{frame['reference_date'].max().date()}")
+    return path
 
 
 def parse_payload(payload: list[dict]) -> pd.DataFrame:
@@ -118,7 +183,7 @@ def read_snapshot(path: str | Path) -> pd.DataFrame:
 
 def load_reservoirs(snapshot_dir: str | Path) -> pd.DataFrame:
     """All versions, so a backtest can select the version available at its issue time."""
-    files = sorted(Path(snapshot_dir).glob("filling-level-*.json"))
+    files = sorted(Path(snapshot_dir).glob("reservoirs-*.json"))
     if not files:
         raise FileNotFoundError(f"no reservoir snapshots in {snapshot_dir}; run make fetch-reservoirs")
     frame = pd.concat([read_snapshot(path) for path in files], ignore_index=True)
@@ -145,3 +210,19 @@ def latest_reservoir_report(frame: pd.DataFrame, delivery_day: dt.date) -> pd.Da
     latest = known.groupby("source_year")["fetched_at_utc"].transform("max")
     known = known[known["fetched_at_utc"] == latest]
     return known[known["timestamp_utc"] == known["timestamp_utc"].max()].copy()
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Download and archive Swiss reservoir data.")
+    parser.add_argument("--out", type=Path, default=Path("data/reservoirs/snapshots"),
+                        help="snapshot directory, relative to the working directory (default: %(default)s)")
+    parser.add_argument("--years", type=int, nargs="+",
+                        help="years to download (otherwise: current year in Europe/Zurich)")
+    args = parser.parse_args(argv)
+    years = args.years or [pd.Timestamp.now(tz=TZ).year]
+    for year in sorted(set(years)):
+        fetch_year(year, args.out)
+
+
+if __name__ == "__main__":
+    main()

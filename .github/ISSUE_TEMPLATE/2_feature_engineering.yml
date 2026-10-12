@@ -37,31 +37,3 @@ body:
       placeholder: "e.g. High forecasted solar generation in cantons with large PV capacity increases risk of grid surplus (positive balance) driving prices down or negative."
     validations:
       required: true
-  - type: textarea
-    id: calculation_logic
-    attributes:
-      label: Mathematical / Transformation Logic
-      description: Describe the exact calculation, window sizes, aggregations, or scaling methods.
-      placeholder: "e.g. Weighted mean of GHI across 6 ECMWF stations using cantonal MW capacity as weights, shifted to D-2 18 UTC run."
-    validations:
-      required: true
-  - type: checkboxes
-    id: leakage_audit
-    attributes:
-      label: Strict Leakage Audit (D-1 11:00 Constraint)
-      description: Mandatory checks to guarantee zero look-ahead bias
-      options:
-        - label: "Swissgrid boundary: Uses only Swissgrid data up to D-2 24:00"
-          required: true
-        - label: "Weather boundary: Uses only ECMWF runs from D-2 18 UTC or earlier"
-          required: true
-        - label: "Pipeline fit inside folds: Any fit/transform logic (imputation, scaling) is fit ONLY on training folds"
-          required: true
-  - type: textarea
-    id: verification_plan
-    attributes:
-      label: Testing & Verification Plan
-      description: How will the feature transformation be tested in `tests/`?
-      placeholder: "e.g. Unit test in tests/test_features.py verifying output shape, null handling, and cutoff boundary."
-    validations:
-      required: true

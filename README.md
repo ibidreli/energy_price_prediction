@@ -9,11 +9,11 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
-| [`notebooks/reservoir_demo.ipynb`](notebooks/reservoir_demo.ipynb) | Executable walkthrough: reservoir snapshots, Parquet and selection at forecast time |
 
 ## Setup
 
-Requires Python 3.14 and `make`.
+The pinned setup uses Python 3.14 and GNU Make. Windows can also use an existing
+Python >=3.11 environment as described below.
 
 ```bash
 make venv        # create .venv with the exact versions from requirements.lock
@@ -34,7 +34,7 @@ make help        # list all targets
 | `data/ausgleichpreis/<year>/` | Raw Swissgrid balance energy prices, monthly XML and XLSX, unchanged as downloaded |
 | `data/control_area_balance/snapshots/` | Swissgrid control area balance, every downloaded version plus `manifest.csv` (`make fetch-cab`) |
 | `data/weather/ecmwf_ifs/` | Archived ECMWF weather forecasts for six sites, one JSON per model run (`make fetch-weather`) |
-| `data/reservoirs/snapshots/` | Swiss reservoir filling levels from Energy-Charts/BFE, every distinct JSON version with fetch time and checksum (`make fetch-reservoirs`) |
+| `data/reservoirs/snapshots/` | Swiss reservoir filling levels from Energy-Charts/BFE, versioned JSON snapshots with `manifest.csv` and `fetch_log.csv` (`make fetch-reservoirs`) |
 | `data/meta/` | Weather sites, PV capacity per canton, cantonal holidays (`make sites`, `make holidays`) |
 | `data/external/` | Large third-party downloads (BFE plant register), not in git |
 | `data/processed/` | Generated, not in git. Rebuild with `make data` |
@@ -58,25 +58,39 @@ are unknown; a snapshot downloaded today cannot establish availability earlier
 in 2026. See [reservoir data and availability](docs/data.md#6-stauseen-energy-chartsbfe).
 
 ```bash
-make fetch-reservoirs                  # fetch the 2026 JSON (network)
+make fetch-reservoirs                  # fetch the current year's JSON (network)
 make data                              # rebuild all four processed tables
-# Optional: include the previous year's reservoir history
+# Optional: explicitly choose years
 make fetch-reservoirs RESERVOIR_YEARS="2025 2026"
 ```
 
-On Windows, the same reservoir steps can be run directly from PowerShell after
-creating `.venv` and installing the project (`python -m venv .venv`, then
-`.venv/Scripts/python.exe -m pip install -e ".[dev]"`). This uses the supported
-Python >=3.11 environment; the `make venv` lock workflow above requires 3.14.
+### Windows / PowerShell
+
+Install Git for Windows (its Bash shell supplies the Unix tools used by Make).
+Set up the environment and install GNU Make once:
 
 ```powershell
-.venv/Scripts/python.exe -m energy_price.fetch_reservoirs --out data/reservoirs/snapshots --years 2026
-.venv/Scripts/python.exe -m energy_price.build_sources reservoirs --src data/reservoirs/snapshots --out data/processed/reservoir_filling.parquet
-.venv/Scripts/python.exe -m pytest
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -e ".[dev]" gnumake "matplotlib>=3.9"
 ```
 
-Open `notebooks/reservoir_demo.ipynb` with the project's `.venv` kernel and run the
-cells in order. The notebook calls the existing pipeline modules; by default it
-uses the stored snapshots. Set `DOWNLOAD_NEW_DATA = True` in its download cell to
-fetch new data deliberately. Historical forecast selection is demonstrated with
-both real snapshots and an explicitly synthetic revision example.
+Activate the environment in each new terminal, then use the same Make targets:
+
+```powershell
+.venv/Scripts/Activate.ps1
+make fetch-reservoirs
+make data
+make figures-reservoirs
+make test-all
+```
+
+Run from the repository root. Windows run targets check the existing Python
+>=3.11 environment. The explicit `make venv` command retains the pinned Python
+3.14 workflow. Git Bash is expected at `C:/Program Files/Git/bin/bash.exe`;
+use `GIT_BASH="<path>"` if Git is installed elsewhere.
+
+The reservoir download defaults to the current calendar year in Europe/Zurich
+and `data/reservoirs/snapshots/`. Override with
+`make fetch-reservoirs RESERVOIR_YEARS="2025 2026"` when needed.
+The direct Python command remains `python -m energy_price.reservoir`, with
+optional `--years` and `--out` arguments.
