@@ -72,7 +72,7 @@ data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) $(RESERVOIR_DATA) ## Build all proc
 
 fetch: fetch-cab fetch-weather fetch-reservoirs ## Download new Swissgrid, weather and reservoir data (network)
 
-fetch-reservoirs: $(ENV_READY) ## Store Swiss Energy-Charts reservoir snapshots if they changed
+fetch-reservoirs: $(ENV_READY) ## Fetch official BFE reservoir data and report new weeks or revisions
 	$(PY) -m energy_price.reservoir --out $(RESERVOIR_DIR) $(if $(strip $(RESERVOIR_YEARS)),--years $(RESERVOIR_YEARS))
 
 fetch-cab: $(ENV_READY) ## Store a new Swissgrid control area balance snapshot if it changed

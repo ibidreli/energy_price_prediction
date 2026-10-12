@@ -10,7 +10,7 @@
 | **Regelzonenbilanz** (Swissgrid) | ob in der Schweiz Strom fehlte oder zu viel da war | 01.01. bis 03.10.2026 | vermutlich bis Ende D−2, **wird bis ca. 18.10. geprüft** |
 | **Wetterprognosen** (ECMWF, 6 Standorte) | Sonne, Wolken, Temperatur, Wind, Niederschlag für den Liefertag | Liefertage 01.01. bis 05.10.2026 | ja, Lauf von D−2 18 UTC |
 | **Feiertage** (alle 26 Kantone) | arbeitsfreie Tage | 2026 und 2027 | ja, gesetzlich festgelegt |
-| **Stauseen** (Energy-Charts/BFE) | verfügbare Speicherenergie | Wochenwerte 04.01. bis 27.09.2026 | nur rechtzeitig beobachtete Snapshots, siehe [Abschnitt 6](#6-stauseen-energy-chartsbfe) |
+| **Stauseen** (BFE) | verfügbare Speicherenergie | Wochenwerte 04.01. bis 04.10.2026 | nur rechtzeitig beobachtete Snapshots, siehe [Abschnitt 6](#6-stauseen-bfe) |
 | ENTSO-E Lastprognose | erwarteter Verbrauch | nicht erhoben | **nicht belegbar**, siehe [Abschnitt 7](#7-nicht-erhoben-entso-e-lastprognose) |
 
 ![Abdeckung der Daten](figures/coverage.png)
@@ -54,7 +54,7 @@ gantt
 | Swissgrid (Preis und Bilanz) | Daten bis **D−2, 24:00** (**Annahme, wird geprüft**) | Die Grenze setzt voraus, dass Swissgrid die Datei **täglich** aktualisiert. Belegt ist bisher nur **eine** Beobachtung: Am Sonntag, 04.10.2026, um 01:21 UTC (03:21 Schweizer Zeit) enthielt sie alles bis 03.10., 23:45. Die Swissgrid-Webseite spricht aber von einer Publikation „on a weekly basis“, und im Web-Archiv gibt es keine älteren Versionen. Wird die Datei nur wöchentlich aktualisiert, leckt die Grenze D−2 um bis zu 5 Tage. Siehe [Prüfung des Aktualisierungsrhythmus](#prüfung-des-aktualisierungsrhythmus). Eine Echtzeit-Datei mit 30 Minuten Verzug, wie sie die Bilanzgruppenvorschriften erwähnen, war auf der Webseite nicht auffindbar. |
 | Wetter | Lauf **D−2, 18 UTC** | Laut Open-Meteo sind Läufe globaler Modelle 4 bis 6 Stunden nach dem Start abrufbar. Mit 6 Stunden gerechnet bleiben bis 11:00 **9 Stunden Reserve im Sommer und 10 im Winter**, an jedem Tag 2026, auch an den Umstellungstagen. Das prüft der Test `test_every_run_of_2026_is_available_at_least_9_hours_before_issue`. |
 | Feiertage | keine | durch kantonales Recht Jahre im Voraus festgelegt |
-| Stauseen | letzter tatsächlich vor D−1, 11:00 abgerufener Wochenbericht | `latest_reservoir_report` prüft Abrufzeit und Berichtswoche; historische Publikationszeiten sind nicht belegt. Details in [Abschnitt 6](#6-stauseen-energy-chartsbfe). |
+| Stauseen | letzter tatsächlich vor D−1, 11:00 abgerufener Wochenbericht | `latest_reservoir_report` prüft Abrufzeit und Berichtswoche; historische Publikationszeiten sind nicht belegt. Details in [Abschnitt 6](#6-stauseen-bfe). |
 
 **Korrektur gegenüber früher:** Im ersten Entwurf stand „Daten bis D−1, 10:30“. Das ist nicht belegbar und gilt nicht mehr.
 
@@ -260,10 +260,12 @@ Für ein Modell bietet sich an, pro Tag zu zählen, wie viele Kantone frei haben
 
 ---
 
-## 6. Stauseen: Energy-Charts/BFE
+## 6. Stauseen: BFE
 
 Wöchentliche [BFE-Stauseedaten](https://www.bfe.admin.ch/de/fuellungsgrad-speicherseen),
-abgerufen über die öffentliche [Energy-Charts-Jahres-JSON](https://www.energy-charts.info/charts/filling_level/data/ch/year_storage_2026.json).
+abgerufen direkt aus der [offiziellen CSV](https://www.bfe-ogd.ch/ogd17/ogd17_fuellungsgrad_speicherseen.csv).
+Die Quelle liefert **GWh**; unsere Tabelle rechnet in **TWh** (Division durch 1000).
+Ältere Energy-Charts-Snapshots bleiben für die beobachtete Historie erhalten.
 
 ### Was enthalten die Daten?
 
@@ -286,7 +288,7 @@ make figures-reservoirs # die beiden Grafiken unten neu erzeugen
 | Pfad | Inhalt |
 |---|---|
 | `src/energy_price/reservoir.py` | Download, Prüfung, Berechnungen und Auswahl zur Prognosezeit |
-| `data/reservoirs/snapshots/reservoirs-<Jahr>_<Abrufzeit UTC>.json` | versionierte Rohantwort mit Abrufmetadaten |
+| `data/reservoirs/snapshots/reservoirs-<Jahr>_<Abrufzeit UTC>.json` | CSV-Text in einem JSON-Snapshot mit Abrufmetadaten; ältere Versionen enthalten Energy-Charts-JSON |
 | `data/reservoirs/snapshots/manifest.csv` | eine Zeile pro gespeicherter Version |
 | `data/reservoirs/snapshots/fetch_log.csv` | jeder Abruf, auch ohne Änderung |
 | `data/processed/reservoir_filling.parquet` | eine Zeile pro Snapshot, Woche und Region |
@@ -294,33 +296,39 @@ make figures-reservoirs # die beiden Grafiken unten neu erzeugen
 ### Speicherinhalt und regionale Füllungsgrade
 
 Die Grafiken verwenden pro Quelljahr den neuesten gespeicherten Snapshot.
-Die zwei Versionen werden deshalb nicht doppelt gezählt. Das ist eine Datenübersicht;
+Die Snapshot-Versionen werden deshalb nicht doppelt gezählt. Das ist eine Datenübersicht;
 für historische Prognosen gilt zusätzlich die Verfügbarkeitsprüfung weiter unten.
 
 ![Schweizer Speicherinhalt und Kapazität](figures/reservoir_energy.png)
 
 Der Schweizer Inhalt fällt bis zum 19.04. auf **1.051 TWh** und steigt danach bis
-zum 20.09. auf **6.639 TWh**. Der letzte Bericht enthält **6.588 TWh**.
+zum 20.09. auf **6.639 TWh**. Der letzte Bericht vom 04.10. enthält **6.572 TWh**.
 
 ![Füllungsgrad der vier Regionen und der Schweiz](figures/reservoir_filling.png)
 
 Die Prozentwerte machen Regionen mit unterschiedlichen Kapazitäten vergleichbar.
 Die saisonalen Verläufe unterscheiden sich; ein Nutzen für die Preisprognose ist noch nicht gemessen.
 
-### Unsere zwei Snapshots
+### Unsere gespeicherten Snapshots
 
-| Abruf (Schweizer Zeit) | Wochen | Letzter Referenzsonntag | Schweizer Inhalt | Füllungsgrad |
-|---|---|---|---|---|
-| [08.10.2026, 17:36](../data/reservoirs/snapshots/reservoirs-2026_2026-10-08T15-36-12-947780Z.json) | 39 | 27.09.2026 | 6.588 TWh | 74.1 % |
-| [12.10.2026, 18:07](../data/reservoirs/snapshots/reservoirs-2026_2026-10-12T16-07-18-428013Z.json) | 39 | 27.09.2026 | 6.588 TWh | 74.1 % |
+| Abruf (Schweizer Zeit) | Quelle | Wochen | Letzter Referenzsonntag | Schweizer Inhalt | Füllungsgrad |
+|---|---|---|---|---|---|
+| [08.10.2026, 17:36](../data/reservoirs/snapshots/reservoirs-2026_2026-10-08T15-36-12-947780Z.json) | Energy-Charts | 39 | 27.09.2026 | 6.588 TWh | 74.1 % |
+| [12.10.2026, 18:07](../data/reservoirs/snapshots/reservoirs-2026_2026-10-12T16-07-18-428013Z.json) | Energy-Charts | 39 | 27.09.2026 | 6.588 TWh | 74.1 % |
+| [12.10.2026, 19:17](../data/reservoirs/snapshots/reservoirs-2026_2026-10-12T17-17-15-433908Z.json) | BFE direkt | 40 | 04.10.2026 | 6.572 TWh | 73.9 % |
 
-Nur das Metadatenfeld `date` wurde geändert. Wegen der anderen Prüfsumme entstand
-ein neuer Snapshot; die Wochenwerte sind identisch. Die Parquet-Tabelle enthält
-**390 Zeilen** (39 Wochen × 5 Regionen × 2 Versionen).
+Zwischen den zwei Energy-Charts-Versionen änderte sich nur das Metadatenfeld `date`.
+Der direkte BFE-Abruf liefert dagegen einen zusätzlichen Wochenbericht. Die Tabelle
+enthält **590 Zeilen** (195 + 195 + 200); der neueste Stand allein hat 200 Zeilen.
 
 ### Aktueller Stand und Verfügbarkeit
 
-Die automatische Aktualitätsprüfung gegenüber der BFE-Originalquelle ist noch offen.
+Bei jedem Abruf wird die Originalquelle mit dem letzten gespeicherten Stand verglichen:
+Die Ausgabe unterscheidet **neue Wochen**, **revidierte Werte** und **unveränderte Werte**.
+Zusätzlich wird das Alter des Referenzsonntags in Kalendertagen angegeben. `unchanged`
+bedeutet eine identische Rohantwort; ein Abruf garantiert keine neue Berichtswoche.
+Aktuell ist der BFE-Bericht vom 04.10. beim Abruf am 12.10. acht Kalendertage alt.
+Die CSV enthält die gesamte Historie; beim Aufbereiten wird das angefragte Jahr ausgewählt.
 Für Prognosen wählt `latest_reservoir_report(table, delivery_day)` nur Versionen,
 die an **D−1 um 11:00** bereits abgerufen waren. Historische Publikationszeiten
 sind nicht belegt.
@@ -345,7 +353,7 @@ Die ENTSO-E-Transparenzplattform veröffentlicht für die Schweiz eine Prognose 
 flowchart LR
     SG[Swissgrid] -->|make fetch-cab| CAB[(snapshots/*.csv)]
     OM[Open-Meteo ECMWF] -->|make fetch-weather| WX[(ecmwf_ifs/*.json)]
-    EC[Energy-Charts / BFE] -->|make fetch-reservoirs| RES[(reservoirs/snapshots/*.json)]
+    BFECSV[BFE Original-CSV] -->|make fetch-reservoirs| RES[(reservoirs/snapshots/*.json)]
     BFE[BFE-Register] -->|make sites| SITES[(weather_sites.csv)]
     SITES --> OM
     PY[python-holidays] -->|make holidays| HOL[(holidays_ch.csv)]
