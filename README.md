@@ -8,6 +8,7 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/overview.md`](docs/overview.md) | Domain wiki: actors, how balance energy prices are formed, open questions |
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
+| [`docs/baseline.md`](docs/baseline.md) | Baseline: linear quantile regression against a historical reference, backtest and results |
 | [`docs/experiment_tracking.md`](docs/experiment_tracking.md) | W&B setup per person, run conventions, what never goes online |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
 
@@ -22,6 +23,7 @@ make data        # build all tables in data/processed/ from the raw files
 make fetch       # download new Swissgrid, weather and reservoir data (network)
 make test        # run the unit tests
 make tracking-check  # check the W&B login, after the setup in docs/experiment_tracking.md
+make baseline    # backtest of the baseline on June to August (TRACK=1 logs to W&B)
 make help        # list all targets
 ```
 

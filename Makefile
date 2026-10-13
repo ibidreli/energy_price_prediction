@@ -39,7 +39,7 @@ RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs test test-all tracking-check clean-data
+.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs test test-all tracking-check baseline baseline-tune clean-data
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -146,6 +146,12 @@ test-all: $(ENV_READY) ## Run unit tests and checks against the real data
 
 tracking-check: $(ENV_READY) ## Check the W&B login and team entity (network, see docs/experiment_tracking.md)
 	$(PY) -m energy_price.tracking
+
+baseline-tune: data ## Choose the baseline settings on April and May (docs/baseline.md)
+	$(PY) -m energy_price.model.backtest tune
+
+baseline: data ## Backtest reference and baseline on June to August (docs/baseline.md)
+	$(PY) -m energy_price.model.backtest test $(if $(TRACK),--track)
 
 clean-data: ## Delete the processed data (raw data stays untouched)
 	rm -rf $(OUT_DIR)
