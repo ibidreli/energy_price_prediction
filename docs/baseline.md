@@ -170,10 +170,12 @@ Der Pinball Loss misst, wie gut die drei Grenzen liegen. Er bestraft Bänder, di
 
 ## 7. Aktuell noch offen
 
-- **W&B:** Backtest hochladen mit `make baseline TRACK=1`. Die Team-Einladung fehlt noch.
-- **Schlusstest September:** einmal mit unveränderten Einstellungen, sobald die finalen Preise da sind.
-- **Grenze D−2 bestätigen:** Aktualisiert Swissgrid die Preise täglich? Bis dahin ist D−2 eine Annahme.
-- **Hauptkennzahl im Team festlegen:** Hier ist es der Pinball Loss, PR #9 nennt den MAE.
+| Punkt | Woher es kommt | Was zu tun ist |
+|---|---|---|
+| **W&B** | Das Logging ist eingebaut, die Team-Einladung fehlt aber noch | nach der Einrichtung `make baseline TRACK=1` ausführen; die Zahlen bleiben gleich |
+| **Schlusstest September** | Swissgrid veröffentlicht finale Preise bis zum 15. Arbeitstag des Folgemonats, für September also bis etwa 21.10. ([`data.md`](data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)) | einmal mit unveränderten Einstellungen laufen lassen |
+| **Grenze D−2** | Beobachtet wurde bisher nur **ein** Abruf: Am 04.10.2026 um 03:21 enthielt die Swissgrid-Datei alle Daten bis 03.10. 23:45. Die Swissgrid-Webseite spricht aber von einer **wöchentlichen** Veröffentlichung ([`data.md`](data.md#1-die-regel-gegen-datenlecks)) | Lucas täglicher Abruf um 10:30 (bis etwa 18.10.) zeigt, ob die Daten jeden Tag nachgeführt werden. Falls nicht, muss die Grenze in `availability.py` nach hinten, und der Backtest wird neu gerechnet |
+| **Hauptkennzahl** | `docs/evaluation.md` (PR #5) nennt den Pinball Loss, `docs/metric.md` (PR #9) den MAE | im Team festlegen; beide Werte stehen hier in den Ergebnissen |
 
 ## 8. Ergebnisse
 
