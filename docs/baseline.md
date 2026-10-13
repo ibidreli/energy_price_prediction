@@ -9,8 +9,11 @@
 | `src/energy_price/model/dataset.py` | Modellierungstabelle: eine Zeile pro Viertelstunde mit Zielwert und Merkmalen |
 | `src/energy_price/model/scores.py` | Pinball-Loss, MAE, Abdeckung, Breite, Skill Score, Pinball-Loss pro Tag |
 | `src/energy_price/model/models.py` | Historische Referenz und lineare Quantilregression (Merkmalsstufen B1, B2) |
-| `tests/test_model_dataset.py`, `tests/test_model_scores.py`, `tests/test_model_models.py` | Tests, vor allem gegen Datenlecks |
+| `src/energy_price/model/backtest.py` | Backtest Tag für Tag mit dem Wissensstand um 11:00 an D−1; Abstimmung, Test, gesperrter Holdout; optional Logging nach W&B |
+| `tests/test_model_dataset.py`, `tests/test_model_scores.py`, `tests/test_model_models.py`, `tests/test_model_backtest.py` | Tests, vor allem gegen Datenlecks |
 | `pyproject.toml`, `requirements.lock` | neue Abhängigkeit `scikit-learn` (mit `scipy`, `joblib`, `threadpoolctl`) |
+| `Makefile` | `make baseline-tune` (Abstimmung) und `make baseline` (Test), mit `TRACK=1` zusätzlich nach W&B |
+| `.gitignore` | `reports/`: Prognosen, Kennzahlen und Laufinfo des Backtests, nicht versioniert |
 
 ## Begriffe
 
@@ -117,7 +120,27 @@ Die Sonne zieht vor allem P10 nach unten, P90 bleibt. Ist der echte Preis am son
 
 ## Backtest
 
-Folgt mit dem nächsten Schritt.
+Der Backtest spielt die Vergangenheit Tag für Tag so nach, wie die Prognose um 11:00 an D−1 entstanden wäre (`backtest.py`).
+
+| Regel | Umsetzung | Test |
+|---|---|---|
+| Training nur mit Preisen bis D−2 | `training_rows` wählt mit `known_at_issue()` | `test_training_ends_before_d_minus_1_for_every_day_of_the_fold` |
+| Wöchentliches Nachtraining | Das Modell für den ersten Tag einer Woche dient auch den sechs folgenden Tagen; diese sehen also eher ältere Daten, nie neuere | `test_folds_are_weekly_blocks_in_order` |
+| Trainingsfenster | wachsend ab 01.01.2026 oder gleitend über 56 Tage (D−57 bis D−2) | `test_rolling_window_starts_at_d_minus_57` |
+| Gleiche Tage für alle Modelle | Fehlt einem Modell an einem Tag eine Prognose (z. B. Wetterlücke am 24.06.2026) oder fehlt der Preis, fällt der Tag für alle Modelle weg | `test_models_are_compared_on_the_same_days_only` |
+| Holdout gesperrt | September und Oktober nur mit `--unlock-holdout` | `test_holdout_is_locked_unless_released` |
+
+| Zeitraum | Liefertage | Zweck |
+|---|---|---|
+| Abstimmung | 01.04. bis 31.05.2026 | Merkmalsstufe, Fenster und Regularisierung `alpha` wählen (`make baseline-tune`) |
+| Test | 01.06. bis 31.08.2026 | Referenz gegen B1 gegen B2 mit den gewählten Einstellungen (`make baseline`) |
+| Holdout | ab 01.09.2026 | einmaliger Schlusstest, sobald die finalen Septemberpreise vorliegen (bis etwa 21.10.2026) |
+
+Januar bis März dienen nur als Trainingsdaten. Die EDA hat Januar bis August bereits angeschaut; Abstimmung und Test sind darum nicht völlig unberührt. Der Holdout ist es.
+
+**Ausgabe** in `reports/baseline/`: Prognosen (`*_forecasts.parquet`), Kennzahlen (`*_scores.csv`), Pinball-Loss pro Tag, Koeffizienten jedes wöchentlichen Fits und `*_run_info.json` mit Git-Commit, Datenversion und Paketversionen.
+
+**W&B:** `make baseline TRACK=1` loggt Referenz, B1 und B2 als je einen Lauf (Job-Typ `eval`, Gruppe `issue-6`). Voraussetzung ist die Einrichtung nach [`experiment_tracking.md`](experiment_tracking.md). Weil das Modell keinen Zufall enthält, ergibt ein späterer Lauf mit Tracking dieselben Zahlen.
 
 ## Ergebnisse
 
