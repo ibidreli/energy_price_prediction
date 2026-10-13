@@ -1,250 +1,225 @@
 # Baseline: lineare Quantilregression
 
-> Issue [#6](https://github.com/ibidreli/energy_price_prediction/issues/6). Stand: 2026-10-13. Code in `src/energy_price/model/`, Tests in `tests/test_model_*.py`.
+> Issue [#6](https://github.com/ibidreli/energy_price_prediction/issues/6) · Stand 13.10.2026 · Code in `src/energy_price/model/`
 
-## Neu in diesem Branch
+## Kurzfassung
 
-| Datei | Inhalt |
-|---|---|
-| `src/energy_price/model/dataset.py` | Modellierungstabelle: eine Zeile pro Viertelstunde mit Zielwert und Merkmalen |
-| `src/energy_price/model/scores.py` | Pinball-Loss, MAE, Abdeckung, Breite, Skill Score, Pinball-Loss pro Tag |
-| `src/energy_price/model/models.py` | Historische Referenz und lineare Quantilregression (Merkmalsstufen B1, B2) |
-| `src/energy_price/model/backtest.py` | Backtest Tag für Tag mit dem Wissensstand um 11:00 an D−1; Abstimmung, Test, gesperrter Holdout; optional Logging nach W&B |
-| `tests/test_model_dataset.py`, `tests/test_model_scores.py`, `tests/test_model_models.py`, `tests/test_model_backtest.py` | Tests, vor allem gegen Datenlecks |
-| `pyproject.toml`, `requirements.lock` | neue Abhängigkeit `scikit-learn` (mit `scipy`, `joblib`, `threadpoolctl`) |
-| `Makefile` | `make baseline-tune` (Abstimmung) und `make baseline` (Test), mit `TRACK=1` zusätzlich nach W&B |
-| `.gitignore` | `reports/`: Prognosen, Kennzahlen und Laufinfo des Backtests, nicht versioniert |
-| `docs/figures/baseline_test_*.png` | Pinball-Loss pro Stunde, Abdeckung pro Monat, Koeffizienten von B2 |
-| `README.md` | Verweis auf dieses Dokument und `make baseline` |
+- **Was:** Am Vortag um 11:00 sagen wir für jede Viertelstunde des nächsten Tages drei Preise voraus: eine untere Grenze (P10), einen mittleren Wert (P50) und eine obere Grenze (P90).
+- **Modell:** lineare Quantilregression, ein einfaches und erklärbares Modell.
+- **Vergleich:** eine Referenz, die einfach die Preise derselben Uhrzeit der letzten 56 Tage nimmt.
+- **Ergebnis:** Das Modell ist etwa gleich gut wie die Referenz, aber nicht besser.
 
-## Begriffe
+## 1. Ausführen
+
+```bash
+make test              # Tests, unter anderem gegen Data Leakage
+make baseline-tune     # Einstellungen auf April und Mai wählen
+make baseline          # Backtest auf Juni bis August, mit Grafiken
+```
+
+Ergebnisse landen in `reports/baseline/` (nicht im Git), Grafiken in `docs/figures/`. Unter Windows zuerst die Umgebung aktivieren ([README](../README.md#windows--powershell)).
+
+## 2. Änderungen im Repo
+
+**Neu** (Code in `src/energy_price/model/`):
+
+| Datei | Inhalt | Warum |
+|---|---|---|
+| `dataset.py` | Preis und Features pro Viertelstunde | gemeinsame Grundlage; nur Daten, die um 11:00 bekannt sind |
+| `models.py` | Referenz und lineare Quantilregression | Massstab und Baseline an einem Ort |
+| `scores.py` | Pinball Loss, MAE, Coverage, Skill Score | Bewertung vorab festgelegt, für alle Modelle gleich |
+| `backtest.py` | Backtest, Grafiken, W&B-Logging | realistischer Test ohne Data Leakage |
+| `tests/test_model_*.py` | 31 Tests | prüfen automatisch, dass keine späteren Daten ins Modell gelangen |
+| `docs/baseline.md` | dieses Dokument | Vorgehen und Ergebnisse für das Team |
+| `docs/figures/baseline_test_*.png` | 3 Grafiken | Ergebnisse auf einen Blick |
+
+**Geändert:**
+
+| Datei | Änderung | Warum |
+|---|---|---|
+| `pyproject.toml`, `requirements.lock` | `scikit-learn` ergänzt | liefert die Quantilregression |
+| `Makefile` | `make baseline-tune`, `make baseline` | Backtest mit einem Befehl |
+| `.gitignore` | `reports/` | Ergebnisse entstehen bei jedem Lauf neu |
+| `README.md` | Verweis auf dieses Dokument | auffindbar für alle |
+
+Die bestehenden Datenmodule (`availability.py`, `weather.py` usw.) sind unverändert.
+
+## 3. Begriffe
 
 | Begriff | Bedeutung |
 |---|---|
-| **D, D−1, D−2** | Liefertag; Vortag, an dem um 11:00 prognostiziert wird; letzter Tag, dessen Swissgrid-Preise um 11:00 vollständig bekannt sind |
-| **P10, P50, P90** | Quantile des Preises: Nur in 10 % der Fälle liegt der Preis unter P10 beziehungsweise über P90. P50 ist der Median, die Punktprognose |
-| **Datenleck** | Ein Merkmal enthält Information, die um 11:00 an D−1 noch unbekannt war. Der Test sieht dann besser aus als die Praxis |
-| **Referenz** | P10, P50 und P90 der Preise derselben Uhrzeit in den letzten 56 Tagen bis D−2 |
-| **B1, B2** | Modell nur mit Kalendermerkmalen; Modell mit Kalender und Strahlungsprognose |
-| **Pinball-Loss** | Hauptmetrik, siehe [Bewertung](#bewertung) |
-| **Abdeckung, Breite** | Anteil der Preise zwischen P10 und P90 (Ziel 80 %); mittlerer Abstand P90 − P10 |
-| **Skill Score** | 1 − Pinball-Loss Modell / Pinball-Loss Referenz. Über 0 ist das Modell besser; 0.10 heisst 10 % tieferer Verlust |
+| **D** | Liefertag: der Tag, für den wir den Preis vorhersagen |
+| **D−1** | Vortag: Um 11:00 wird die Prognose erstellt |
+| **D−2** | Letzter Tag, dessen Preise um 11:00 schon bekannt sind |
+| **P10** | Untere Grenze: Nur 10 % der Preise liegen darunter |
+| **P50** | Mittlere Prognose (Median) |
+| **P90** | Obere Grenze: Nur 10 % der Preise liegen darüber |
+| **Data Leakage** | Das Modell nutzt Wissen, das um 11:00 noch nicht da war. Der Test sieht dann zu gut aus |
+| **Features** | Eingaben des Modells, z. B. Uhrzeit oder Sonneneinstrahlung |
+| **Referenz** | Einfachste Prognose ohne Modell: P10, P50 und P90 der Preise derselben Uhrzeit in den letzten 56 Tagen ([Abschnitt 5](#referenz)) |
+| **B1** | Modell nur mit Kalender: Uhrzeit, Wochenende, Feiertage |
+| **B2** | B1 plus Sonneneinstrahlung aus der Wetterprognose |
+| **Backtest** | Die Vergangenheit Tag für Tag nachspielen, jeweils nur mit damals bekannten Daten |
+| **Pinball Loss** | Fehler von P10, P50 und P90 zusammen. Tiefer ist besser. Unsere Hauptkennzahl |
+| **MAE** | Mittlere Abweichung von P50 zum echten Preis in ct/kWh |
+| **Coverage** | Anteil der echten Preise zwischen P10 und P90. Ziel: 80 % |
+| **Skill Score** | Um wie viel das Modell besser ist als die Referenz. +10 % heisst 10 % weniger Fehler |
 
-## Modellwahl
+## 4. Warum dieses Modell
 
-### Entscheid
+### Der Preis hat zwei typische Bereiche
 
-Eine **lineare Quantilregression** sagt P10, P50 und P90 direkt vorher. Sie muss eine **historische Referenz** schlagen. Komplexere Modelle (Gradient Boosting, neuronale Netze) müssen später ihrerseits diese Baseline schlagen.
+- **Fehlt Strom im Netz (short):** Preis meist um 19 ct/kWh, nie negativ.
+- **Hat es zu viel Strom (long):** Preis meist um 6 ct/kWh, teils stark negativ (bis −688 ct/kWh).
+- **Welcher Fall eintritt,** lässt sich am Vortag kaum vorhersagen.
+- **Ein normales lineares Modell** sagt einen Mittelwert dazwischen voraus, wo kaum echte Preise liegen.
 
-### Begründung
+### Die Quantilregression löst das
 
-1. **Der Preis besteht aus zwei Verteilungen.** Bei Unterdeckung (short) liegt der Median bei 18.9 ct/kWh und der Preis ist nie negativ, bei Überschuss (long) bei 5.6 ct/kWh mit Werten bis −688 ct/kWh ([`data.md`](data.md#3-swissgrid-regelzonenbilanz)). Die Richtung lässt sich um 11:00 kaum vorhersagen (EDA aus PR #5, `docs/eda.md`, H2: 54 % gegenüber 50.5 % Zufall). Eine gewöhnliche Regression (OLS) schätzt den bedingten Mittelwert, der oft zwischen den beiden Verteilungen liegt. Die Quantilregression schätzt für jedes Quantil eine eigene Gleichung: Die Sonne darf P10 stark senken und P90 kaum verändern.
-2. **Unsicherheit ohne Verteilungsannahme.** Die Quantile kommen direkt aus dem Modell, mit dem Pinball-Loss als Verlustfunktion (Koenker und Bassett 1978).
-3. **Erklärbar.** Jeder Koeffizient ist eine Verschiebung des Quantils in ct/kWh pro Einheit des Merkmals.
-4. **Lineare Modelle sind ernsthafte Benchmarks.** Lago et al. (2021) vergleichen regularisierte lineare Modelle mit neuronalen Netzen und verlangen, neue Methoden gegen einfache Modelle zu prüfen. Ihre Daten sind allerdings Day-Ahead-Handelspreise, nicht Ausgleichsenergiepreise.
-5. **Erwartung ehrlich gesetzt.** Für Ausgleichspreise am Vortag fanden Klæboe et al. (2015) keine informativen Punktprognosen; das Review von Verstraeten et al. (2026) beschreibt Ausgleichspreise als deutlich volatiler als Day-Ahead-Preise, die meisten Studien arbeiten mit Horizonten von wenigen Stunden. Ein Gewinn ist darum eher bei der Unsicherheit als beim MAE zu erwarten.
+- Sie lernt für P10, P50 und P90 je eine eigene Gleichung.
+- Die Sonne kann so P10 stark senken und P90 kaum verändern.
+- Die Unsicherheit kommt direkt aus dem Modell.
 
-### Verworfene oder spätere Alternativen
+### Sie ist erklärbar
 
-| Ansatz | Warum nicht als Baseline |
+- Jeder Koeffizient ist eine Verschiebung in ct/kWh.
+- Beispiel: „Pro 100 W/m² Sonne sinkt P10 um 3 ct/kWh.“
+
+### Was die Literatur erwarten lässt
+
+- Lineare Modelle sind übliche Vergleichsmodelle für Strompreise ([Lago et al. 2021](https://arxiv.org/abs/2008.08004)).
+- Ausgleichspreise schwanken viel stärker als Day-Ahead-Preise ([Verstraeten et al. 2026](https://arxiv.org/abs/2605.17054)).
+- Am Vortag sind sie kaum vorhersagbar ([Klæboe et al. 2015](https://ideas.repec.org/p/gwc/wpaper/2013-006.html)).
+- Ein grosser Vorsprung war darum nicht zu erwarten.
+
+## 5. Aufbau
+
+### Referenz
+
+Die Referenz ist die einfachste Prognose, die ohne Modell möglich ist. Unser Modell muss zeigen, dass es mehr bringt.
+
+**So rechnet sie**, Beispiel für die Viertelstunde 12:00 am Liefertag D:
+
+1. Die Preise um 12:00 der letzten 56 Tage nehmen (D−57 bis D−2): 56 Werte.
+2. Sortieren, vom tiefsten zum höchsten.
+3. Ablesen:
+   - **P10:** etwa der 6. tiefste Wert
+   - **P50:** der mittlere Wert (Median)
+   - **P90:** etwa der 6. höchste Wert
+
+Das sind **Quantile, kein Mittelwert.** Ein Mittelwert würde von einzelnen Extrempreisen (bis −688 ct/kWh) stark verzogen.
+
+**Warum 56 Tage:**
+
+| Grund | Erklärung |
 |---|---|
-| OLS oder Ridge plus Fehlerintervalle | Zielt auf den Mittelwert; die Unsicherheit braucht einen zweiten Schritt |
-| Zweischritt: zuerst short/long, dann Preis (Dumas et al. 2019) | Passt zur Preisformel (A bei short, B bei long), aber die Richtung ist um 11:00 kaum vorhersagbar. Späterer Kandidat |
-| Gradient Boosting, neuronale Netze | Für rund 240 Liefertage und eine erklärbare Baseline zu aufwendig. Spätere Herausforderer |
+| In der EDA am besten | Verglichen wurden 7, 14, 28, 56 Tage und alle Daten. 56 Tage hatten den kleinsten Fehler und die beste Coverage (EDA H11, PR #5) |
+| Ganze Wochen | 56 Tage = 8 Wochen. Jeder Wochentag kommt gleich oft vor |
+| Genug Werte | 56 Werte pro Uhrzeit reichen für stabile P10 und P90; bei 7 Tagen wären es nur 7 |
+| Aktuell genug | Ältere Daten, etwa aus dem Winter, fallen heraus. Die Referenz passt sich laufend an |
 
-## Aufbau
+**Hinweis:** Die 56 Tage wurden in der EDA auf Daten gewählt, die auch den Testzeitraum enthalten. Das macht die Referenz eher stärker. Der Vergleich ist für unser Modell also eher streng als zu günstig.
 
-### Daten (`dataset.py`)
+### Features
 
-Eine Zeile pro Viertelstunde des Liefertags in Schweizer Lokalzeit (92 Viertelstunden bei der Umstellung auf Sommerzeit, 100 bei der Umstellung auf Winterzeit). Zielwert ist `aep_ct_kwh` ab 01.01.2026 (Owner-Entscheid).
+Alle Features sind um 11:00 am Vortag bekannt.
 
-| Merkmal | Quelle | Um 11:00 an D−1 bekannt, weil |
+| Feature | B1 | B2 |
 |---|---|---|
-| Stunde (Lokalzeit) | Kalender | fest |
-| Position in der Stunde (−1.5, −0.5, 0.5, 1.5 für :00 bis :45) | Kalender | fest |
-| Wochenende | Kalender | fest |
-| Anteil der PV-Leistung in Kantonen mit Feiertag | `holidays_ch.csv`, `pv_capacity_by_canton.csv` | gesetzlich festgelegt |
-| Strahlung: PV-gewichtetes Mittel der sechs Standorte in W/m² | ECMWF, Lauf D−2 18 UTC | spätestens D−1 02:00 verfügbar ([`data.md`](data.md#1-die-regel-gegen-datenlecks)) |
-| Änderung der Strahlung: (nächste − vorige Stunde) / 2 | wie oben | wie oben |
+| Uhrzeit | ja | ja |
+| Position der Viertelstunde in der Stunde (der Preis kippt oft innerhalb der Stunde) | ja | ja |
+| Wochenende | ja | ja |
+| Feiertage, gewichtet nach Solarleistung im Kanton | ja | ja |
+| Sonneneinstrahlung, Wetterprognose vom Abend D−2 (sicher vor 11:00 verfügbar) | – | ja |
+| Zu- oder Abnahme der Sonne in dieser Stunde | – | ja |
 
-Eine Strahlungsangabe mit Zeitstempel h:00 ist das Mittel der Stunde davor. Die Viertelstunden h:00 bis h:45 erhalten darum den Wert mit Stempel h+1:00. Der Stempel D 00:00 gehört zum Lauf für D und wird für D−1 nie verwendet; diesen Fall prüft ein Test.
+### Bewertung mit dem Pinball Loss
 
-### Referenz (`models.py`)
+Der Pinball Loss misst, wie gut die drei Grenzen liegen. Er bestraft Bänder, die zu schmal sind (Preis oft ausserhalb), und solche, die unnötig breit sind.
 
-Für jede Uhrzeit des Tages die empirischen Quantile 0.1, 0.5 und 0.9 der Preise derselben Uhrzeit über **56 Tage, D−57 bis D−2**. Die Daten werden mit `known_at_issue()` ausgewählt. Das Fenster von 56 Tagen war in der EDA (H11) die beste Variante der historischen Quantile.
+**Beispiel:** sonniger Mittag, der echte Preis ist −30 ct/kWh.
 
-### Lineare Quantilregression (`models.py`)
-
-Für jedes Quantil τ eine Gleichung:
-
-```
-Preisquantil_τ = Grundwert + Stundeneffekt + Trend innerhalb der Stunde × Stunde
-               + Wochenende + Feiertagsanteil
-               [+ Strahlung + Strahlungsänderung × Position]   nur B2
-```
-
-| Stufe | Merkmale | Parameter je Quantil |
-|---|---|---|
-| **B1** | 23 Stunden-Dummies, 24 Trends innerhalb der Stunde (Position × Stunde), Wochenende, Feiertagsanteil | 50 |
-| **B2** | B1 plus Strahlung (pro 100 W/m²) und Strahlungsänderung × Position | 52 |
-
-Der Trend innerhalb der Stunde bildet ab, dass die Systembilanz zur vollen Stunde in die eine und bis :45 in die andere Richtung kippt, je nach Tageszeit (EDA, H8). Die Strahlungsänderung verschiebt dieses Kippen mit Sonnenauf- und -untergang.
-
-- Geschätzt mit `sklearn.linear_model.QuantileRegressor` (Löser HiGHS) und L1-Regularisierung `alpha`.
-- Die Merkmale werden mit Mittelwert und Standardabweichung **nur der Trainingsdaten** standardisiert. Die Koeffizienten werden für die Auswertung in die ursprünglichen Einheiten zurückgerechnet.
-- Kreuzen sich die Quantile, werden sie pro Viertelstunde sortiert.
-- Der Löser enthält keinen Zufall: gleiche Daten ergeben gleiche Koeffizienten, es braucht keinen Seed.
-
-### Bewertung
-
-| Kennzahl | Bedeutung | Gut ist |
-|---|---|---|
-| **Mittlerer Pinball-Loss** (Hauptmetrik) | Mittel über P10, P50 und P90; bewertet Lage und Breite des Bands zugleich | tiefer als die Referenz |
-| MAE von P50 | Mittlere Abweichung der Punktprognose in ct/kWh | tief |
-| Abdeckung | Anteil der Preise zwischen P10 und P90 | nahe 80 % |
-| Breite | Mittel von P90 − P10 | schmal bei 80 % Abdeckung |
-| Skill Score | 1 − Pinball-Loss Modell / Pinball-Loss Referenz | über 0 |
-
-Pinball-Loss für das Quantil τ, Prognose q und echten Preis y: τ · (y − q), wenn y ≥ q, sonst (1 − τ) · (q − y). Er ist eine *proper scoring rule*: Am besten schneidet ab, wer die wahren Quantile trifft. Ein künstlich schmales oder breites Band verschlechtert ihn. Bei τ = 0.5 ist er der halbe absolute Fehler.
-
-**Hinweis:** Der mittlere Pinball-Loss als Hauptmetrik ist ein Vorschlag. Issue #6 verlangt ihn für die Quantile; eine teamweite Festlegung der Hauptmetrik steht noch aus.
-
-### Zahlenbeispiel
-
-Erfundene Koeffizienten, nur Strahlung S in W/m²:
-
-| | P10 = 3 − 0.04 · S | P50 = 13 − 0.01 · S | P90 = 24 |
+| | P10 | P50 | P90 |
 |---|---|---|---|
-| bedeckt, S = 0 | 3 | 13 | 24 |
-| sonniger Mittag, S = 600 | −21 | 7 | 24 |
+| Prognose | −21 | 7 | 24 |
+| Abstand zum echten Preis | 9 | 37 | 54 |
+| Gewicht | 0.9 | 0.5 | 0.1 |
+| **Pinball Loss** | **8.1** | **18.5** | **5.4** |
 
-Die Sonne zieht vor allem P10 nach unten, P90 bleibt. Ist der echte Preis am sonnigen Mittag −30 ct/kWh, beträgt der Pinball-Loss für P10 0.9 · 9 = 8.1, für P50 0.5 · 37 = 18.5 und für P90 0.1 · 54 = 5.4, im Mittel 10.7. Der Test `test_pinball_matches_the_worked_example` rechnet genau dieses Beispiel nach.
+- **Gewicht:** Liegt der Preis *unter* der Prognose, zählt der Abstand mit 1 − Quantil (bei P10 also 0.9), liegt er darüber, mit dem Quantil selbst.
+- **Deutung:** P10 hätte tiefer liegen müssen, das kostet viel. Dass P90 weit über dem Preis liegt, kostet wenig, denn P90 soll ja hoch liegen.
+- **Gesamt:** Mittel der drei Werte = **10.7**.
 
-## Backtest
+## 6. Backtest ohne Data Leakage
 
-Der Backtest spielt die Vergangenheit Tag für Tag so nach, wie die Prognose um 11:00 an D−1 entstanden wäre (`backtest.py`).
+- **Tag für Tag nachgespielt:** Für jeden Tag wird so prognostiziert, wie es um 11:00 am Vortag möglich gewesen wäre.
+- **Training nur mit Preisen bis D−2.**
+- **Wöchentlich neu trainiert.**
+- **Automatisch geprüft:** Die Tests in `tests/test_model_*.py` stellen sicher, dass keine späteren Daten ins Modell gelangen.
 
-| Regel | Umsetzung | Test |
-|---|---|---|
-| Training nur mit Preisen bis D−2 | `training_rows` wählt mit `known_at_issue()` | `test_training_ends_before_d_minus_1_for_every_day_of_the_fold` |
-| Wöchentliches Nachtraining | Das Modell für den ersten Tag einer Woche dient auch den sechs folgenden Tagen; diese sehen also eher ältere Daten, nie neuere | `test_folds_are_weekly_blocks_in_order` |
-| Trainingsfenster | wachsend ab 01.01.2026 oder gleitend über 56 Tage (D−57 bis D−2) | `test_rolling_window_starts_at_d_minus_57` |
-| Gleiche Tage für alle Modelle | Fehlt einem Modell an einem Tag eine Prognose (z. B. Wetterlücke am 24.06.2026) oder fehlt der Preis, fällt der Tag für alle Modelle weg | `test_models_are_compared_on_the_same_days_only` |
-| Holdout gesperrt | September und Oktober nur mit `--unlock-holdout` | `test_holdout_is_locked_unless_released` |
+| Zeitraum | Zweck |
+|---|---|
+| Januar bis März | nur Training |
+| April und Mai | Einstellungen wählen |
+| Juni bis August | Test |
+| September | Schlusstest (Holdout) mit Daten, die vorher niemand angeschaut hat |
 
-| Zeitraum | Liefertage | Zweck |
-|---|---|---|
-| Abstimmung | 01.04. bis 31.05.2026 | Merkmalsstufe, Fenster und Regularisierung `alpha` wählen (`make baseline-tune`) |
-| Test | 01.06. bis 31.08.2026 | Referenz gegen B1 gegen B2 mit den gewählten Einstellungen (`make baseline`) |
-| Holdout | ab 01.09.2026 | einmaliger Schlusstest, sobald die finalen Septemberpreise vorliegen (bis etwa 21.10.2026) |
+**Gewählte Einstellungen:** Auf April und Mai wurden Trainingsfenster (alle Daten ab 01.01. oder nur die letzten 56 Tage) und Regularisierung (Bremse gegen zu grosse Koeffizienten) verglichen. Am besten waren **alle Daten ab 01.01. ohne Regularisierung**, für B1 und B2.
 
-Januar bis März dienen nur als Trainingsdaten. Die EDA hat Januar bis August bereits angeschaut; Abstimmung und Test sind darum nicht völlig unberührt. Der Holdout ist es.
+**Restrisiko:** Trainiert wird mit den finalen Preisen. Um 11:00 gab es nur provisorische Werte. Die Ergebnisse sind darum leicht zu gut.
 
-**Ausgabe** in `reports/baseline/`: Prognosen (`*_forecasts.parquet`), Kennzahlen (`*_scores.csv`), Pinball-Loss pro Tag, Koeffizienten jedes wöchentlichen Fits und `*_run_info.json` mit Git-Commit, Datenversion und Paketversionen.
+## 7. Aktuell noch offen
 
-**W&B:** `make baseline TRACK=1` loggt Referenz, B1 und B2 als je einen Lauf (Job-Typ `eval`, Gruppe `issue-6`). Voraussetzung ist die Einrichtung nach [`experiment_tracking.md`](experiment_tracking.md). Weil das Modell keinen Zufall enthält, ergibt ein späterer Lauf mit Tracking dieselben Zahlen.
+- **W&B:** Backtest hochladen mit `make baseline TRACK=1`. Die Team-Einladung fehlt noch.
+- **Schlusstest September:** einmal mit unveränderten Einstellungen, sobald die finalen Preise da sind.
+- **Grenze D−2 bestätigen:** Aktualisiert Swissgrid die Preise täglich? Bis dahin ist D−2 eine Annahme.
+- **Hauptkennzahl im Team festlegen:** Hier ist es der Pinball Loss, PR #9 nennt den MAE.
 
-## Ergebnisse
+## 8. Ergebnisse
 
-### Kurzfassung
-
-1. **Die Baseline schlägt die Referenz im Test nicht.** Über Juni bis August liegt der Pinball-Loss von B2 0.7 % über dem der Referenz (Skill Score −0.007); B2 ist an 53 % der Tage besser. Praktisch sind beide gleich gut. Das passt zur Literatur, nach der Ausgleichspreise am Vortag kaum vorhersagbar sind.
-2. **Die Strahlung hilft, aber nur in sonnigen Stunden und bei negativen Preisen.** B2 ist besser als B1 und zwischen 9 und 16 Uhr besser als die Referenz. In Viertelstunden mit negativem Preis senkt B2 den Pinball-Loss gegenüber der Referenz um 4 %.
-3. **Alle Bänder sind zu schmal.** Die Abdeckung liegt bei 73 bis 75 % statt 80 %, im August bei B2 nur bei 66 %.
-4. **Die Einstellungen aus April und Mai übertragen sich nicht vollständig.** In der Abstimmung war B2 4.0 % besser als die Referenz, im Test nicht mehr. Die Einstellungen wurden nach dem Blick auf den Test bewusst nicht geändert; das wäre ein Datenleck über die Modellwahl.
-
-### Abstimmung (April und Mai, 61 Liefertage)
-
-`make baseline-tune` prüft je Merkmalsstufe 2 Fenster und 3 Werte für `alpha` (Auszug, ganze Tabelle in `reports/baseline/tune_scores.csv`):
-
-| Variante | Pinball-Loss | MAE P50 | Abdeckung | Breite | Skill Score |
-|---|---|---|---|---|---|
-| Referenz | 3.449 | 9.98 | 77.6 % | 26.1 | 0 |
-| B1, wachsend, alpha 0 | 3.489 | 10.06 | 73.7 % | 22.5 | −0.012 |
-| B1, 56 Tage, alpha 0.01 | 3.548 | 10.26 | 78.1 % | 25.2 | −0.029 |
-| **B2, wachsend, alpha 0** | **3.311** | **9.72** | 78.3 % | 25.8 | **+0.040** |
-| B2, 56 Tage, alpha 0.01 | 3.470 | 10.22 | 79.9 % | 26.9 | −0.006 |
-| B2, wachsend, alpha 0.1 | 3.686 | 10.52 | 74.8 % | 21.2 | −0.069 |
-
-Gewählt wurde für B1 und B2 das **wachsende Fenster ohne Regularisierung** (`CHOSEN` in `backtest.py`). Bei `alpha = 0.1` setzt die Regularisierung die Strahlung auf null; B2 wird dann identisch mit B1.
-
-### Test (Juni bis August, 91 Liefertage)
-
-Der 24.06.2026 fällt für alle Modelle weg (Wetterlücke im Archiv).
-
-| Modell | Pinball-Loss | MAE P50 | Abdeckung | Breite | Skill Score | Tage besser als Referenz |
-|---|---|---|---|---|---|---|
-| Referenz | **3.202** | 9.92 | **75.2 %** | 26.3 | 0 | – |
-| B1 | 3.251 | 9.94 | 72.7 % | 24.4 | −0.015 | 53 % |
-| B2 | 3.225 | **9.81** | 73.6 % | 25.5 | −0.007 | 53 % |
-
-Pinball-Loss, MAE und Breite in ct/kWh.
-
-| Monat | Referenz | B1 | B2 |
+| Juni bis August (91 Tage) | Pinball Loss | Coverage | gegenüber Referenz |
 |---|---|---|---|
-| Juni | 3.09 | 3.14 | **3.06** |
-| Juli | 3.20 | 3.20 | **3.16** |
-| August | **3.31** | 3.41 | 3.44 |
+| Referenz | **3.20** | **75 %** | – |
+| B1: Kalender | 3.25 | 73 % | −1.5 % |
+| B2: Kalender + Sonne | 3.23 | 74 % | −0.7 % |
 
-| Nur Viertelstunden mit negativem Preis | Pinball-Loss | MAE P50 | Abdeckung |
-|---|---|---|---|
-| Referenz | 7.48 | 23.3 | 57 % |
-| B1 | 8.27 | 26.0 | 46 % |
-| B2 | **7.18** | **22.6** | **61 %** |
+- **Gleich gut, nicht besser:** B2 liegt knapp hinter der Referenz und ist an gut der Hälfte der Tage besser.
+- **Die Sonne hilft mittags:** Von 9 bis 16 Uhr und bei negativen Preisen ist B2 besser als die Referenz, abends schlechter.
+- **Die Bänder sind zu schmal:** Alle Modelle erreichen weniger als 80 % Coverage.
+- **Einstellungen:** In der Abstimmung (April und Mai) war B2 noch 4 % besser. Danach wurde nichts mehr angepasst, damit der Test fair bleibt.
+- **Ein Tag fehlt:** Der 24.06. ist wegen einer Lücke in den Wetterdaten für alle Modelle ausgenommen.
 
-![Pinball-Loss pro Stunde](figures/baseline_test_pinball_by_hour.png)
+![Pinball Loss pro Stunde](figures/baseline_test_pinball_by_hour.png)
 
-B2 ist in den Sonnenstunden von 9 bis 16 Uhr besser als die Referenz, abends von 18 bis 23 Uhr deutlich und nachts leicht schlechter. Abends fehlt ein Merkmal für die Lastrampe (EDA, H8 und Teamfrage zur ENTSO-E-Lastprognose).
-
-![Abdeckung pro Monat](figures/baseline_test_coverage_by_month.png)
-
-Alle Modelle decken weniger als 80 % ab. Bei B2 sinkt die Abdeckung von 80 % im Juni auf 66 % im August.
+![Coverage pro Monat](figures/baseline_test_coverage_by_month.png)
 
 ![Koeffizienten von B2](figures/baseline_test_coefficients.png)
 
-Koeffizienten des letzten Fits (für den 31.08., 23'036 Viertelstunden Training), in ct/kWh pro Einheit:
+**Was das Modell gelernt hat:** Pro 100 W/m² Sonne sinkt P10 um 3 ct/kWh, P90 nur um 0.6. Sonne macht tiefe Preise also wahrscheinlicher, hohe kaum seltener.
 
-- **Strahlung:** pro 100 W/m² sinkt P10 um 3.0, P50 um 1.1 und P90 nur um 0.6 ct/kWh. Bei 800 W/m² liegt P10 damit 24 ct/kWh tiefer, P90 nur 5. Das ist die erwartete Asymmetrie: Sonne macht negative Preise wahrscheinlicher, ändert aber wenig an den hohen Preisen.
-- **Strahlungsänderung × Position:** negativ für alle Quantile. Steigt die Sonne, sinkt der Preis gegen :45 hin; das passt zum Kippen der Systembilanz Richtung long (EDA, H8).
-- **Wochenende:** senkt vor allem P10 (−4.6).
-- **Feiertag:** P10 −13.2, P90 +2.8, also ein breiteres Band. Beruht auf wenigen Feiertagen und ist entsprechend unsicher.
+## 9. Fazit
 
-### Einordnung
+### Was verglichen wurde
 
-- **Warum der Abstand zur Referenz klein ist:** Die Referenz kennt das Tagesprofil der letzten 56 Tage, und das Tagesprofil erklärt einen grossen Teil der vorhersagbaren Struktur. Der zusätzliche Beitrag der Strahlung ist auf wenige Stunden und Tage beschränkt.
-- **Warum B2 im August zurückfällt:** Das wachsende Fenster mischt Winter und Frühling mit Sommer; Grundniveau und Stundenprofil gelten für alle Monate gleich. Die Referenz passt sich mit ihrem 56-Tage-Fenster laufend an. Das ist eine Vermutung; geprüft ist nur, dass das gleitende Fenster in der Abstimmung schlechter war.
-- **Zu schmale Bänder** zeigt schon die EDA für historische Quantile (H11). Die Quantilregression trifft die 80 % im Training genau (80.0 % beim Fit für den 31.08.), aber nicht auf neuen Tagen.
+- **Referenz:** die einfachste Prognose ohne Modell und ohne Wetterdaten: P10, P50 und P90 der Preise derselben Uhrzeit aus den letzten 56 Tagen ([Abschnitt 5](#referenz)).
+- **Baseline B2:** unser Modell. Es nutzt zusätzlich Kalender und Sonnenprognose.
+- **Frage:** Bringt das Modell mehr als der Blick in die Vergangenheit?
 
-### Nächste Schritte (Vorschlag)
+### Was die Zahlen bedeuten
 
-Vorab festgelegt, damit der Holdout nicht zur Modellwahl verwendet wird:
+| Kennzahl | B2 gegenüber Referenz | Einordnung |
+|---|---|---|
+| Pinball Loss | 3.23 statt 3.20 | Unterschied unter 1 %: praktisch gleich gut |
+| Tage besser | 53 % | kaum mehr als ein Münzwurf |
+| MAE von P50 | 9.8 statt 9.9 ct/kWh | P50 liegt im Schnitt rund 10 ct/kWh daneben. Bei typischen Preisen von 6 bis 19 ct/kWh ist das viel |
+| Coverage | 74 % statt 75 % | Ziel 80 %: Etwa jede vierte statt jede fünfte Viertelstunde liegt ausserhalb des Bands |
+| B2 gegenüber B1 | 3.23 statt 3.25 | Die Sonne verbessert das Modell, aber nur leicht |
 
-1. **Holdout September** einmal mit den unveränderten Einstellungen auswerten, sobald die finalen Preise vorliegen.
-2. **Kalibrierung der Bänder:** P10 und P90 mit den Fehlern der letzten Wochen nachträglich verbreitern (z. B. Conformal Prediction) und auf der Abdeckung prüfen.
-3. **Saison:** ein Trainingsfenster ab April oder eine stärkere Gewichtung jüngerer Tage gegen das wachsende Fenster testen.
-4. **Merkmal für die Abendstunden:** ENTSO-E-Lastprognose, sobald ihre Verfügbarkeit um 11:00 belegt ist.
+### Gesamtfazit
 
-### Checkliste aus Issue #6
-
-| Punkt | Stand |
-|---|---|
-| Leakage guard: keine Information nach D−1 11:00 | erfüllt; Swissgrid-Daten nur bis D−2, Wetter nur aus dem Lauf D−2 18 UTC, mit Tests. Restrisiken unter [Grenzen](#grenzen) |
-| Determinismus | erfüllt; der Löser hat keinen Zufall, `*_run_info.json` hält Git-Commit, Datenversion und Paketversionen fest |
-| Vergleich mit einer Referenz | erfüllt; historische Quantile über 56 Tage. Eine reine Persistenz von D−2 wäre schwächer (EDA, H11: Rangkorrelation 0.16) |
-| Artefakte | Prognosen, Kennzahlen, Koeffizienten und Laufinfo in `reports/baseline/`; Grafiken in `docs/figures/`. W&B-Logging vorbereitet (`make baseline TRACK=1`), Lauf folgt nach der Einrichtung des Zugangs |
-
-## Grenzen
-
-- **Grenze D−2 ist eine Annahme.** Ob Swissgrid die Datei täglich aktualisiert, wird bis etwa 18.10.2026 geprüft ([`data.md`](data.md#prüfung-des-aktualisierungsrhythmus)).
-- **Finale statt provisorischer Preise.** Training und Referenz verwenden finale Preise; um 11:00 waren nur provisorische bekannt. Die Ergebnisse sind darum leicht zu optimistisch.
-- **Wenig Daten.** Rund 240 Liefertage seit 01.01.2026, ohne Herbst und mit einem Bruch im Frühling (EDA, H12). Die etwa 23'000 Viertelstunden sind nicht unabhängig; die eigentliche Stichprobe sind die Tage.
-- **Wechselwirkungen** bildet ein lineares Modell nur über gezielt gebaute Merkmale ab.
-
-## Quellen
-
-- R. Koenker, G. Bassett (1978): *Regression Quantiles.* Econometrica 46(1), S. 33 bis 50.
-- J. Lago, G. Marcjasz, B. De Schutter, R. Weron (2021): *Forecasting day-ahead electricity prices: A review of state-of-the-art algorithms, best practices and an open-access benchmark.* Applied Energy 293, 116983. [arXiv:2008.08004](https://arxiv.org/abs/2008.08004)
-- G. Klæboe, A. L. Eriksrud, S.-E. Fleten (2015): *Benchmarking time series based forecasting models for electricity balancing market prices.* Energy Systems 6(1), S. 43 bis 61. [Working Paper](https://ideas.repec.org/p/gwc/wpaper/2013-006.html)
-- J. Dumas et al. (2019): *Probabilistic Forecasting of Imbalance Prices in the Belgian Context.* 16th International Conference on the European Energy Market. [arXiv:2106.07361](https://arxiv.org/abs/2106.07361)
-- A. Verstraeten, M. M. Mascarenhas, H. Kazmi (2026): *A review of imbalance price forecasting in Europe: algorithms, metrics and the way forward.* EEM 2026. [arXiv:2605.17054](https://arxiv.org/abs/2605.17054)
-- [scikit-learn: QuantileRegressor](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.QuantileRegressor.html)
+- **Die Antwort auf die Frage ist nein:** Das Modell ist nicht besser als der Blick in die Vergangenheit, aber auch nicht schlechter.
+- **Das ist erwartbar:** Laut Literatur sind Ausgleichspreise am Vortag kaum vorhersagbar.
+- **Die Sonne hilft punktuell:** mittags und bei negativen Preisen. Abends fehlt Information, etwa eine Lastprognose.
+- **Der Nutzen liegt im Band P10 bis P90,** nicht im einzelnen Wert P50. Das Band ist aber noch zu schmal und muss kalibriert werden.
+- **Die Baseline steht:** reproduzierbar (ein erneuter Lauf ergibt exakt dieselben Zahlen), gegen Data Leakage getestet und erklärbar.
+- **Der Massstab für spätere Modelle:** ein Pinball Loss unter 3.20, also besser als die Referenz.
