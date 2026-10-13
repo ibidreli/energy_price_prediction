@@ -1,8 +1,19 @@
 .DEFAULT_GOAL := help
 
-PYTHON  ?= python3
 VENV    := .venv
+ifeq ($(OS),Windows_NT)
+PYTHON  ?= python
+PY      := $(VENV)/Scripts/python.exe
+GIT_BASH ?= $(subst \,/,$(ProgramFiles))/Git/bin/bash.exe
+SHELL   := $(GIT_BASH)
+.SHELLFLAGS := -c
+export PATH := $(subst /bin/bash.exe,/usr/bin,$(GIT_BASH));$(PATH)
+ENV_READY := check-venv
+else
+PYTHON  ?= python3
 PY      := $(VENV)/bin/python
+ENV_READY := $(VENV)/.installed
+endif
 LOCK    := requirements.lock
 RAW_DIR := data/ausgleichpreis
 OUT_DIR := data/processed
@@ -22,15 +33,24 @@ REGISTER     := data/external/bfe_anlagen.zip
 REGISTER_URL := https://data.geo.admin.ch/ch.bfe.elektrizitaetsproduktionsanlagen/csv/2056/ch.bfe.elektrizitaetsproduktionsanlagen.zip
 CAB_DATA     := $(OUT_DIR)/control_area_balance.parquet
 WEATHER_DATA := $(OUT_DIR)/weather_forecasts.parquet
+RESERVOIR_DIR := data/reservoirs/snapshots
+RESERVOIR_YEARS ?=
+RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv lock data fetch fetch-cab fetch-weather sites holidays figures test test-all clean-data
+.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs test test-all clean-data
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-11s %s\n", $$1, $$2}'
 
 venv: $(VENV)/.installed ## Create .venv with the exact versions from requirements.lock
+
+# Windows run targets use the existing supported Python environment.
+# The explicit `make venv` target retains the Python 3.14 lock workflow.
+check-venv:
+	@test -x $(PY) || { echo "no $(VENV), create it as described in README.md"; exit 1; }
+	@$(PY) -c 'import energy_price, pandas, pyarrow, holidays'
 
 # requirements.lock pins exact versions as constraints. Packages it does not list,
 # e.g. platform-specific ones or a dependency newly added to pyproject.toml, are resolved normally.
@@ -48,24 +68,27 @@ lock: ## Write the package versions installed in .venv to requirements.lock
 	$(PY) -m pip freeze --exclude-editable >> $(LOCK).tmp
 	@mv $(LOCK).tmp $(LOCK)
 
-data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) ## Build all processed tables (only if inputs changed)
+data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) $(RESERVOIR_DATA) ## Build all processed tables (only if inputs changed)
 
-fetch: fetch-cab fetch-weather ## Download new Swissgrid and weather data (network)
+fetch: fetch-cab fetch-weather fetch-reservoirs ## Download new Swissgrid, weather and reservoir data (network)
 
-fetch-cab: venv ## Store a new Swissgrid control area balance snapshot if it changed
+fetch-reservoirs: $(ENV_READY) ## Fetch official BFE reservoir data and report new weeks or revisions
+	$(PY) -m energy_price.reservoir --out $(RESERVOIR_DIR) $(if $(strip $(RESERVOIR_YEARS)),--years $(RESERVOIR_YEARS))
+
+fetch-cab: $(ENV_READY) ## Store a new Swissgrid control area balance snapshot if it changed
 	$(PY) -m energy_price.fetch_swissgrid --out $(CAB_DIR)
 
-fetch-weather: venv ## Download weather forecast runs that are not stored yet
+fetch-weather: $(ENV_READY) ## Download weather forecast runs that are not stored yet
 	$(PY) -m energy_price.fetch_weather --sites $(SITES) --out $(WEATHER_DIR) --start $(WEATHER_FROM)
 
 $(REGISTER):
 	mkdir -p $(dir $@)
 	curl -sSfL -o $@.tmp $(REGISTER_URL) && mv $@.tmp $@
 
-sites: $(REGISTER) venv ## Choose the weather sites from the BFE photovoltaic register
+sites: $(REGISTER) $(ENV_READY) ## Choose the weather sites from the BFE photovoltaic register
 	$(PY) -m energy_price.pv_sites --register $(REGISTER) --out $(META_DIR)
 
-holidays: venv ## Write the legal holidays of all cantons
+holidays: $(ENV_READY) ## Write the legal holidays of all cantons
 	$(PY) -m energy_price.holidays_ch --years 2026 2027 --out $(HOLIDAYS)
 
 # Checksum stamps as for the prices: rebuild when a file is added, removed or its content changes.
@@ -73,40 +96,52 @@ holidays: venv ## Write the legal holidays of all cantons
 # the same second as the last build would otherwise go unnoticed and leave the table stale for good.
 CAB_STAMP     := $(OUT_DIR)/.cab_checksums
 WEATHER_STAMP := $(OUT_DIR)/.weather_checksums
+RESERVOIR_STAMP := $(OUT_DIR)/.reservoir_checksums
 
-$(CAB_STAMP): FORCE | $(VENV)/.installed
+$(RESERVOIR_STAMP): FORCE | $(ENV_READY)
+	@mkdir -p $(OUT_DIR)
+	@$(PY) -m energy_price.checksums $(RESERVOIR_DIR) --pattern 'reservoirs-*.json' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(RESERVOIR_DATA); fi
+
+$(RESERVOIR_DATA): $(RESERVOIR_STAMP) $(SOURCES) | $(ENV_READY)
+	$(PY) -m energy_price.build_sources reservoirs --src $(RESERVOIR_DIR) --out $@
+
+$(CAB_STAMP): FORCE | $(ENV_READY)
 	@mkdir -p $(OUT_DIR)
 	@$(PY) -m energy_price.checksums $(CAB_DIR) --pattern 'control-area-balance-*.csv' > $@.tmp
 	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(CAB_DATA); fi
 
-$(WEATHER_STAMP): FORCE | $(VENV)/.installed
+$(WEATHER_STAMP): FORCE | $(ENV_READY)
 	@mkdir -p $(OUT_DIR)
 	@$(PY) -m energy_price.checksums $(WEATHER_DIR) --pattern 'run_*.json' > $@.tmp
 	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(WEATHER_DATA); fi
 
-$(CAB_DATA): $(CAB_STAMP) $(SOURCES) | $(VENV)/.installed
+$(CAB_DATA): $(CAB_STAMP) $(SOURCES) | $(ENV_READY)
 	$(PY) -m energy_price.build_sources cab --src $(CAB_DIR) --out $@
 
-$(WEATHER_DATA): $(WEATHER_STAMP) $(SOURCES) | $(VENV)/.installed
+$(WEATHER_DATA): $(WEATHER_STAMP) $(SOURCES) | $(ENV_READY)
 	$(PY) -m energy_price.build_sources weather --src $(WEATHER_DIR) --out $@
 
 figures: data $(REGISTER) ## Render the figures of docs/data.md
 	$(PY) -m energy_price.figures_data --out docs/figures
 
+figures-reservoirs: $(RESERVOIR_DATA) ## Render only the reservoir figures
+	$(PY) -m energy_price.figures_data --out docs/figures --only-reservoirs
+
 # Checksums of all raw files. Rewritten only when a file is added, removed or its content
 # changes, so a rebuild never depends on file modification times (cp -p, unzip, git checkout).
-$(RAW_STAMP): FORCE | $(VENV)/.installed
+$(RAW_STAMP): FORCE | $(ENV_READY)
 	@mkdir -p $(OUT_DIR)
 	@$(PY) -m energy_price.checksums $(RAW_DIR) > $@.tmp
 	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(DATASET); fi
 
-$(DATASET): $(RAW_STAMP) $(SOURCES) | $(VENV)/.installed
+$(DATASET): $(RAW_STAMP) $(SOURCES) | $(ENV_READY)
 	$(PY) -m energy_price.build_dataset --raw $(RAW_DIR) --out $@
 
-test: venv ## Run unit tests
+test: $(ENV_READY) ## Run unit tests
 	$(PY) -m pytest -m "not realdata"
 
-test-all: venv ## Run unit tests and checks against the real data
+test-all: $(ENV_READY) ## Run unit tests and checks against the real data
 	$(PY) -m pytest
 
 clean-data: ## Delete the processed data (raw data stays untouched)
