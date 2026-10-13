@@ -8,7 +8,7 @@ is explicitly released with ``--unlock-holdout``; it was not part of the EDA.
 
 Usage:
 ``python -m energy_price.model.backtest tune``    grid over feature set, window and alpha on April and May
-``python -m energy_price.model.backtest test``    reference, B1 and B2 on June to August, with figures
+``python -m energy_price.model.backtest test``    reference, B1 and B2 on June to August, figures in docs/figures
 ``python -m energy_price.model.backtest holdout --unlock-holdout``
 
 ``--track`` logs every model as a W&B run in the group ``issue-6`` (docs/experiment_tracking.md).
@@ -32,7 +32,7 @@ from joblib import Parallel, delayed
 from energy_price.availability import known_at_issue
 from energy_price.model.dataset import FIRST_DAY, ROOT, TARGET, build_table, load_inputs
 from energy_price.model.models import LinearQuantileModel, reference_forecast
-from energy_price.model.scores import COLUMNS, daily_pinball, score, skill_score
+from energy_price.model.scores import COLUMNS, daily_pinball, pinball_per_row, score, skill_score
 
 PERIODS = {
     "tune": ("2026-04-01", "2026-05-31"),
@@ -45,6 +45,7 @@ WINDOWS = {"expanding": None, "rolling_56d": 56}
 ALPHAS = (0.0, 0.01, 0.1)
 ISSUE = 6
 OUT_DIR = ROOT / "reports" / "baseline"
+FIG_DIR = ROOT / "docs" / "figures"
 
 
 @dataclass(frozen=True)
@@ -58,10 +59,11 @@ class Config:
         return self.feature_set
 
 
-# Chosen on the tuning period (April and May), see docs/baseline.md.
+# Chosen on the tuning period (April and May, `make baseline-tune`): for both feature sets the
+# expanding window without penalty had the lowest mean pinball loss, see docs/baseline.md.
 CHOSEN = {
-    "B1": Config("B1", "expanding", 0.01),
-    "B2": Config("B2", "expanding", 0.01),
+    "B1": Config("B1", "expanding", 0.0),
+    "B2": Config("B2", "expanding", 0.0),
 }
 
 
@@ -232,6 +234,108 @@ def evaluate_period(table: pd.DataFrame, period: str, jobs: int, out_dir: Path, 
     return scores
 
 
+# Chart colours: reference palette of the team's figures, categorical slots 1 to 3 (validated all-pairs
+# for colour-blind readers) and an ordinal blue ramp for the three quantiles.
+SERIES = {"reference": "#2a78d6", "B1": "#eb6834", "B2": "#1baf7a"}
+QUANTILE_SHADES = {"q10": "#86b6ef", "q50": "#2a78d6", "q90": "#104281"}
+INK, INK_SECONDARY, GRID, AXIS, SURFACE = "#0b0b0b", "#52514e", "#e1e0d9", "#c3c2b7", "#fcfcfb"
+MONTHS = {6: "June", 7: "July", 8: "August", 9: "September", 10: "October"}
+COEFFICIENTS_SHOWN = {
+    "radiation_100": "Radiation, per 100 W/m²",
+    "radiation_change_100_x_position": "Radiation change × position in hour",
+    "weekend": "Weekend",
+    "holiday_pv_share": "Holiday, full PV share",
+}
+
+
+def _axes(ax, title: str, ylabel: str) -> None:
+    ax.set_facecolor(SURFACE)
+    ax.set_title(title, loc="left", color=INK, fontsize=11, pad=10)
+    ax.set_ylabel(ylabel, color=INK_SECONDARY, fontsize=9)
+    ax.grid(axis="y", color=GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color(AXIS)
+    ax.tick_params(colors=INK_SECONDARY, labelsize=8, length=0)
+
+
+def figures(period: str, out_dir: Path, fig_dir: Path) -> list[Path]:
+    """Pinball loss per hour, coverage per month and B2 coefficients per quantile, as PNG."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    forecasts = pd.read_parquet(out_dir / f"{period}_forecasts.parquet")
+    coefficients = pd.read_csv(out_dir / f"{period}_coefficients.csv", parse_dates=["fit_day"])
+    rows = common_rows(forecasts)
+    rows = rows.assign(pinball=pinball_per_row(rows), inside=(rows[TARGET] >= rows["q10"]) & (rows[TARGET] <= rows["q90"]))
+    models = [m for m in SERIES if m in set(rows["model"])]
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    style = {"font.family": ["Segoe UI", "DejaVu Sans", "sans-serif"], "figure.facecolor": SURFACE}
+
+    with plt.rc_context(style):
+        fig, ax = plt.subplots(figsize=(8, 3.6))
+        by_hour = rows.groupby(["model", "hour"])["pinball"].mean().unstack(0)
+        for m in models:
+            ax.plot(by_hour.index, by_hour[m], color=SERIES[m], linewidth=2, marker="o", markersize=3.5, label=m)
+        ax.set_xticks(range(0, 24, 2))
+        ax.set_xlim(-0.5, 23.5)
+        ax.set_ylim(bottom=0)
+        ax.set_xlabel("Hour of the delivery day (local time)", color=INK_SECONDARY, fontsize=9)
+        _axes(ax, f"Mean pinball loss per hour, {period} period (lower is better)", "ct/kWh")
+        ax.legend(frameon=False, fontsize=8, loc="upper left", ncol=3)
+        paths.append(fig_dir / f"baseline_{period}_pinball_by_hour.png")
+        fig.tight_layout()
+        fig.savefig(paths[-1], dpi=150)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(8, 3.4))
+        by_month = rows.groupby(["model", rows["delivery_day"].dt.month])["inside"].mean().unstack(0) * 100
+        width = 0.26
+        for i, m in enumerate(models):
+            x = np.arange(len(by_month)) + (i - (len(models) - 1) / 2) * (width + 0.02)
+            bars = ax.bar(x, by_month[m], width=width, color=SERIES[m], label=m)
+            ax.bar_label(bars, fmt="%.0f", fontsize=7, color=INK_SECONDARY, padding=2,
+                         bbox={"facecolor": SURFACE, "edgecolor": "none", "pad": 0.6})
+        ax.axhline(80, color=INK_SECONDARY, linewidth=1, linestyle=(0, (4, 3)), zorder=0.5)
+        ax.annotate("target 80 %", (len(by_month) - 0.5, 80), xytext=(0, 4), textcoords="offset points",
+                    ha="right", fontsize=8, color=INK_SECONDARY)
+        ax.set_xticks(range(len(by_month)), [MONTHS.get(k, str(k)) for k in by_month.index])
+        ax.set_ylim(0, 112)
+        ax.set_yticks(range(0, 101, 20))
+        _axes(ax, f"Share of prices between P10 and P90, {period} period", "%")
+        ax.legend(frameon=False, fontsize=8, loc="upper left", ncol=3)
+        paths.append(fig_dir / f"baseline_{period}_coverage_by_month.png")
+        fig.tight_layout()
+        fig.savefig(paths[-1], dpi=150)
+        plt.close(fig)
+
+        last = coefficients[(coefficients["model"] == "B2") & (coefficients["fit_day"] == coefficients["fit_day"].max())]
+        last = last.set_index("feature").loc[list(COEFFICIENTS_SHOWN)]
+        fig, ax = plt.subplots(figsize=(8, 3.4))
+        height = 0.24
+        for i, q in enumerate(QUANTILE_SHADES):
+            y = np.arange(len(last)) + (i - 1) * (height + 0.02)
+            bars = ax.barh(y, last[q], height=height, color=QUANTILE_SHADES[q], label=q.upper().replace("Q", "P"))
+            ax.bar_label(bars, fmt="%.1f", fontsize=7, color=INK_SECONDARY, padding=3)
+        ax.axvline(0, color=AXIS, linewidth=1)
+        ax.set_yticks(range(len(last)), [COEFFICIENTS_SHOWN[f] for f in last.index])
+        ax.invert_yaxis()
+        fit_day = last["fit_day"].iloc[0].date()
+        _axes(ax, f"B2 coefficients per quantile, fit for {fit_day} (ct/kWh per unit)", "")
+        ax.grid(axis="x", color=GRID, linewidth=0.8)
+        ax.grid(axis="y", visible=False)
+        ax.legend(frameon=False, fontsize=8, loc="upper left")
+        paths.append(fig_dir / f"baseline_{period}_coefficients.png")
+        fig.tight_layout()
+        fig.savefig(paths[-1], dpi=150)
+        plt.close(fig)
+    return paths
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("step", choices=["tune", "test", "holdout"])
@@ -247,6 +351,8 @@ def main(argv: list[str] | None = None) -> None:
         scores = tune(table, args.jobs, args.out)
     else:
         scores = evaluate_period(table, args.step, args.jobs, args.out, args.unlock_holdout, args.track)
+        for path in figures(args.step, args.out, FIG_DIR):
+            print(f"figure {path.relative_to(ROOT)}")
     print(scores.round(3).to_string())
     print(f"written to {args.out}")
 

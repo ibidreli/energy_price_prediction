@@ -14,6 +14,8 @@
 | `pyproject.toml`, `requirements.lock` | neue Abhängigkeit `scikit-learn` (mit `scipy`, `joblib`, `threadpoolctl`) |
 | `Makefile` | `make baseline-tune` (Abstimmung) und `make baseline` (Test), mit `TRACK=1` zusätzlich nach W&B |
 | `.gitignore` | `reports/`: Prognosen, Kennzahlen und Laufinfo des Backtests, nicht versioniert |
+| `docs/figures/baseline_test_*.png` | Pinball-Loss pro Stunde, Abdeckung pro Monat, Koeffizienten von B2 |
+| `README.md` | Verweis auf dieses Dokument und `make baseline` |
 
 ## Begriffe
 
@@ -144,7 +146,92 @@ Januar bis März dienen nur als Trainingsdaten. Die EDA hat Januar bis August be
 
 ## Ergebnisse
 
-Folgen nach dem Backtest.
+### Kurzfassung
+
+1. **Die Baseline schlägt die Referenz im Test nicht.** Über Juni bis August liegt der Pinball-Loss von B2 0.7 % über dem der Referenz (Skill Score −0.007); B2 ist an 53 % der Tage besser. Praktisch sind beide gleich gut. Das passt zur Literatur, nach der Ausgleichspreise am Vortag kaum vorhersagbar sind.
+2. **Die Strahlung hilft, aber nur in sonnigen Stunden und bei negativen Preisen.** B2 ist besser als B1 und zwischen 9 und 16 Uhr besser als die Referenz. In Viertelstunden mit negativem Preis senkt B2 den Pinball-Loss gegenüber der Referenz um 4 %.
+3. **Alle Bänder sind zu schmal.** Die Abdeckung liegt bei 73 bis 75 % statt 80 %, im August bei B2 nur bei 66 %.
+4. **Die Einstellungen aus April und Mai übertragen sich nicht vollständig.** In der Abstimmung war B2 4.0 % besser als die Referenz, im Test nicht mehr. Die Einstellungen wurden nach dem Blick auf den Test bewusst nicht geändert; das wäre ein Datenleck über die Modellwahl.
+
+### Abstimmung (April und Mai, 61 Liefertage)
+
+`make baseline-tune` prüft je Merkmalsstufe 2 Fenster und 3 Werte für `alpha` (Auszug, ganze Tabelle in `reports/baseline/tune_scores.csv`):
+
+| Variante | Pinball-Loss | MAE P50 | Abdeckung | Breite | Skill Score |
+|---|---|---|---|---|---|
+| Referenz | 3.449 | 9.98 | 77.6 % | 26.1 | 0 |
+| B1, wachsend, alpha 0 | 3.489 | 10.06 | 73.7 % | 22.5 | −0.012 |
+| B1, 56 Tage, alpha 0.01 | 3.548 | 10.26 | 78.1 % | 25.2 | −0.029 |
+| **B2, wachsend, alpha 0** | **3.311** | **9.72** | 78.3 % | 25.8 | **+0.040** |
+| B2, 56 Tage, alpha 0.01 | 3.470 | 10.22 | 79.9 % | 26.9 | −0.006 |
+| B2, wachsend, alpha 0.1 | 3.686 | 10.52 | 74.8 % | 21.2 | −0.069 |
+
+Gewählt wurde für B1 und B2 das **wachsende Fenster ohne Regularisierung** (`CHOSEN` in `backtest.py`). Bei `alpha = 0.1` setzt die Regularisierung die Strahlung auf null; B2 wird dann identisch mit B1.
+
+### Test (Juni bis August, 91 Liefertage)
+
+Der 24.06.2026 fällt für alle Modelle weg (Wetterlücke im Archiv).
+
+| Modell | Pinball-Loss | MAE P50 | Abdeckung | Breite | Skill Score | Tage besser als Referenz |
+|---|---|---|---|---|---|---|
+| Referenz | **3.202** | 9.92 | **75.2 %** | 26.3 | 0 | – |
+| B1 | 3.251 | 9.94 | 72.7 % | 24.4 | −0.015 | 53 % |
+| B2 | 3.225 | **9.81** | 73.6 % | 25.5 | −0.007 | 53 % |
+
+Pinball-Loss, MAE und Breite in ct/kWh.
+
+| Monat | Referenz | B1 | B2 |
+|---|---|---|---|
+| Juni | 3.09 | 3.14 | **3.06** |
+| Juli | 3.20 | 3.20 | **3.16** |
+| August | **3.31** | 3.41 | 3.44 |
+
+| Nur Viertelstunden mit negativem Preis | Pinball-Loss | MAE P50 | Abdeckung |
+|---|---|---|---|
+| Referenz | 7.48 | 23.3 | 57 % |
+| B1 | 8.27 | 26.0 | 46 % |
+| B2 | **7.18** | **22.6** | **61 %** |
+
+![Pinball-Loss pro Stunde](figures/baseline_test_pinball_by_hour.png)
+
+B2 ist in den Sonnenstunden von 9 bis 16 Uhr besser als die Referenz, abends von 18 bis 23 Uhr deutlich und nachts leicht schlechter. Abends fehlt ein Merkmal für die Lastrampe (EDA, H8 und Teamfrage zur ENTSO-E-Lastprognose).
+
+![Abdeckung pro Monat](figures/baseline_test_coverage_by_month.png)
+
+Alle Modelle decken weniger als 80 % ab. Bei B2 sinkt die Abdeckung von 80 % im Juni auf 66 % im August.
+
+![Koeffizienten von B2](figures/baseline_test_coefficients.png)
+
+Koeffizienten des letzten Fits (für den 31.08., 23'036 Viertelstunden Training), in ct/kWh pro Einheit:
+
+- **Strahlung:** pro 100 W/m² sinkt P10 um 3.0, P50 um 1.1 und P90 nur um 0.6 ct/kWh. Bei 800 W/m² liegt P10 damit 24 ct/kWh tiefer, P90 nur 5. Das ist die erwartete Asymmetrie: Sonne macht negative Preise wahrscheinlicher, ändert aber wenig an den hohen Preisen.
+- **Strahlungsänderung × Position:** negativ für alle Quantile. Steigt die Sonne, sinkt der Preis gegen :45 hin; das passt zum Kippen der Systembilanz Richtung long (EDA, H8).
+- **Wochenende:** senkt vor allem P10 (−4.6).
+- **Feiertag:** P10 −13.2, P90 +2.8, also ein breiteres Band. Beruht auf wenigen Feiertagen und ist entsprechend unsicher.
+
+### Einordnung
+
+- **Warum der Abstand zur Referenz klein ist:** Die Referenz kennt das Tagesprofil der letzten 56 Tage, und das Tagesprofil erklärt einen grossen Teil der vorhersagbaren Struktur. Der zusätzliche Beitrag der Strahlung ist auf wenige Stunden und Tage beschränkt.
+- **Warum B2 im August zurückfällt:** Das wachsende Fenster mischt Winter und Frühling mit Sommer; Grundniveau und Stundenprofil gelten für alle Monate gleich. Die Referenz passt sich mit ihrem 56-Tage-Fenster laufend an. Das ist eine Vermutung; geprüft ist nur, dass das gleitende Fenster in der Abstimmung schlechter war.
+- **Zu schmale Bänder** zeigt schon die EDA für historische Quantile (H11). Die Quantilregression trifft die 80 % im Training genau (80.0 % beim Fit für den 31.08.), aber nicht auf neuen Tagen.
+
+### Nächste Schritte (Vorschlag)
+
+Vorab festgelegt, damit der Holdout nicht zur Modellwahl verwendet wird:
+
+1. **Holdout September** einmal mit den unveränderten Einstellungen auswerten, sobald die finalen Preise vorliegen.
+2. **Kalibrierung der Bänder:** P10 und P90 mit den Fehlern der letzten Wochen nachträglich verbreitern (z. B. Conformal Prediction) und auf der Abdeckung prüfen.
+3. **Saison:** ein Trainingsfenster ab April oder eine stärkere Gewichtung jüngerer Tage gegen das wachsende Fenster testen.
+4. **Merkmal für die Abendstunden:** ENTSO-E-Lastprognose, sobald ihre Verfügbarkeit um 11:00 belegt ist.
+
+### Checkliste aus Issue #6
+
+| Punkt | Stand |
+|---|---|
+| Leakage guard: keine Information nach D−1 11:00 | erfüllt; Swissgrid-Daten nur bis D−2, Wetter nur aus dem Lauf D−2 18 UTC, mit Tests. Restrisiken unter [Grenzen](#grenzen) |
+| Determinismus | erfüllt; der Löser hat keinen Zufall, `*_run_info.json` hält Git-Commit, Datenversion und Paketversionen fest |
+| Vergleich mit einer Referenz | erfüllt; historische Quantile über 56 Tage. Eine reine Persistenz von D−2 wäre schwächer (EDA, H11: Rangkorrelation 0.16) |
+| Artefakte | Prognosen, Kennzahlen, Koeffizienten und Laufinfo in `reports/baseline/`; Grafiken in `docs/figures/`. W&B-Logging vorbereitet (`make baseline TRACK=1`), Lauf folgt nach der Einrichtung des Zugangs |
 
 ## Grenzen
 
