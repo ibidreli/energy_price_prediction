@@ -1,6 +1,6 @@
 # Datengrundlage
 
-> Stand der Erhebung: 2026-10-04. Alle Zahlen in diesem Dokument sind aus den Daten gemessen und lassen sich mit `make data` und `make figures` reproduzieren. Wo etwas eine Vermutung ist, steht es ausdrücklich so da.
+> Stand der Erhebung: 2026-10-04; Stauseen ergänzt und geprüft am 12.10.2026. Alle Zahlen in diesem Dokument sind aus den Daten gemessen und lassen sich mit `make data` und `make figures` reproduzieren. Wo etwas eine Vermutung ist, steht es ausdrücklich so da.
 
 ## Kurzfassung
 
@@ -10,7 +10,8 @@
 | **Regelzonenbilanz** (Swissgrid) | ob in der Schweiz Strom fehlte oder zu viel da war | 01.01. bis 03.10.2026 | vermutlich bis Ende D−2, **wird bis ca. 18.10. geprüft** |
 | **Wetterprognosen** (ECMWF, 6 Standorte) | Sonne, Wolken, Temperatur, Wind, Niederschlag für den Liefertag | Liefertage 01.01. bis 05.10.2026 | ja, Lauf von D−2 18 UTC |
 | **Feiertage** (alle 26 Kantone) | arbeitsfreie Tage | 2026 und 2027 | ja, gesetzlich festgelegt |
-| ENTSO-E Lastprognose | erwarteter Verbrauch | nicht erhoben | **nicht belegbar**, siehe [Abschnitt 6](#6-nicht-erhoben-entso-e-lastprognose) |
+| **Stauseen** (BFE) | verfügbare Speicherenergie | Wochenwerte 04.01. bis 04.10.2026 | nur rechtzeitig beobachtete Snapshots, siehe [Abschnitt 6](#6-stauseen-bfe) |
+| ENTSO-E Lastprognose | erwarteter Verbrauch | nicht erhoben | **nicht belegbar**, siehe [Abschnitt 7](#7-nicht-erhoben-entso-e-lastprognose) |
 
 ![Abdeckung der Daten](figures/coverage.png)
 
@@ -53,6 +54,7 @@ gantt
 | Swissgrid (Preis und Bilanz) | Daten bis **D−2, 24:00** (**Annahme, wird geprüft**) | Die Grenze setzt voraus, dass Swissgrid die Datei **täglich** aktualisiert. Belegt ist bisher nur **eine** Beobachtung: Am Sonntag, 04.10.2026, um 01:21 UTC (03:21 Schweizer Zeit) enthielt sie alles bis 03.10., 23:45. Die Swissgrid-Webseite spricht aber von einer Publikation „on a weekly basis“, und im Web-Archiv gibt es keine älteren Versionen. Wird die Datei nur wöchentlich aktualisiert, leckt die Grenze D−2 um bis zu 5 Tage. Siehe [Prüfung des Aktualisierungsrhythmus](#prüfung-des-aktualisierungsrhythmus). Eine Echtzeit-Datei mit 30 Minuten Verzug, wie sie die Bilanzgruppenvorschriften erwähnen, war auf der Webseite nicht auffindbar. |
 | Wetter | Lauf **D−2, 18 UTC** | Laut Open-Meteo sind Läufe globaler Modelle 4 bis 6 Stunden nach dem Start abrufbar. Mit 6 Stunden gerechnet bleiben bis 11:00 **9 Stunden Reserve im Sommer und 10 im Winter**, an jedem Tag 2026, auch an den Umstellungstagen. Das prüft der Test `test_every_run_of_2026_is_available_at_least_9_hours_before_issue`. |
 | Feiertage | keine | durch kantonales Recht Jahre im Voraus festgelegt |
+| Stauseen | letzter tatsächlich vor D−1, 11:00 abgerufener Wochenbericht | `latest_reservoir_report` prüft Abrufzeit und Berichtswoche; historische Publikationszeiten sind nicht belegt. Details in [Abschnitt 6](#6-stauseen-bfe). |
 
 **Korrektur gegenüber früher:** Im ersten Entwurf stand „Daten bis D−1, 10:30“. Das ist nicht belegbar und gilt nicht mehr.
 
@@ -258,7 +260,82 @@ Für ein Modell bietet sich an, pro Tag zu zählen, wie viele Kantone frei haben
 
 ---
 
-## 6. Nicht erhoben: ENTSO-E Lastprognose
+## 6. Stauseen: BFE
+
+Wöchentliche [BFE-Stauseedaten](https://www.bfe.admin.ch/de/fuellungsgrad-speicherseen),
+abgerufen direkt aus der [offiziellen CSV](https://www.bfe-ogd.ch/ogd17/ogd17_fuellungsgrad_speicherseen.csv).
+Die Quelle liefert **GWh**; unsere Tabelle rechnet in **TWh** (Division durch 1000).
+Ältere Energy-Charts-Snapshots bleiben für die beobachtete Historie erhalten.
+
+### Was enthalten die Daten?
+
+| Grösse | Bedeutung |
+|---|---|
+| `reference_date` | Referenzsonntag des Wochenberichts |
+| `region` | Wallis, Graubünden, Tessin, übrige Schweiz und berechnetes Schweizer Total |
+| `stored_twh`, `capacity_twh` | gespeicherte Energie und maximale Kapazität in TWh |
+| `filling_pct` | Füllungsgrad: `100 * stored_twh / capacity_twh` |
+| `fetched_at_utc` | Zeitpunkt, an dem wir diese Version tatsächlich abgerufen haben |
+
+### Ablauf und Dateien
+
+```bash
+make fetch-reservoirs   # aktuelles Jahr; geänderte Rohantwort als Snapshot speichern
+make data              # Parquet-Tabelle aufbereiten
+make figures-reservoirs # die beiden Grafiken unten neu erzeugen
+```
+
+| Pfad | Inhalt |
+|---|---|
+| `src/energy_price/reservoir.py` | Download, Prüfung, Berechnungen und Auswahl zur Prognosezeit |
+| `data/reservoirs/snapshots/reservoirs-<Jahr>_<Abrufzeit UTC>.json` | CSV-Text in einem JSON-Snapshot mit Abrufmetadaten; ältere Versionen enthalten Energy-Charts-JSON |
+| `data/reservoirs/snapshots/manifest.csv` | eine Zeile pro gespeicherter Version |
+| `data/reservoirs/snapshots/fetch_log.csv` | jeder Abruf, auch ohne Änderung |
+| `data/processed/reservoir_filling.parquet` | eine Zeile pro Snapshot, Woche und Region |
+
+### Speicherinhalt und regionale Füllungsgrade
+
+Die Grafiken verwenden pro Quelljahr den neuesten gespeicherten Snapshot.
+Die Snapshot-Versionen werden deshalb nicht doppelt gezählt. Das ist eine Datenübersicht;
+für historische Prognosen gilt zusätzlich die Verfügbarkeitsprüfung weiter unten.
+
+![Schweizer Speicherinhalt und Kapazität](figures/reservoir_energy.png)
+
+Der Schweizer Inhalt fällt bis zum 19.04. auf **1.051 TWh** und steigt danach bis
+zum 20.09. auf **6.639 TWh**. Der letzte Bericht vom 04.10. enthält **6.572 TWh**.
+
+![Füllungsgrad der vier Regionen und der Schweiz](figures/reservoir_filling.png)
+
+Die Prozentwerte machen Regionen mit unterschiedlichen Kapazitäten vergleichbar.
+Die saisonalen Verläufe unterscheiden sich; ein Nutzen für die Preisprognose ist noch nicht gemessen.
+
+### Unsere gespeicherten Snapshots
+
+| Abruf (Schweizer Zeit) | Quelle | Wochen | Letzter Referenzsonntag | Schweizer Inhalt | Füllungsgrad |
+|---|---|---|---|---|---|
+| [08.10.2026, 17:36](../data/reservoirs/snapshots/reservoirs-2026_2026-10-08T15-36-12-947780Z.json) | Energy-Charts | 39 | 27.09.2026 | 6.588 TWh | 74.1 % |
+| [12.10.2026, 18:07](../data/reservoirs/snapshots/reservoirs-2026_2026-10-12T16-07-18-428013Z.json) | Energy-Charts | 39 | 27.09.2026 | 6.588 TWh | 74.1 % |
+| [12.10.2026, 19:17](../data/reservoirs/snapshots/reservoirs-2026_2026-10-12T17-17-15-433908Z.json) | BFE direkt | 40 | 04.10.2026 | 6.572 TWh | 73.9 % |
+
+Zwischen den zwei Energy-Charts-Versionen änderte sich nur das Metadatenfeld `date`.
+Der direkte BFE-Abruf liefert dagegen einen zusätzlichen Wochenbericht. Die Tabelle
+enthält **590 Zeilen** (195 + 195 + 200); der neueste Stand allein hat 200 Zeilen.
+
+### Aktueller Stand und Verfügbarkeit
+
+Bei jedem Abruf wird die Originalquelle mit dem letzten gespeicherten Stand verglichen:
+Die Ausgabe unterscheidet **neue Wochen**, **revidierte Werte** und **unveränderte Werte**.
+Zusätzlich wird das Alter des Referenzsonntags in Kalendertagen angegeben. `unchanged`
+bedeutet eine identische Rohantwort; ein Abruf garantiert keine neue Berichtswoche.
+Aktuell ist der BFE-Bericht vom 04.10. beim Abruf am 12.10. acht Kalendertage alt.
+Die CSV enthält die gesamte Historie; beim Aufbereiten wird das angefragte Jahr ausgewählt.
+Für Prognosen wählt `latest_reservoir_report(table, delivery_day)` nur Versionen,
+die an **D−1 um 11:00** bereits abgerufen waren. Historische Publikationszeiten
+sind nicht belegt.
+
+---
+
+## 7. Nicht erhoben: ENTSO-E Lastprognose
 
 Die ENTSO-E-Transparenzplattform veröffentlicht für die Schweiz eine Prognose des Gesamtverbrauchs für den nächsten Tag. Sie wäre nützlich, **ist aber nicht erhoben**, weil sich ihre Verfügbarkeit um 11:00 nicht belegen lässt:
 
@@ -270,18 +347,20 @@ Die ENTSO-E-Transparenzplattform veröffentlicht für die Schweiz eine Prognose 
 
 ---
 
-## 7. Ablauf und Dateien
+## 8. Ablauf und Dateien
 
 ```mermaid
 flowchart LR
     SG[Swissgrid] -->|make fetch-cab| CAB[(snapshots/*.csv)]
     OM[Open-Meteo ECMWF] -->|make fetch-weather| WX[(ecmwf_ifs/*.json)]
+    BFECSV[BFE Original-CSV] -->|make fetch-reservoirs| RES[(reservoirs/snapshots/*.json)]
     BFE[BFE-Register] -->|make sites| SITES[(weather_sites.csv)]
     SITES --> OM
     PY[python-holidays] -->|make holidays| HOL[(holidays_ch.csv)]
     AEP[(ausgleichpreis/*.xml)] --> DATA
     CAB --> DATA[make data]
     WX --> DATA
+    RES --> DATA
     DATA --> PQ[(data/processed/*.parquet)]
     PQ -->|make figures| FIG[docs/figures]
 ```
@@ -291,21 +370,24 @@ flowchart LR
 | `data/ausgleichpreis/` | Swissgrid-Preise, monatlich | ja |
 | `data/control_area_balance/snapshots/` | Regelzonenbilanz, jede Version mit `manifest.csv` | ja, die Versionen lassen sich später nicht mehr herunterladen |
 | `data/weather/ecmwf_ifs/` | Wetterprognosen, ein JSON pro Lauf | ja, falls das Archiv verschwindet |
+| `data/reservoirs/snapshots/` | Stausee-Wochenberichte, alle beobachteten Versionen mit Metadaten | ja, für Revisionen und beobachtete Verfügbarkeit |
 | `data/meta/` | Standorte, PV pro Kanton, Standort-Kurve, Feiertage | ja |
 | `data/external/` | BFE-Register (18 MB) | nein, `make sites` lädt es neu |
 | `data/processed/` | aufbereitete Tabellen | nein, `make data` baut sie neu |
 
 | Befehl | Wirkung |
 |---|---|
-| `make fetch` | holt neue Swissgrid- und Wetterdaten (Netzwerk) |
+| `make fetch` | holt neue Swissgrid-, Wetter- und Stauseedaten (Netzwerk) |
+| `make fetch-reservoirs` | holt die Schweizer Stauseedaten des aktuellen Kalenderjahres (Europe/Zurich); andere Jahre mit `RESERVOIR_YEARS="2025 2026"` |
 | `make sites` | berechnet die Standorte neu aus dem BFE-Register |
 | `make holidays` | schreibt die Feiertage neu |
 | `make data` | baut alle Tabellen in `data/processed/` |
 | `make figures` | erzeugt die Grafiken dieses Dokuments |
 
-## 8. Offene Punkte
+## 9. Offene Punkte
 
 1. **Aktualisierungsrhythmus von Swissgrid bestätigen** (bis ca. 18.10.2026, siehe [Prüfung](#prüfung-des-aktualisierungsrhythmus)). Davon hängt die Grenze D−2 ab.
 2. **Korrekturen von Swissgrid messen,** sobald die finalen Septemberpreise publiziert sind. Bis dahin ist offen, wie stark provisorische und finale Werte abweichen.
 3. **Knappheitsschwellen klären:** Gelten die Werte von der Swissgrid-Webseite (−1200 / +1000 MW) für 2026? Frage an den Owner oder an Swissgrid.
 4. **ENTSO-E-Token:** entscheiden, ob die Lastprognose geprüft werden soll.
+5. **Historische Stausee-Verfügbarkeit belegen:** archivierte BFE-/Energy-Charts-Versionen und Publikationszeitpunkte suchen, bevor die neuen Werte im Backtest ab Januar als Merkmale verwendet werden.
