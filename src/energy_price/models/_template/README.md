@@ -1,9 +1,9 @@
 # <Modellname>
 
-<!-- Steckbrief des Modells, gleiche Felder wie die EXP-Issue-Vorlage. Nach dem Kopieren alle <...> ersetzen.
+<!-- Steckbrief des Modells. Nach dem Kopieren alle <...> ersetzen.
      Anleitung: docs/models/README.md -->
 
-**Issue:** #<n> · **Status:** in Arbeit / abgeschlossen / verworfen
+**Status:** in Arbeit / abgeschlossen / verworfen
 
 ## Hypothese
 

@@ -1,7 +1,5 @@
 # Baseline: lineare Quantilregression
 
-> Issue [#6](https://github.com/ibidreli/energy_price_prediction/issues/6) · Stand 13.10.2026, Struktur 18.10.2026 (#13) · Code in `src/energy_price/models/baseline_model/`
-
 ## Kurzfassung
 
 - **Was:** Am Vortag um 11:00 sagen wir für jede Viertelstunde des nächsten Tages drei Preise voraus: eine untere Grenze (P10), einen mittleren Wert (P50) und eine obere Grenze (P90).

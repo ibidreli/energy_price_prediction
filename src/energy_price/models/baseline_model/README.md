@@ -1,6 +1,6 @@
 # Baseline: lineare Quantilregression
 
-**Issue:** [#6](https://github.com/ibidreli/energy_price_prediction/issues/6) · **Status:** abgeschlossen, Massstab für alle weiteren Modelle · **Doku:** [`docs/models/baseline_model.md`](../../../../docs/models/baseline_model.md)
+**Status:** abgeschlossen, Massstab für alle weiteren Modelle · **Doku:** [`docs/models/baseline_model.md`](../../../../docs/models/baseline_model.md)
 
 ## Hypothese
 

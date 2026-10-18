@@ -1,65 +1,147 @@
-# Modelle: Aufbau und neues Modell anlegen
+# Modelle: neues Modell erstellen
 
-> Issues [#13](https://github.com/ibidreli/energy_price_prediction/issues/13) und [#14](https://github.com/ibidreli/energy_price_prediction/issues/14) · Stand 18.10.2026
-
-Jedes Modell ist ein Ordner mit zwei Dateien: `model.py` (Modell und Einstellungen) und `README.md` (Hypothese und Ergebnis). Alles andere wird von allen Modellen gemeinsam genutzt und ist nur einmal geschrieben. So werden alle Modelle gleich trainiert, gleich bewertet und sind direkt vergleichbar.
+Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backtest, Kennzahlen und Grafiken sind für alle Modelle gleich und schon fertig. Für ein neues Modell schreibt man deshalb nur das Modell selbst und seine Einstellungen.
 
 ## 1. Übersicht
 
-| Modell | Ordner | Issue | Status | Pinball Loss Test | MAE P50 Test |
-|---|---|---|---|---|---|
-| Referenz (letzte 56 Tage) | `models/shared/reference.py` | – | Massstab | 3.20 | 9.92 |
-| Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | [#6](https://github.com/ibidreli/energy_price_prediction/issues/6) | abgeschlossen | 3.23 | 9.81 |
-| M2 kalibrierte Bänder | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | offen | geplant | | |
-| M3 Gradient Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | offen | geplant | | |
-| M4 Regime-Modell short/long | [`regime_mixture/`](../../src/energy_price/models/regime_mixture/) | offen | geplant | | |
+| Modell | Ordner | Status | MAE P50 Test | Pinball Loss Test |
+|---|---|---|---|---|
+| Referenz (letzte 56 Tage) | `models/shared/reference.py` | Massstab | 9.92 | 3.20 |
+| Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
 
-Geplante Experimente, Reihenfolge und Zeitplan: [Modell-Roadmap](roadmap.md). Jedes umgesetzte Modell bekommt hier eine Zeile.
+Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
 
-## 2. Gemeinsame Bausteine
+## 2. Aufbau eines Modellordners
 
-Diese Teile wurden für die Baseline gebaut und stehen jedem Modell zur Verfügung:
+```text
+src/energy_price/models/<name>/
+├── __init__.py   leer, damit Python den Ordner findet
+├── README.md     Steckbrief: Hypothese, Modell und Features, Ergebnis, Entscheid
+└── model.py      das Modell und seine Einstellungen
+```
+
+In `model.py` stehen drei Variablen:
+
+| Variable | Inhalt | Wann |
+|---|---|---|
+| `MODEL` | das Modell, das trainiert wird | beim Schreiben festlegen |
+| `GRID` | alle Settings, die beim Tuning ausprobiert werden | beim Schreiben festlegen |
+| `CHOSEN` | das beste Setting aus dem Tuning, das im Test verwendet wird | **erst nach dem Tuning** eintragen |
+
+`model.py` wird nie direkt ausgeführt. Das übernimmt `make backtest`: Der Befehl liest die Datei, trainiert das Modell und bewertet es.
+
+## 3. Schritt für Schritt
+
+Beispiel: das geplante Modell `gbm_quantile`.
+
+**1. Vorlage kopieren**
+
+Geplante Modelle haben schon einen Ordner mit `README.md`. Dazu kommen `__init__.py` und `model.py` aus der Vorlage:
+
+```bash
+cp src/energy_price/models/_template/__init__.py src/energy_price/models/gbm_quantile/
+cp src/energy_price/models/_template/model.py src/energy_price/models/gbm_quantile/
+```
+
+Für eine ganz neue Idee wird der ganze Ordner kopiert: `cp -r src/energy_price/models/_template src/energy_price/models/<name>`. Die Vorlage ist sofort lauffähig.
+
+**2. `model.py` schreiben (`MODEL` und `GRID`)**
+
+```python
+from sklearn.ensemble import HistGradientBoostingRegressor
+
+from energy_price.models.shared.base import PerQuantileModel
+
+
+class Model(PerQuantileModel):
+    def __init__(self, feature_set="B2", learning_rate=0.1):
+        super().__init__(feature_set)
+        self.learning_rate = learning_rate
+
+    def make_estimator(self, tau):
+        return HistGradientBoostingRegressor(loss="quantile", quantile=tau, learning_rate=self.learning_rate, random_state=0)
+
+
+MODEL = Model
+
+GRID = [
+    {"feature_set": fs, "window": "expanding", "learning_rate": lr}
+    for fs in ("B1", "B2")
+    for lr in (0.05, 0.1)
+]
+
+CHOSEN = {"gbm": {"feature_set": "B2", "window": "expanding", "learning_rate": 0.1}}   # Platzhalter bis nach dem Tuning
+```
+
+- Ein Setting enthält die Parameter von `Model` und dazu `window`: `"expanding"` trainiert mit allen Daten seit 01.01., `"rolling_56d"` nur mit den letzten 56 Tagen.
+- `PerQuantileModel` erledigt den Rest: ein Modell pro Quantil P10, P50, P90, Features aus dem Feature-Set, keine Prognose bei fehlenden Werten und sortierte Quantile.
+
+**3. Tuning**
+
+```bash
+make backtest MODEL=gbm_quantile STEP=tune
+```
+
+Probiert alle Settings aus `GRID` auf April und Mai aus. Das Ergebnis steht in `reports/gbm_quantile/tune_scores.csv`, eine Zeile pro Setting, zum Beispiel `B2|expanding|0.1`.
+
+**4. Bestes Setting als `CHOSEN` eintragen**
+
+Die Zeile mit der besten Hauptkennzahl in `model.py` als `CHOSEN` eintragen. Vorschlag ist der tiefste MAE (Spalte `mae_q50`), Pinball Loss und Coverage werden mitbeachtet; die Hauptkennzahl legt das Team fest. Der Name links (`"gbm"`) erscheint in den Ergebnissen und Grafiken. Danach wird `CHOSEN` nicht mehr geändert.
+
+**5. Test**
+
+```bash
+make backtest MODEL=gbm_quantile STEP=test
+```
+
+Rechnet Juni bis August und vergleicht automatisch mit der Referenz und der Baseline B2. Ergebnisse in `reports/gbm_quantile/`, Grafiken in `docs/figures/gbm_quantile/`. Mit `TRACK=1` werden die Läufe zusätzlich in W&B gespeichert.
+
+**6. Ergebnis dokumentieren**
+
+Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile in der Übersicht oben nachführen.
+
+## 4. Was alle Modelle gemeinsam nutzen
 
 | Baustein | Datei | Wofür |
 |---|---|---|
-| Feature-Sets `B1`, `B2` | `features/design.py` | `design_matrix(table, "B2")`; neue Features als Block dort ergänzen |
-| `PerQuantileModel` | `models/shared/base.py` | Grundgerüst: ein Schätzer pro Quantil, Standardisierung nur auf Trainingsdaten, fehlende Features, sortierte Quantile |
-| `LinearQuantileModel` | `models/shared/linear.py` | lineare Quantilregression der Baseline, mit Koeffizienten in ct/kWh |
+| Feature-Sets `B1`, `B2` | `features/design.py` | B1 Kalender, B2 Kalender plus Sonnenprognose; neue Features als Block dort ergänzen |
+| `PerQuantileModel` | `models/shared/base.py` | Grundgerüst für jedes Modell |
+| `LinearQuantileModel` | `models/shared/linear.py` | lineare Quantilregression der Baseline |
 | Referenz | `models/shared/reference.py` | Massstab für jedes Modell |
-| Backtest | `evaluation/backtest.py` | Training bis D−2, wöchentlich neu, Holdout-Sperre |
+| Backtest und Ablauf | `evaluation/backtest.py`, `evaluation/experiment.py` | Training bis D−2, wöchentlich neu, `make backtest` |
 | Kennzahlen | `evaluation/scores.py` | MAE, Pinball Loss, Coverage, Skill Score |
-| Ablauf und Befehl | `evaluation/experiment.py` | `make backtest MODEL=<name> STEP=tune\|test` für jeden Modellordner |
-| Grafiken | `evaluation/figures.py` | Fehler pro Stunde, Coverage pro Monat, Koeffizienten |
-| W&B | `evaluation/tracking.py` | mit `TRACK=1`, gruppiert nach der Issue-Nummer im Branchnamen |
+| Grafiken, W&B | `evaluation/figures.py`, `evaluation/tracking.py` | gleiche Grafiken und Tracking für jedes Modell |
 
-Ein neues Modell braucht deshalb oft nur wenige Zeilen. Ein Gradient-Boosting-Modell auf B2 sähe zum Beispiel so aus:
+## 5. Regeln
 
-```python
-class Model(PerQuantileModel):
-    def make_estimator(self, tau):
-        return HistGradientBoostingRegressor(loss="quantile", quantile=tau)
-```
+- **Kein Data Leakage:** Der Backtest gibt dem Modell nur Preise bis D−2. Neue Features gehören in `features/`, mit einem Test, dass sie um D−1 11:00 bekannt sind ([data.md](../data.md#1-die-regel-gegen-datenlecks)).
+- **Erst abstimmen, dann testen:** April und Mai zum Abstimmen, Juni bis August als Test. Der Holdout (September und Oktober) läuft genau einmal ganz am Schluss: `make backtest MODEL=<name> STEP=holdout UNLOCK=1`.
+- **Reproduzierbar:** Modelle mit Zufall setzen einen festen Seed (`random_state=0`).
+- **Tests sind optional:** `tests/test_model_template.py` zeigt, wie ein Modell getestet wird.
 
-## 3. Modell starten
+## 6. To-do: geplante Modelle
 
-Geplante Modelle haben schon einen Ordner mit `README.md` (Hypothese aus der [Roadmap](roadmap.md)). Zum Start kommt `model.py` aus der Vorlage dazu, für eine neue Idee wird der ganze Ordner kopiert:
+Die Baseline erreicht die Referenz, schlägt sie aber nicht. Die drei geplanten Modelle setzen an ihren Schwächen an: zu schmale Unsicherheitsbänder, fehlende Wechselwirkungen zwischen den Einflussgrössen und zwei sehr unterschiedliche Preissituationen im Netz.
 
-```bash
-git checkout -b exp/15-gbm-quantile
-cp src/energy_price/models/_template/__init__.py src/energy_price/models/gbm_quantile/   # geplantes Modell
-cp src/energy_price/models/_template/model.py src/energy_price/models/gbm_quantile/
-cp -r src/energy_price/models/_template src/energy_price/models/<neue_idee>                 # neue Idee
-```
+**Kalibrierte Bänder** · [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/)
 
-1. **`model.py`:** das Modell schreiben (Platzhalter ersetzen), `GRID` und `CHOSEN` anpassen.
-2. **Abstimmen:** `make backtest MODEL=gbm_quantile STEP=tune`, dann die beste Zeile aus `reports/gbm_quantile/tune_scores.csv` als `CHOSEN` eintragen.
-3. **Testen:** `make backtest MODEL=gbm_quantile STEP=test`. Verglichen wird automatisch mit Referenz und Baseline B2, Grafiken landen in `docs/figures/gbm_quantile/`.
-4. **`README.md`:** Ergebnis und Entscheid eintragen, Zeile in der Übersicht oben nachführen.
+Korrigiert die Bänder der Baseline anhand der Fehler der letzten Wochen, damit sie so oft treffen wie vorgesehen (Conformal Prediction).
 
-Der Platzhalter im Template ist lauffähig. Eine frische Kopie lässt sich also sofort backtesten. Eigene Tests sind optional; `tests/test_model_template.py` zeigt, wie.
+- Die Bänder der Baseline sind zu schmal, der echte Preis liegt häufiger ausserhalb als vorgesehen.
+- Ein verlässliches Band ist für den Use Case zentral, weil eine Bilanzgruppe damit ihr Risiko abschätzt.
+- Einfach umzusetzen, und der Korrekturschritt lässt sich später auf jedes Modell anwenden.
 
-## 4. Regeln
+**Gradient Boosting** · [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/)
 
-- **Kein Data Leakage:** Der Backtest gibt `fit` nur Preise bis D−2. Neue Features gehören in `features/`, mit einem Test, dass sie um D−1 11:00 bekannt sind ([data.md](../data.md#1-die-regel-gegen-datenlecks)).
-- **Einstellungen vor dem Test festlegen:** April und Mai zum Abstimmen, Juni bis August als Test. `CHOSEN` danach nicht mehr ändern. Der Holdout (September und Oktober) läuft erst ganz am Schluss.
-- **Reproduzierbar:** Modelle mit Zufall setzen einen festen Seed (`random_state`).
+Viele kleine Entscheidungsbäume, die nacheinander die Fehler der vorherigen korrigieren und direkt P10, P50 und P90 vorhersagen.
+
+- Der Preis hängt von Kombinationen ab, zum Beispiel wirkt die Sonne je nach Uhrzeit und Jahreszeit anders. Ein lineares Modell bildet solche Wechselwirkungen nur ab, wenn man sie von Hand vorgibt; ein Baummodell findet sie selbst.
+- Es zeigt, wie viel jede Datenquelle zur Prognose beiträgt (Feature Importance). Das wurde im Review ausdrücklich verlangt.
+
+**Regime-Modell short/long** · [`regime_mixture/`](../../src/energy_price/models/regime_mixture/)
+
+Schätzt zuerst, ob im Netz Strom fehlt (short) oder zu viel da ist (long), und sagt den Preis dann für beide Situationen getrennt voraus.
+
+- Fehlt Strom, ist der Preis meist hoch; gibt es zu viel Strom, ist er tief und teils negativ. Ein einzelnes Modell mittelt die beiden Situationen und landet dazwischen, wo kaum echte Preise liegen.
+- Im Review wurde dieser Sprung bei unterdeckter Regelzone als zentraler Punkt genannt.
+- Die geschätzte Richtung zeigt zusätzlich, ob eine Bilanzgruppe bei einer Abweichung zahlt oder vergütet wird.

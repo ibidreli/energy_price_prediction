@@ -1,6 +1,6 @@
-# Gradient Boosting mit Quantil-Loss (M3)
+# Gradient Boosting mit Quantil-Loss
 
-**Issue:** offen · **Status:** geplant · **Roadmap:** [M3](../../../../docs/models/roadmap.md#2-experimente)
+**Status:** geplant
 
 ## Hypothese
 
@@ -22,4 +22,4 @@ Ein Baummodell erkennt Interaktionen wie Uhrzeit × Position in der Stunde × St
 
 ## Starten
 
-`model.py` und `__init__.py` aus `../_template/` kopieren, Anleitung in [docs/models/README.md](../../../../docs/models/README.md#3-modell-starten).
+`model.py` und `__init__.py` aus `../_template/` kopieren, Anleitung in [docs/models/README.md](../../../../docs/models/README.md).

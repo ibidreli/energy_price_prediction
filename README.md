@@ -10,7 +10,6 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/models/README.md`](docs/models/README.md) | Model structure: one folder per model, shared backtest, how to start a new model from the template |
 | [`docs/models/baseline_model.md`](docs/models/baseline_model.md) | Baseline: linear quantile regression against a historical reference, backtest and results |
-| [`docs/models/roadmap.md`](docs/models/roadmap.md) | Model roadmap after the baseline: planned experiments, order and status |
 | [`docs/experiment_tracking.md`](docs/experiment_tracking.md) | W&B setup per person, run conventions, what never goes online |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
 
@@ -47,7 +46,7 @@ src/energy_price/
 │   ├── shared/           code all models use: base.py, linear.py, reference.py
 │   ├── _template/        copy to start a new model (docs/models/README.md)
 │   ├── baseline_model/   model.py + README.md
-│   └── ...               planned models, see docs/models/roadmap.md
+│   └── ...               planned models (README only), see docs/models/README.md
 └── evaluation/        4. backtest, scores, experiment runner, figures, W&B tracking
 ```
 

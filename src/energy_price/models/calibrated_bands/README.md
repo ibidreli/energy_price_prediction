@@ -1,6 +1,6 @@
-# Kalibrierte Bänder (M2)
+# Kalibrierte Bänder
 
-**Issue:** offen · **Status:** geplant · **Roadmap:** [M2](../../../../docs/models/roadmap.md#2-experimente)
+**Status:** geplant
 
 ## Hypothese
 
@@ -22,4 +22,4 @@ Conformal Quantile Regression auf der Baseline B2 (`models/shared/linear.py`, Fe
 
 ## Starten
 
-`model.py` und `__init__.py` aus `../_template/` kopieren, Anleitung in [docs/models/README.md](../../../../docs/models/README.md#3-modell-starten).
+`model.py` und `__init__.py` aus `../_template/` kopieren, Anleitung in [docs/models/README.md](../../../../docs/models/README.md).
