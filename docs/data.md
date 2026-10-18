@@ -80,7 +80,7 @@ Für Januar bis August ist der Preis in der Swissgrid-Datei **zu 100 % identisch
 
 ## 2. Ausgleichsenergiepreis
 
-Die Zielgrösse, bereits mit dem Repo geliefert (`data/ausgleichpreis/`, Aufbereitung in `src/energy_price/swissgrid.py`, beschrieben im [README](../README.md#data)). Seit 2026 gilt **ein** Preis pro Viertelstunde (`aep_ct_kwh`), vorher zwei (`long_ct_kwh`, `short_ct_kwh`). Gemäss Owner-Entscheid verwenden wir nur 2026: 23'324 Viertelstunden, final bis 31.08.2026.
+Die Zielgrösse, bereits mit dem Repo geliefert (`data/ausgleichpreis/`, Aufbereitung in `src/energy_price/data/swissgrid.py`, beschrieben im [README](../README.md#data)). Seit 2026 gilt **ein** Preis pro Viertelstunde (`aep_ct_kwh`), vorher zwei (`long_ct_kwh`, `short_ct_kwh`). Gemäss Owner-Entscheid verwenden wir nur 2026: 23'324 Viertelstunden, final bis 31.08.2026.
 
 Wie der Preis berechnet wird, erklärt [overview.md](overview.md).
 
@@ -203,7 +203,7 @@ Von 1 auf 6 Standorte sinkt die Distanz um 48 km, von 6 auf 12 nur noch um 9 km.
 
 Open-Meteo wählt die nächste *Land*-Zelle: Rivaz liegt auf 447 m, also über dem Genfersee (372 m). Die Zelle für Vira liegt rund 7 km südlich am Lago Maggiore.
 
-Die Standortwahl ist reproduzierbar (`make sites`) und lässt sich mit `N_SITES` in `src/energy_price/pv_sites.py` ändern.
+Die Standortwahl ist reproduzierbar (`make sites`) und lässt sich mit `N_SITES` in `src/energy_price/data/pv_sites.py` ändern.
 
 ### Was gespeichert ist
 
@@ -287,7 +287,7 @@ make figures-reservoirs # die beiden Grafiken unten neu erzeugen
 
 | Pfad | Inhalt |
 |---|---|
-| `src/energy_price/reservoir.py` | Download, Prüfung, Berechnungen und Auswahl zur Prognosezeit |
+| `src/energy_price/data/reservoir.py` | Download, Prüfung, Berechnungen und Auswahl zur Prognosezeit |
 | `data/reservoirs/snapshots/reservoirs-<Jahr>_<Abrufzeit UTC>.json` | CSV-Text in einem JSON-Snapshot mit Abrufmetadaten; ältere Versionen enthalten Energy-Charts-JSON |
 | `data/reservoirs/snapshots/manifest.csv` | eine Zeile pro gespeicherter Version |
 | `data/reservoirs/snapshots/fetch_log.csv` | jeder Abruf, auch ohne Änderung |

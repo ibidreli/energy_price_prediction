@@ -33,7 +33,7 @@ Use `start_run` instead of calling `wandb.init` directly. It fills in the team e
 One hypothesis is one issue; every candidate model is its own run in that issue's group. Give each run a `name` and put the model into `config`, so the runs table shows which row is which model:
 
 ```python
-from energy_price.tracking import start_run
+from energy_price.evaluation.tracking import start_run
 
 candidates = {"ridge": make_ridge(), "lgbm_quantile": make_lgbm()}
 cv = {"scheme": "expanding_window", "n_folds": 5, "test_start": "2026-07-01"}

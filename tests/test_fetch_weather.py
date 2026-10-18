@@ -5,7 +5,7 @@ import json
 import pandas as pd
 import pytest
 
-from energy_price import fetch_weather as fw
+from energy_price.data import fetch_weather as fw
 
 SITES = pd.DataFrame({"site": ["A", "B"], "lat": [47.0, 46.5], "lon": [8.0, 7.0]})
 

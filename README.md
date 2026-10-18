@@ -8,7 +8,9 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/overview.md`](docs/overview.md) | Domain wiki: actors, how balance energy prices are formed, open questions |
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
-| [`docs/baseline.md`](docs/baseline.md) | Baseline: linear quantile regression against a historical reference, backtest and results |
+| [`docs/models/README.md`](docs/models/README.md) | Model structure: one folder per model, shared backtest, how to start a new model from the template |
+| [`docs/models/baseline_model.md`](docs/models/baseline_model.md) | Baseline: linear quantile regression against a historical reference, backtest and results |
+| [`docs/models/roadmap.md`](docs/models/roadmap.md) | Model roadmap after the baseline: planned experiments, order and status |
 | [`docs/experiment_tracking.md`](docs/experiment_tracking.md) | W&B setup per person, run conventions, what never goes online |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
 
@@ -24,12 +26,35 @@ make fetch       # download new Swissgrid, weather and reservoir data (network)
 make test        # run the unit tests
 make tracking-check  # check the W&B login, after the setup in docs/experiment_tracking.md
 make baseline    # backtest of the baseline on June to August (TRACK=1 logs to W&B)
+make backtest MODEL=<name> STEP=tune|test   # backtest of any model in src/energy_price/models/
 make help        # list all targets
 ```
 
 `make data` only rebuilds when a raw file was added, removed or changed.
 
 **Dependencies.** `requirements.lock` pins every package version and records the Python version it was created with. `make venv` installs exactly these versions and stops with a hint if your Python version differs, for example `make venv PYTHON=python3.14`. To add or update a package: change `pyproject.toml`, install it into `.venv`, then run `make lock` and commit the new lock file. The code itself also runs on Python 3.11 with pandas 2.2.
+
+## Code
+
+```text
+src/energy_price/
+├── paths.py           repository paths, defined once
+├── availability.py    what is known at the issue time D-1 11:00 (leakage rules)
+├── data/              1. download and read the raw data, build data/processed/ and the data figures
+│                         (make fetch, make data, make figures)
+├── features/          2. model input table and feature sets (B1, B2)
+├── models/            3. one folder per model
+│   ├── shared/           code all models use: base.py, linear.py, reference.py
+│   ├── _template/        copy to start a new model (docs/models/README.md)
+│   ├── baseline_model/   model.py + README.md
+│   └── ...               planned models, see docs/models/roadmap.md
+└── evaluation/        4. backtest, scores, experiment runner, figures, W&B tracking
+```
+
+The folders follow the order of the work: provide the data, form features, train models, evaluate.
+Python package names cannot start with a digit, so the numbers are only shown here.
+
+Tests are in `tests/`: `test_<package>_<module>.py` for the shared parts, `test_<model>.py` for a model.
 
 ## Data
 
@@ -96,7 +121,7 @@ use `GIT_BASH="<path>"` if Git is installed elsewhere.
 The reservoir download defaults to the current calendar year in Europe/Zurich
 and `data/reservoirs/snapshots/`. Override with
 `make fetch-reservoirs RESERVOIR_YEARS="2025 2026"` when needed.
-The direct Python command remains `python -m energy_price.reservoir`, with
+The direct Python command remains `python -m energy_price.data.reservoir`, with
 optional `--years` and `--out` arguments.
 
 The download reads the official BFE CSV directly and compares its weekly values

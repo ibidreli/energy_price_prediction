@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from energy_price import build_dataset, checksums
-from energy_price.swissgrid import OUTPUT_COLUMNS, SwissgridFormatError, load_prices
+from energy_price.data import build_dataset, checksums
+from energy_price.data.swissgrid import OUTPUT_COLUMNS, SwissgridFormatError, load_prices
 from xml_fixtures import month_rows, write_xml
 
 
