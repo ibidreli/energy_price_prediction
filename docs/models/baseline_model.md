@@ -13,6 +13,7 @@
 make test              # Tests, unter anderem gegen Data Leakage
 make baseline-tune     # Einstellungen auf April und Mai wählen (= make backtest STEP=tune)
 make baseline          # Backtest auf Juni bis August, mit Grafiken (= make backtest STEP=test)
+make baseline TRACK=1  # zusätzlich in W&B, Gruppe issue-6 (docs/experiment_tracking.md)
 ```
 
 Ergebnisse landen in `reports/baseline_model/` (nicht im Git), Grafiken in `docs/figures/baseline_model/`. Unter Windows zuerst die Umgebung aktivieren ([README](../../README.md#windows--powershell)).
@@ -175,10 +176,9 @@ Der Pinball Loss misst, wie gut die drei Grenzen liegen. Er bestraft Bänder, di
 
 | Punkt | Woher es kommt | Was zu tun ist |
 |---|---|---|
-| **W&B** | Das Logging ist eingebaut, die Team-Einladung fehlt aber noch | nach der Einrichtung `make baseline TRACK=1` ausführen; die Zahlen bleiben gleich |
 | **Schlusstest September** | Swissgrid veröffentlicht finale Preise bis zum 15. Arbeitstag des Folgemonats, für September also bis etwa 21.10. ([`data.md`](../data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)) | einmal mit unveränderten Einstellungen laufen lassen |
 | **Grenze D−2** | Beobachtet wurde bisher nur **ein** Abruf: Am 04.10.2026 um 03:21 enthielt die Swissgrid-Datei alle Daten bis 03.10. 23:45. Die Swissgrid-Webseite spricht aber von einer **wöchentlichen** Veröffentlichung ([`data.md`](../data.md#1-die-regel-gegen-datenlecks)) | Lucas täglicher Abruf um 10:30 (bis etwa 18.10.) zeigt, ob die Daten jeden Tag nachgeführt werden. Falls nicht, muss die Grenze in `availability.py` nach hinten, und der Backtest wird neu gerechnet |
-| **Hauptkennzahl** | `docs/evaluation.md` (PR #5) nennt den Pinball Loss, `docs/metric.md` (PR #9) den MAE | im Team festlegen; beide Werte stehen hier in den Ergebnissen |
+| **Hauptkennzahl** | Festgelegt ist der Pinball Loss (Wahl von `CHOSEN`, Vergleich der Modelle), MAE und Coverage ergänzend. `docs/metric.md` (PR #9) nennt noch den MAE | PR #9 an den Pinball Loss angleichen |
 
 ## 8. Ergebnisse
 

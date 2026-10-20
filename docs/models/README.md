@@ -86,7 +86,7 @@ Probiert alle Settings aus `GRID` auf April und Mai aus. Das Ergebnis steht in `
 
 **4. Bestes Setting als `CHOSEN` eintragen**
 
-Die Zeile mit der besten Hauptkennzahl in `model.py` als `CHOSEN` eintragen. Vorschlag ist der tiefste MAE (Spalte `mae_q50`), Pinball Loss und Coverage werden mitbeachtet; die Hauptkennzahl legt das Team fest. Der Name links (`"gbm"`) erscheint in den Ergebnissen und Grafiken. Danach wird `CHOSEN` nicht mehr geändert.
+Die Zeile mit dem tiefsten Pinball Loss (Spalte `pinball`) in `model.py` als `CHOSEN` eintragen. Der Pinball Loss ist die Hauptkennzahl, weil er P10, P50 und P90 zusammen bewertet; MAE (`mae_q50`) und Coverage (`coverage_80`) werden ergänzend angeschaut. Der Name links (`"gbm"`) erscheint in den Ergebnissen und Grafiken. Danach wird `CHOSEN` nicht mehr geändert.
 
 **5. Test**
 
@@ -94,7 +94,7 @@ Die Zeile mit der besten Hauptkennzahl in `model.py` als `CHOSEN` eintragen. Vor
 make backtest MODEL=gbm_quantile STEP=test
 ```
 
-Rechnet Juni bis August und vergleicht automatisch mit der Referenz und der Baseline B2. Ergebnisse in `reports/gbm_quantile/`, Grafiken in `docs/figures/gbm_quantile/`. Mit `TRACK=1` werden die Läufe zusätzlich in W&B gespeichert.
+Rechnet Juni bis August und vergleicht automatisch mit der Referenz und der Baseline B2. Ergebnisse in `reports/gbm_quantile/`, Grafiken in `docs/figures/gbm_quantile/`. Mit `TRACK=1` werden die Läufe zusätzlich in W&B gespeichert: die Kennzahlen des ganzen Zeitraums in der Summary (Runs-Tabelle) und pro Liefertag `test/daily_pinball` sowie `test/daily_pinball_vs_reference` (Modell minus Referenz, unter 0 ist besser) als Liniendiagramm im Workspace. Step 0 ist der erste Tag des Zeitraums.
 
 **6. Ergebnis dokumentieren**
 
