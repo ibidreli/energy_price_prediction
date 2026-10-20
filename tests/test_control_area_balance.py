@@ -3,8 +3,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from energy_price import fetch_swissgrid
-from energy_price.control_area_balance import COLUMNS, ControlAreaBalanceFormatError, latest_snapshot, read_snapshot
+from energy_price.data import fetch_swissgrid
+from energy_price.data.control_area_balance import COLUMNS, ControlAreaBalanceFormatError, latest_snapshot, read_snapshot
 
 HEADER = ";".join(["Date Time [UTC]", *COLUMNS])
 
