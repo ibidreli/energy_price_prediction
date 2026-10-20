@@ -14,12 +14,12 @@ Never put tokens or credentials into ``config``: it is uploaded and visible to t
 
 Example::
 
-    from energy_price.tracking import start_run
+    from energy_price.evaluation.tracking import start_run
 
     with start_run("train", config={"model": "lgbm_quantile", "alpha": 0.1}) as run:
         run.log({"val/pinball_loss": 0.42})
 
-Usage: ``python -m energy_price.tracking`` checks login and entity without starting a run.
+Usage: ``python -m energy_price.evaluation.tracking`` checks login and entity without starting a run.
 """
 
 from __future__ import annotations
@@ -36,12 +36,11 @@ from typing import Any
 import wandb
 from dotenv import dotenv_values
 
+from energy_price.paths import ENV_FILE, PROCESSED_DIR, ROOT
+
 PROJECT = "energy-price-prediction"
-ROOT = Path(__file__).resolve().parents[2]
-ENV_FILE = ROOT / ".env"
 # Only these keys are taken from .env, so a key or token put there by mistake stays unused.
 ENV_KEYS = ("WANDB_ENTITY", "WANDB_PROJECT", "WANDB_MODE")
-PROCESSED_DIR = ROOT / "data" / "processed"
 # One stamp per data source, written by `make data`; new sources are picked up automatically.
 DATA_STAMP_GLOB = ".*_checksums"
 # Branch naming from docs/project_management.md is <type>/<issue-id>-<description>. Branches in use

@@ -4,7 +4,7 @@ Holidays are fixed by cantonal law and known years in advance, so they are avail
 forecast time. Only the category "public" of the python-holidays package is used; customary
 days off without legal status (for example Berchtoldstag in Zurich) are not included.
 
-Usage: ``python -m energy_price.holidays_ch --years 2026 2027 --out data/meta/holidays_ch.csv``
+Usage: ``python -m energy_price.data.holidays_ch --years 2026 2027 --out data/meta/holidays_ch.csv``
 """
 
 from __future__ import annotations

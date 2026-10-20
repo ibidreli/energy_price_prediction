@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from energy_price.fetch_weather import VARIABLES, run_for_delivery_day
-from energy_price.weather import WeatherFormatError, load_weather, missing_values, read_run_file
+from energy_price.data.fetch_weather import VARIABLES, run_for_delivery_day
+from energy_price.data.weather import WeatherFormatError, load_weather, missing_values, read_run_file
 
 
 def write_run(directory: Path, run: pd.Timestamp, sites: list[str], hours: int = 96, gap: str | None = None) -> Path:

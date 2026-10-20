@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from energy_price.holidays_ch import CANTONS, cantonal_holidays
-from energy_price.pv_sites import lv95_to_wgs84, snap_to_municipality, weighted_kmeans
+from energy_price.data.holidays_ch import CANTONS, cantonal_holidays
+from energy_price.data.pv_sites import lv95_to_wgs84, snap_to_municipality, weighted_kmeans
 
 
 def test_every_canton_has_the_national_day_and_new_year():

@@ -1,8 +1,8 @@
 """Build the processed tables for the additional data sources.
 
 Usage:
-``python -m energy_price.build_sources cab --src data/control_area_balance/snapshots --out data/processed/control_area_balance.parquet``
-``python -m energy_price.build_sources weather --src data/weather/ecmwf_ifs --out data/processed/weather_forecasts.parquet``
+``python -m energy_price.data.build_sources cab --src data/control_area_balance/snapshots --out data/processed/control_area_balance.parquet``
+``python -m energy_price.data.build_sources weather --src data/weather/ecmwf_ifs --out data/processed/weather_forecasts.parquet``
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from energy_price.control_area_balance import latest_snapshot, read_snapshot
-from energy_price.reservoir import load_reservoirs
-from energy_price.weather import load_weather, missing_values
+from energy_price.data.control_area_balance import latest_snapshot, read_snapshot
+from energy_price.data.reservoir import load_reservoirs
+from energy_price.data.weather import load_weather, missing_values
 
 
 def write_parquet(frame: pd.DataFrame, out: Path) -> None:

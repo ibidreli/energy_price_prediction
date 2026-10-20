@@ -1,6 +1,6 @@
 """Build ``data/processed/balance_prices.parquet`` from the raw Swissgrid XML files.
 
-Usage: ``python -m energy_price.build_dataset --raw data/ausgleichpreis --out data/processed/balance_prices.parquet``
+Usage: ``python -m energy_price.data.build_dataset --raw data/ausgleichpreis --out data/processed/balance_prices.parquet``
 """
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from energy_price.swissgrid import load_prices
+from energy_price.data.swissgrid import load_prices
 
 
 def main(argv: list[str] | None = None) -> None:

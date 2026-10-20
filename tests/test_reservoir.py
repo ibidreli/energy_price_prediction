@@ -6,8 +6,9 @@ import json
 import pandas as pd
 import pytest
 
-from energy_price import build_sources, reservoir
-from energy_price.reservoir import (
+from energy_price.data import build_sources
+from energy_price.data import reservoir
+from energy_price.data.reservoir import (
     SERIES, ReservoirFormatError, load_reservoirs, parse_payload, read_snapshot, latest_reservoir_report,
 )
 

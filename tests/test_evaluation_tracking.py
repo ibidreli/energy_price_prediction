@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from energy_price import tracking as tr
+from energy_price.evaluation import tracking as tr
 
 NO_GIT = {"git_branch": None, "git_commit": None, "git_dirty": None}
 

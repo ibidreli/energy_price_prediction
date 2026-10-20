@@ -5,7 +5,7 @@ use Monday dates; reference_date denotes the preceding Sunday reported as 'Sunda
 Historical Energy-Charts JSON snapshots remain readable.
 Availability is established by the snapshot's fetch time, never the chart date.
 
-Download: python -m energy_price.reservoir
+Download: python -m energy_price.data.reservoir
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from energy_price.availability import issue_time
-from energy_price.fetch_swissgrid import append_row
+from energy_price.data.fetch_swissgrid import append_row
 
 TZ = "Europe/Zurich"
 BFE_URL = "https://www.bfe-ogd.ch/ogd17/ogd17_fuellungsgrad_speicherseen.csv"

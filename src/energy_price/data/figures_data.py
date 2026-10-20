@@ -1,6 +1,6 @@
 """Render the figures of docs/data.md from the processed data.
 
-Usage: ``python -m energy_price.figures_data --out docs/figures``
+Usage: ``python -m energy_price.data.figures_data --out docs/figures``
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from energy_price.pv_sites import lv95_to_wgs84, read_pv_plants  # noqa: E402
+from energy_price.data.pv_sites import lv95_to_wgs84, read_pv_plants  # noqa: E402
 
 PROCESSED = Path("data/processed")
 META = Path("data/meta")

@@ -19,3 +19,6 @@ data/external/
 .env
 wandb/
 artifacts/
+
+# Backtest results of the baseline, rebuild with `make baseline`
+reports/

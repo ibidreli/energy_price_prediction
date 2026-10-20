@@ -4,7 +4,7 @@ Source: BFE register of all Swiss electricity production plants (opendata, LV95 
 The sites are the centres of a capacity-weighted k-means over all PV plants, each moved to the
 nearest municipality with PV plants so that no site ends up in a lake or on a glacier.
 
-Usage: ``python -m energy_price.pv_sites --register data/external/bfe_anlagen.zip --out data/meta``
+Usage: ``python -m energy_price.data.pv_sites --register data/external/bfe_anlagen.zip --out data/meta``
 """
 
 from __future__ import annotations
