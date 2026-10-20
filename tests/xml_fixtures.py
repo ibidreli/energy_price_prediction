@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from energy_price.swissgrid import TZ
+from energy_price.data.swissgrid import TZ
 
 
 def write_xml(path: Path, series: dict[str, list[tuple[str, str]]], unit: str = "ct/kWh") -> Path:

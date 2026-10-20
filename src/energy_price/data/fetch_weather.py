@@ -7,7 +7,7 @@ D-1 11:00 Swiss time. Later runs are never used, which rules out look-ahead.
 
 One JSON file per run is stored unchanged, together with the request and the download time.
 
-Usage: ``python -m energy_price.fetch_weather --sites data/meta/weather_sites.csv --out data/weather/ecmwf_ifs --start 2026-01-01``
+Usage: ``python -m energy_price.data.fetch_weather --sites data/meta/weather_sites.csv --out data/weather/ecmwf_ifs --start 2026-01-01``
 """
 
 from __future__ import annotations

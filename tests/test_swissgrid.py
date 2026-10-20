@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from energy_price.swissgrid import TZ, SwissgridFormatError, load_prices, read_price_file
+from energy_price.data.swissgrid import TZ, SwissgridFormatError, load_prices, read_price_file
 from xml_fixtures import month_rows, write_xml
 
 REAL_DATA = Path(__file__).resolve().parents[1] / "data" / "ausgleichpreis"

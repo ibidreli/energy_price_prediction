@@ -6,7 +6,7 @@ snapshot. ``manifest.csv`` records URL, download time, ``Last-Modified``, checks
 ``fetch_log.csv`` records every download, changed or not, with ``days_behind``: how many days the
 last complete local day lags behind the download date. It is the evidence for the D-2 cutoff.
 
-Usage: ``python -m energy_price.fetch_swissgrid --out data/control_area_balance/snapshots``
+Usage: ``python -m energy_price.data.fetch_swissgrid --out data/control_area_balance/snapshots``
 """
 
 from __future__ import annotations

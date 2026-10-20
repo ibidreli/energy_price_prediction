@@ -1,0 +1,99 @@
+{"year": 2026, "url": "https://www.energy-charts.info/charts/filling_level/data/ch/year_storage_2026.json", "fetched_at_utc": "2026-10-08T15:36:12.947780+00:00", "last_modified": "Thu, 08 Oct 2026 01:05:31 GMT", "sha256": "6604a9d19f001fb588289ac07c16e1fbd43380772fa191dce48415a854c7238b", "data": [
+ {
+  "name": [ { "en": "Wallis", "de": "Wallis", "fr": "Valais", "it": "Vallese", "es": "Valais" } ],
+  "color": "rgb(228, 26, 28)",
+  "visible": true,
+  "showInLegend": true,
+  "yAxis": 0,
+  "data": [ 2.084, 1.892, 1.695, 1.536, 1.397, 1.273, 1.181, 1.044, 0.928, 0.815, 0.716, 0.614, 0.482, 0.419, 0.411, 0.347, 0.323, 0.368, 0.328, 0.293, 0.306, 0.545, 0.715, 0.84, 1.077, 1.341, 1.617, 1.815, 2.127, 2.341, 2.61, 2.867, 3.089, 3.181, 3.34, 3.407, 3.475, 3.465, 3.453 ],
+  "xAxisValues": [ 1767571200000, 1768176000000, 1768780800000, 1769385600000, 1769990400000, 1770595200000, 1771200000000, 1771804800000, 1772409600000, 1773014400000, 1773619200000, 1774224000000, 1774828800000, 1775433600000, 1776038400000, 1776643200000, 1777248000000, 1777852800000, 1778457600000, 1779062400000, 1779667200000, 1780272000000, 1780876800000, 1781481600000, 1782086400000, 1782691200000, 1783296000000, 1783900800000, 1784505600000, 1785110400000, 1785715200000, 1786320000000, 1786924800000, 1787529600000, 1788134400000, 1788739200000, 1789344000000, 1789948800000, 1790553600000 ],
+  "format": "Highcharts",
+  "chartTitle": [ { "en": "Storage filling level of water reservoirs and hydro storage plants in Switzerland in 2026", "de": "F\u00fcllstand von Speicherwasser- und Pumpspeicherkraftwerken in der Schweiz in 2026", "fr": "Niveau de remplissage des r\u00e9servoirs d'eau et des centrales hydro\u00e9lectriques en Suisse en 2026", "it": "Livello di riempimento dei serbatoi d'acqua e delle centrali idroelettriche in Svizzera nell'anno 2026", "es": "Nivel de llenado de los embalses y centrales hidroel\u00e9ctricas en Suiza en el a\u00f1o 2026" } ],
+  "xAxisFormat": "unixTime",
+  "timeZone": "UTC",
+  "xAxisLabel": [ { "en": "Date", "de": "Datum", "fr": "Date", "it": "Data", "es": "Fecha" } ],
+  "y0AxisLabel": [ { "en": "Energy (TWh)", "de": "Energie (TWh)", "fr": "\u00c9nergie (TWh)", "it": "Energia (TWh)", "es": "Energ\u00eda (TWh)" } ],
+  "y0AxisLabelPercent": [ { "en": "Energy (%)", "de": "Energie (%)", "fr": "\u00c9nergie (%)", "it": "Energia (%)", "es": "Energ\u00eda (%)" } ],
+  "y0AxisDecimalPlaces": 3,
+  "showNavigator": true,
+  "datasource": "<a href=https://opendata.swiss/de/showcase/fullungsgrad-der-speicherseen target=_blank>BFE</a>",
+  "date": 1791421531116,
+  "comment": [ { "en": "Level of the reservoirs in the regions of Valais, Grisons, Ticino and the rest of Switzerland on Sunday at midnight. The report on the filling level of the reservoirs is published weekly.", "de": "F\u00fcllungsgrad der Speicherseen in den Regionen Wallis, Graub\u00fcnden, Tessin sowie in der \u00fcbrigen Schweiz am Sonntag, 24 Uhr. Der Bericht F\u00fcllungsgrad der Speicherseen wird w\u00f6chentlich publiziert.", "fr": "Taux de remplissage des lacs d'accumulation dans les r\u00e9gions du Valais, des Grisons, du Tessin ainsi que dans le reste de la Suisse le dimanche \u00e0 24 heures. Le rapport sur le taux de remplissage des lacs d'accumulation est publi\u00e9 chaque semaine.", "it": "Livello dei serbatoi nelle regioni del Vallese, Grigioni, Ticino e il resto della Svizzera domenica a mezzanotte. Il rapporto sul livello di riempimento dei serbatoi viene pubblicato settimanalmente.", "es": "Nivel de los embalses en las regiones de Valais, Grisones, Tesino y el resto de Suiza el domingo a medianoche. El informe sobre el nivel de llenado de los embalses se publica semanalmente." } ],
+  "stacking": "stacked_absolute_area"
+ },
+ {
+  "name": [ { "en": "Grisons", "de": "Graub\u00fcnden", "fr": "Grisons", "it": "Grigioni", "es": "Graub\u00fcnden" } ],
+  "color": "rgb(55, 126, 184)",
+  "visible": true,
+  "showInLegend": true,
+  "yAxis": 0,
+  "data": [ 1.078, 0.955, 0.841, 0.719, 0.624, 0.538, 0.472, 0.426, 0.384, 0.331, 0.289, 0.262, 0.227, 0.21, 0.216, 0.219, 0.239, 0.28, 0.286, 0.306, 0.345, 0.463, 0.595, 0.708, 0.775, 0.818, 0.869, 0.918, 0.964, 0.998, 1.036, 1.069, 1.097, 1.157, 1.232, 1.26, 1.293, 1.308, 1.316 ]
+ },
+ {
+  "name": [ { "en": "Ticino", "de": "Tessin", "fr": "Tessin", "it": "Ticino", "es": "Ticino" } ],
+  "color": "rgb(77, 175, 74)",
+  "visible": true,
+  "showInLegend": true,
+  "yAxis": 0,
+  "data": [ 0.62, 0.529, 0.475, 0.416, 0.395, 0.356, 0.318, 0.276, 0.238, 0.197, 0.162, 0.123, 0.093, 0.076, 0.084, 0.097, 0.112, 0.144, 0.163, 0.177, 0.199, 0.273, 0.338, 0.386, 0.428, 0.456, 0.483, 0.5, 0.521, 0.541, 0.557, 0.577, 0.587, 0.602, 0.639, 0.656, 0.663, 0.668, 0.628 ]
+ },
+ {
+  "name": [ { "en": "Other Switzerland", "de": "\u00dcbrige Schweiz", "fr": "Reste de la Suisse", "it": "Resto della Svizzera", "es": "Resto de Suiza" } ],
+  "color": "rgb(152, 78, 163)",
+  "visible": true,
+  "showInLegend": true,
+  "yAxis": 0,
+  "data": [ 0.903, 0.819, 0.763, 0.685, 0.651, 0.638, 0.621, 0.583, 0.536, 0.46, 0.432, 0.395, 0.364, 0.35, 0.389, 0.388, 0.403, 0.434, 0.361, 0.359, 0.374, 0.489, 0.581, 0.649, 0.703, 0.77, 0.83, 0.859, 0.921, 0.954, 1.01, 1.077, 1.119, 1.143, 1.177, 1.175, 1.179, 1.198, 1.191 ]
+ },
+ {
+  "name": [ { "en": "Wallis max. storage", "de": "Wallis max. Speicher", "fr": "Niveau de stockage maximal en Valais", "it": "Livello massimo di stoccaggio nel Vallese", "es": "Nivel m\u00e1ximo de almacenamiento en el Valais" } ],
+  "color": "rgb(228, 26, 28)",
+  "type": "line",
+  "visible": false,
+  "showInLegend": true,
+  "yAxis": 0,
+  "hideInPercentView": true,
+  "data": [ 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07, 4.07 ]
+ },
+ {
+  "name": [ { "en": "Grisons max. storage", "de": "Graub\u00fcnden max. Speicher", "fr": "Niveau de stockage maximal dans les Grisons", "it": "Livello massimo di stoccaggio in Grigioni", "es": "Nivel m\u00e1ximo de almacenamiento en los Grisones" } ],
+  "color": "rgb(55, 126, 184)",
+  "type": "line",
+  "visible": false,
+  "showInLegend": true,
+  "yAxis": 0,
+  "hideInPercentView": true,
+  "data": [ 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98, 1.98 ]
+ },
+ {
+  "name": [ { "en": "Tessin max. storage", "de": "Tessin max. Speicher", "fr": "Niveau de stockage maximal au Tessin", "it": "Livello massimo di stoccaggio in Ticino", "es": "Nivel m\u00e1ximo de almacenamiento en Ticino" } ],
+  "color": "rgb(77, 175, 74)",
+  "type": "line",
+  "visible": false,
+  "showInLegend": true,
+  "yAxis": 0,
+  "hideInPercentView": true,
+  "data": [ 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245, 1.245 ]
+ },
+ {
+  "name": [ { "en": "Other Switzerland max. storage", "de": "\u00dcbrige Schweiz max. Speicher", "fr": "Niveau de stockage maximal dans le reste de la Suisse", "it": "Livello massimo di stoccaggio nel resto della Svizzera", "es": "Nivel m\u00e1ximo de almacenamiento en el resto de Suiza" } ],
+  "color": "rgb(152, 78, 163)",
+  "type": "line",
+  "visible": false,
+  "showInLegend": true,
+  "yAxis": 0,
+  "hideInPercentView": true,
+  "data": [ 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6, 1.6 ]
+ },
+ {
+  "name": [ { "en": "Total Switzerland max. storage", "de": "Ganze Schweiz max. Speicher", "fr": "Niveau de stockage maximal dans toute la Suisse", "it": "Livello massimo di stoccaggio in tutta la Svizzera", "es": "Nivel m\u00e1ximo de almacenamiento en toda Suiza" } ],
+  "color": "rgb(0, 0, 0)",
+  "type": "line",
+  "visible": true,
+  "showInLegend": true,
+  "yAxis": 0,
+  "hideInPercentView": true,
+  "data": [ 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895, 8.895 ]
+ }
+]
+}

@@ -3,7 +3,7 @@
 The Makefile compares this output with the previous run to detect added, removed or
 changed raw files, independent of file modification times and of platform tools.
 
-Usage: ``python -m energy_price.checksums data/ausgleichpreis``
+Usage: ``python -m energy_price.data.checksums data/ausgleichpreis``
 """
 
 from __future__ import annotations

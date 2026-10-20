@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from energy_price.fetch_weather import RUN_DAYS_BEFORE_DELIVERY, VARIABLES, run_for_delivery_day
+from energy_price.data.fetch_weather import RUN_DAYS_BEFORE_DELIVERY, VARIABLES, run_for_delivery_day
 
 TZ = "Europe/Zurich"
 UNRELIABLE_VARIABLES = ["snow_depth"]

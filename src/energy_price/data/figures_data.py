@@ -1,6 +1,6 @@
 """Render the figures of docs/data.md from the processed data.
 
-Usage: ``python -m energy_price.figures_data --out docs/figures``
+Usage: ``python -m energy_price.data.figures_data --out docs/figures``
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from energy_price.pv_sites import lv95_to_wgs84, read_pv_plants  # noqa: E402
+from energy_price.data.pv_sites import lv95_to_wgs84, read_pv_plants  # noqa: E402
 
 PROCESSED = Path("data/processed")
 META = Path("data/meta")
@@ -232,12 +232,61 @@ def fig_coverage(out: Path, prices: pd.DataFrame, cab: pd.DataFrame, weather: pd
     save(fig, out, "coverage.png")
 
 
+def fig_reservoirs(out: Path, reservoirs: pd.DataFrame) -> None:
+    """Show the latest observed version per source year, without counting revisions twice."""
+    newest = reservoirs.groupby("source_year")["fetched_at_utc"].transform("max")
+    data = reservoirs[reservoirs["fetched_at_utc"] == newest].sort_values("reference_date")
+    swiss = data[data["region"] == "switzerland"]
+    last = swiss.iloc[-1]
+    years = sorted(data["source_year"].unique())
+    period = str(years[0]) if len(years) == 1 else f"{years[0]}–{years[-1]}"
+    fetched = data["fetched_at_utc"].max().tz_convert("Europe/Zurich")
+    note = f"Snapshot: {fetched:%d.%m.%Y} · letzter Wochenbericht: {last['reference_date']:%d.%m.%Y}"
+
+    fig, ax = plt.subplots(figsize=(10, 4.4))
+    ax.fill_between(swiss["reference_date"], swiss["stored_twh"], color=BLUE, alpha=0.12)
+    ax.plot(swiss["reference_date"], swiss["stored_twh"], color=BLUE, label="Gespeicherte Energie")
+    ax.plot(swiss["reference_date"], swiss["capacity_twh"], color=INK_2, linestyle="--", label="Speicherkapazität")
+    ax.scatter([last["reference_date"]], [last["stored_twh"]], color=BLUE, zorder=3)
+    ax.annotate(f"{last['stored_twh']:.3f} TWh", (last["reference_date"], last["stored_twh"]),
+                xytext=(-8, -20), textcoords="offset points", ha="right", color=INK)
+    ax.set(title=f"Schweizer Speicherinhalt {period}", xlabel="Referenzsonntag", ylabel="Energie [TWh]",
+           ylim=(0, swiss["capacity_twh"].max() * 1.12))
+    german_month_axis(ax.xaxis)
+    ax.legend(loc="upper left", ncol=2)
+    fig.text(0.09, 0.01, note, fontsize=8, color=INK_2)
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    save(fig, out, "reservoir_energy.png")
+
+    fig, ax = plt.subplots(figsize=(10, 4.4))
+    regions = [("valais", "Wallis"), ("grisons", "Graubünden"),
+               ("ticino", "Tessin"), ("other_switzerland", "Übrige Schweiz")]
+    for (region, label), colour in zip(regions, CATEGORICAL[:len(regions)], strict=True):
+        series = data[data["region"] == region]
+        ax.plot(series["reference_date"], series["filling_pct"], color=colour, label=label)
+    ax.plot(swiss["reference_date"], swiss["filling_pct"], color=INK, linestyle="--", label="Schweiz")
+    ax.set(title=f"Füllungsgrad nach Region {period}", xlabel="Referenzsonntag", ylabel="Füllungsgrad",
+           ylim=(0, 100))
+    ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(100))
+    german_month_axis(ax.xaxis)
+    ax.legend(loc="upper left", ncol=3, fontsize=9)
+    fig.text(0.09, 0.01, note, fontsize=8, color=INK_2)
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    save(fig, out, "reservoir_filling.png")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--only-reservoirs", action="store_true", help="render only the two reservoir figures")
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     style()
+
+    fig_reservoirs(args.out, pd.read_parquet(PROCESSED / "reservoir_filling.parquet"))
+    if args.only_reservoirs:
+        print(f"reservoir figures written to {args.out}")
+        return
 
     sites = pd.read_csv(META / "weather_sites.csv")
     prices = pd.read_parquet(PROCESSED / "balance_prices.parquet")
