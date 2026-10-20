@@ -7,6 +7,8 @@ CDS1 Balance Energy Price Prediction Challenge
 |---|---|
 | [`docs/overview.md`](docs/overview.md) | Domain wiki: actors, how balance energy prices are formed, open questions |
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
+| [`docs/eda.md`](docs/eda.md) | Exploratory analysis in two rounds (H1 to H12), feature candidates, questions for the owner; notebooks [`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb) and [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb) |
+| [`docs/evaluation.md`](docs/evaluation.md) | Forecast output (P10, P50, P90) and metrics (mean pinball loss, MAE, coverage, width), with reasons; code in `src/energy_price/metrics.py` |
 | [`docs/metric.md`](docs/metric.md) | Evaluation metric (MAE, pinball loss, coverage) and baseline |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/models/README.md`](docs/models/README.md) | Model structure: one folder per model, shared backtest, how to start a new model from the template |
@@ -24,6 +26,8 @@ make venv        # create .venv with the exact versions from requirements.lock
 make data        # build all tables in data/processed/ from the raw files
 make fetch       # download new Swissgrid, weather and reservoir data (network)
 make test        # run the unit tests
+make notebook    # run the EDA notebooks and store their outputs (one: NB=notebooks/02_eda.ipynb)
+make profile     # automated HTML profile per table in reports/ (own .venv-profile)
 make tracking-check  # check the W&B login, after the setup in docs/experiment_tracking.md
 make baseline    # backtest of the baseline on June to August (TRACK=1 logs to W&B)
 make backtest MODEL=<name> STEP=tune|test   # backtest of any model in src/energy_price/models/
@@ -34,6 +38,7 @@ make help        # list all targets
 
 **Dependencies.** `requirements.lock` pins every package version and records the Python version it was created with. `make venv` installs exactly these versions and stops with a hint if your Python version differs, for example `make venv PYTHON=python3.14`. To add or update a package: change `pyproject.toml`, install it into `.venv`, then run `make lock` and commit the new lock file. The code itself also runs on Python 3.11 with pandas 2.2.
 
+**Profiling.** `fg-data-profiling` (formerly `ydata-profiling`) requires pandas < 3, the project uses pandas 3. `make profile` therefore installs it into a separate `.venv-profile` from `requirements-profile.lock` and never touches `.venv`.
 ## Code
 
 ```text
