@@ -124,9 +124,10 @@ def evaluate_period(name: str, table: pd.DataFrame, period: str, jobs: int, out_
 
     if do_track:
         n_folds = len(folds(days))
-        track_reference(period, scores, n_folds)
+        track_reference(period, scores, n_folds, daily=daily[REFERENCE])
         for variant, settings in module.CHOSEN.items():
-            track(period, variant, {"model": name, **settings}, scores.loc[variant], n_folds, PERIODS[period])
+            track(period, variant, {"model": name, **settings}, scores.loc[variant], n_folds, PERIODS[period],
+                  daily=daily[variant], reference_daily=daily[REFERENCE])
     return scores
 
 

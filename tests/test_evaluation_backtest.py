@@ -8,6 +8,7 @@ from energy_price.evaluation.backtest import (
     common_rows,
     evaluate,
     folds,
+    log_daily,
     period_days,
     run_model,
     run_reference,
@@ -112,3 +113,39 @@ def test_any_model_with_fit_and_predict_runs_through_the_backtest():
     assert set(forecasts["model"]) == {"mean"}
     assert forecasts[["q10", "q50", "q90"]].notna().all().all()
     assert sorted(forecasts["delivery_day"].unique()) == days
+
+
+class RecordingRun:
+    """Stand-in for a W&B run that records define_metric and log calls."""
+
+    def __init__(self):
+        self.metrics, self.rows = {}, []
+
+    def define_metric(self, name, **kwargs):
+        self.metrics[name] = kwargs
+
+    def log(self, row, step):
+        self.rows.append((step, row))
+
+
+def test_daily_pinball_is_logged_as_history_one_step_per_day():
+    days = pd.date_range("2026-06-01", periods=3, freq="D", name="delivery_day")
+    model = pd.Series([2.0, 5.0, 3.0], index=days)
+    reference = pd.Series([2.5, 4.0, 3.0], index=days)
+    run = RecordingRun()
+
+    log_daily(run, "test", model, reference)
+
+    assert run.metrics == {"test/daily_*": {"summary": "none"}}
+    assert [step for step, _ in run.rows] == [0, 1, 2]
+    assert [row["test/daily_pinball"] for _, row in run.rows] == [2.0, 5.0, 3.0]
+    assert [row["test/daily_pinball_vs_reference"] for _, row in run.rows] == [-0.5, 1.0, 0.0]
+
+
+def test_reference_logs_no_difference_to_itself():
+    days = pd.date_range("2026-06-01", periods=2, freq="D", name="delivery_day")
+    run = RecordingRun()
+
+    log_daily(run, "test", pd.Series([1.0, 2.0], index=days))
+
+    assert all(set(row) == {"test/daily_pinball"} for _, row in run.rows)

@@ -179,21 +179,44 @@ def write_outputs(out_dir: Path, period: str, forecasts: pd.DataFrame, scores: p
     (out_dir / f"{period}_run_info.json").write_text(json.dumps(info, indent=2))
 
 
+def log_daily(run, split: str, daily: pd.Series, reference_daily: pd.Series | None = None) -> None:
+    """Pinball loss per delivery day as W&B history, one step per day (step 0 is the first day).
+
+    The workspace draws it as a line chart per run. With ``reference_daily`` the daily difference
+    model minus reference is logged as well: below 0 the model was better on that day. The daily
+    values get no summary, so the summary keeps only the scores of the whole period.
+    """
+    run.define_metric(f"{split}/daily_*", summary="none")
+    diff = None if reference_daily is None else daily - reference_daily.reindex(daily.index)
+    for step, day in enumerate(daily.index):
+        row = {f"{split}/daily_pinball": float(daily[day])}
+        if diff is not None:
+            row[f"{split}/daily_pinball_vs_reference"] = float(diff[day])
+        run.log(row, step=step)
+
+
 def track(split: str, name: str, config: dict, metrics: pd.Series, n_folds: int, period: tuple[str, str],
-          issue: int | None = None) -> None:
-    """Log one model as a W&B run (job type eval, group ``issue-<issue>``, else from the branch name)."""
+          issue: int | None = None, daily: pd.Series | None = None,
+          reference_daily: pd.Series | None = None) -> None:
+    """Log one model as a W&B run (job type eval, group ``issue-<issue>``, else from the branch name).
+
+    ``metrics`` go to the summary; ``daily`` (and ``reference_daily``) to the history, see ``log_daily``.
+    """
     from energy_price.evaluation.tracking import start_run
 
     scheme = "rolling_window" if config.get("window", "").startswith("rolling") else "expanding_window"
     cv = {"scheme": scheme, "n_folds": n_folds, "test_start": period[0], "test_end": period[1],
           "refit_days": REFIT_DAYS}
     with start_run("eval", issue=issue, name=name, config={**config, "cv": cv, "split": split}) as run:
+        if daily is not None:
+            log_daily(run, split, daily, reference_daily)
         for key, value in metrics.items():
             if pd.notna(value):
                 run.summary[f"{split}/{key}"] = float(value)
 
 
-def track_reference(split: str, scores: pd.DataFrame, n_folds: int, issue: int | None = None) -> None:
+def track_reference(split: str, scores: pd.DataFrame, n_folds: int, issue: int | None = None,
+                    daily: pd.Series | None = None) -> None:
     """Log the reference of a period as a W&B run, next to the models of the same issue."""
     track(split, REFERENCE, {"model": REFERENCE, "window": f"rolling_{REFERENCE_WINDOW_DAYS}d"},
-          scores.loc[REFERENCE], n_folds, PERIODS[split], issue)
+          scores.loc[REFERENCE], n_folds, PERIODS[split], issue, daily)
