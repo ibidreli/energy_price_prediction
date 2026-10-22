@@ -8,7 +8,7 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 |---|---|---|---|---|
 | Referenz (letzte 56 Tage) | `models/shared/reference.py` | Massstab | 9.92 | 3.20 |
 | Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
-| Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | abgestimmt; finaler Test nach D−2-Bestätigung | ausstehend | ausstehend |
+| Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | abgestimmt; finaler Test freigegeben | ausstehend | ausstehend |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
 
@@ -106,8 +106,9 @@ Die Zeile mit dem tiefsten Pinball Loss (Spalte `pinball`) in `model.py` als `CH
 
 **5. Test**
 
-Für `gbm_quantile` gemäss Issue #17 erst ausführen, wenn die tägliche Swissgrid-Verfügbarkeit
-bis D−2 bestätigt ist. Bis dahin sind Tuning-Ergebnisse ausdrücklich vorläufig. Der Holdout bleibt gesperrt.
+Die tägliche Swissgrid-Verfügbarkeit bis D−2 wurde am 22.10.2026 vom Nutzer im Projekt
+bestätigt. Damit ist der finale Test für `gbm_quantile` gemäss Issue #17 freigegeben.
+Der Holdout bleibt gesperrt.
 
 ```bash
 make backtest MODEL=gbm_quantile STEP=test

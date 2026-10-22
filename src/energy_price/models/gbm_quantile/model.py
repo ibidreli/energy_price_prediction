@@ -3,6 +3,7 @@
 from energy_price.models.shared.boosting import GradientBoostingQuantileModel
 
 MODEL = GradientBoostingQuantileModel
+ISSUE = 17
 
 # Four conservative configurations, each with both training windows. The first is
 # the anchor; the others change learning rate, tree size or leaf support individually.
@@ -32,7 +33,9 @@ IMPORTANCE_GROUPS = {
 IMPORTANCE_REPEATS = 5
 
 RUN_INFO = {
-    "availability": "D-2 cutoff; daily Swissgrid publication not yet confirmed",
+    "availability": "D-2 cutoff; daily availability at D-1 11:00 confirmed by user on 2026-10-22",
+    "availability_confirmation_date": "2026-10-22",
+    "availability_confirmation_source": "user confirmation in project conversation",
     "early_stopping": False,
     "random_state": 0,
     "feature_comparison": "same B2 features as the linear baseline; no extra data sources",

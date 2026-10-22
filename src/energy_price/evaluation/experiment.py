@@ -200,13 +200,23 @@ def evaluate_period(name: str, table: pd.DataFrame, period: str, jobs: int, out_
     if do_track:
         n_folds = len(folds(days))
         issue = getattr(module, "ISSUE", None)
-        track_reference(period, scores, n_folds, issue=issue, daily=daily[REFERENCE])
+        urls = {REFERENCE: track_reference(period, scores, n_folds, issue=issue, daily=daily[REFERENCE])}
         for variant, settings in module.CHOSEN.items():
-            track(period, variant, {"model": name, **settings, **getattr(module, "RUN_INFO", {})},
+            urls[variant] = track(period, variant, {"model": name, **settings, **getattr(module, "RUN_INFO", {})},
                   scores.loc[variant], n_folds, PERIODS[period], issue=issue,
                   daily=daily[variant], reference_daily=daily[REFERENCE],
                   tables={"breakdowns": breakdown[breakdown["model"] == variant].reset_index(drop=True)},
                   files=tracking_files(out_dir, period))
+        if baseline is not None:
+            variant = f"baseline_{BASELINE_VARIANT}"
+            baseline_module = load(BASELINE)
+            urls[variant] = track(period, variant, {"model": BASELINE,
+                                  **baseline_module.CHOSEN[BASELINE_VARIANT],
+                                  **getattr(baseline_module, "RUN_INFO", {})},
+                                  scores.loc[variant], n_folds, PERIODS[period], issue=issue,
+                                  daily=daily[variant], reference_daily=daily[REFERENCE],
+                                  tables={"breakdowns": breakdown[breakdown["model"] == variant].reset_index(drop=True)})
+        (out_dir / f"{period}_wandb_urls.json").write_text(json.dumps(urls, indent=2), encoding="utf-8")
     return scores
 
 

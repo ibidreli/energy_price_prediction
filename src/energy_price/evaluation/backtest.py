@@ -237,7 +237,7 @@ def track(split: str, name: str, config: dict, metrics: pd.Series, n_folds: int,
 
 
 def track_reference(split: str, scores: pd.DataFrame, n_folds: int, issue: int | None = None,
-                    daily: pd.Series | None = None) -> None:
+                    daily: pd.Series | None = None) -> str | None:
     """Log the reference of a period as a W&B run, next to the models of the same issue."""
-    track(split, REFERENCE, {"model": REFERENCE, "window": f"rolling_{REFERENCE_WINDOW_DAYS}d"},
-          scores.loc[REFERENCE], n_folds, PERIODS[split], issue, daily)
+    return track(split, REFERENCE, {"model": REFERENCE, "window": f"rolling_{REFERENCE_WINDOW_DAYS}d"},
+                 scores.loc[REFERENCE], n_folds, PERIODS[split], issue, daily)

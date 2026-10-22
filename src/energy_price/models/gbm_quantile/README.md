@@ -1,7 +1,8 @@
 # Gradient Boosting mit Quantil-Loss
 
-**Status:** implementiert und auf April/Mai abgestimmt (Issue #17). Finaler Test wartet auf
-Bestätigung der Swissgrid-Verfügbarkeit bis D−2; der Holdout wurde nicht geöffnet.
+**Status:** implementiert und auf April/Mai abgestimmt (Issue #17). Die tägliche
+Swissgrid-Verfügbarkeit bis D−2 wurde am 22.10.2026 durch den Nutzer im Projekt bestätigt;
+der finale Test ist freigegeben. Der Holdout wurde nicht geöffnet.
 
 ## Hypothese
 
@@ -27,8 +28,8 @@ wird ausschliesslich nach der Prognose für die Auswertung verknüpft.
 ## Tuning April und Mai
 
 Zeitlicher Backtest über 61 Tage bzw. 5'856 Viertelstunden, neun wöchentliche Fits.
-Trainiert wird jeweils nur mit Preisen bis D−2 unter der noch zu bestätigenden
-Veröffentlichungsannahme. Alle Modelle werden auf denselben Viertelstunden bewertet.
+Trainiert wird jeweils nur mit Preisen bis D−2. Diese Verfügbarkeitsgrenze wurde am
+22.10.2026 im Projekt bestätigt. Alle Modelle werden auf denselben Viertelstunden bewertet.
 
 Das kleine Grid vergleicht vier Konfigurationen mit jeweils zwei Trainingsfenstern:
 
@@ -43,7 +44,7 @@ Für alle Varianten gelten 150 Boosting-Iterationen und L2-Regularisierung 1.0.
 Trainingsfenster: alle Daten seit Januar (`expanding`) oder die letzten 56 Tage.
 
 **Gewählt:** `expanding`, Lernrate 0.05, 7 Blätter, mindestens 50 Werte pro Blatt.
-Das Setting hat den tiefsten Tuning-Pinball-Loss und wird vor dem Test als `CHOSEN`
+Das Setting hat den tiefsten Tuning-Pinball-Loss und wurde vor dem Test als `CHOSEN`
 festgelegt. Es wird nicht anhand von Testergebnissen nachjustiert.
 
 | Modell | Pinball Loss | MAE P50 | Coverage | Intervallbreite |
@@ -100,8 +101,8 @@ Tuning-Zeitraum berechnet und ist entsprechend explorativ.
 | Baseline B2 | 9.81 | 3.23 | 74 % |
 | Gradient Boosting | ausstehend | ausstehend | ausstehend |
 
-**Entscheid:** Modell und Tuning stehen; die Testhypothese bleibt offen. Der finale
-Test wurde gemäss Issue #17 wegen der unbestätigten D−2-Grenze nicht ausgeführt.
+**Entscheid:** Modell und Tuning stehen; die Testhypothese bleibt bis zur Auswertung
+offen. Die D−2-Bestätigung vom 22.10.2026 gibt den finalen Test gemäss Issue #17 frei.
 Zusätzlich gilt das bestehende Restrisiko nachträglich revidierter Swissgrid-Preise,
 siehe [Datengrundlage](../../../../docs/data.md).
 
