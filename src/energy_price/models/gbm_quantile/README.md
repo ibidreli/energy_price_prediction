@@ -1,14 +1,14 @@
 # Gradient Boosting mit Quantil-Loss
 
-**Status:** implementiert und auf April/Mai abgestimmt (Issue #17). Die tägliche
-Swissgrid-Verfügbarkeit bis D−2 wurde am 22.10.2026 durch den Nutzer im Projekt bestätigt;
-der finale Test ist freigegeben. Der Holdout wurde nicht geöffnet.
+**Status:** implementiert, auf April/Mai abgestimmt und auf Juni bis August ausgewertet
+(Issue #17). Die tägliche Swissgrid-Verfügbarkeit bis D−2 wurde am 22.10.2026 durch den
+Nutzer im Projekt bestätigt. Der Holdout wurde nicht geöffnet; Teamreview steht aus.
 
 ## Hypothese
 
 Der Einfluss der Sonnenstrahlung auf den Preis hängt von Uhrzeit und Position innerhalb
 der Stunde ab. Gradient Boosting bildet diese nichtlinearen Zusammenhänge flexibler ab
-als die lineare Baseline B2 und schlägt die Referenz im Pinball-Loss. Die Hypothese wird
+als die lineare Baseline B2 und schlägt die Referenz im Pinball-Loss. Die Hypothese wurde
 auf Juni bis August geprüft; der Referenzwert von 3.20 stammt aus diesem Testzeitraum.
 
 ## Modell und Features
@@ -95,22 +95,53 @@ Tuning-Zeitraum berechnet und ist entsprechend explorativ.
 
 ## Ergebnis (Test Juni bis August)
 
-| Modell | MAE P50 | Pinball Loss | Coverage |
-|---|---|---|---|
-| Referenz | 9.92 | 3.20 | 75 % |
-| Baseline B2 | 9.81 | 3.23 | 74 % |
-| Gradient Boosting | ausstehend | ausstehend | ausstehend |
+Der finale Lauf vom 22.10.2026 verwendet das unveränderte `CHOSEN` aus dem Tuning,
+14 wöchentliche Fits und den Code-Commit `161b317`. Ausgewertet werden 91 Tage bzw.
+8'736 Viertelstunden: Der 24.06. fehlt wegen unvollständiger Wetterdaten für alle drei
+Modelle. Die gespeicherten B2-Features und Zielwerte der Baseline wurden vor dem Lauf
+gegen die aktuellen Daten geprüft und stimmen überein. Die Run-Metadaten vermerken
+einen sauberen Git-Stand und die D−2-Bestätigung samt Datum und Quelle.
 
-**Entscheid:** Modell und Tuning stehen; die Testhypothese bleibt bis zur Auswertung
-offen. Die D−2-Bestätigung vom 22.10.2026 gibt den finalen Test gemäss Issue #17 frei.
-Zusätzlich gilt das bestehende Restrisiko nachträglich revidierter Swissgrid-Preise,
-siehe [Datengrundlage](../../../../docs/data.md).
+| Modell | MAE P50 | Pinball Loss | Coverage | Intervallbreite |
+|---|---|---|---|---|
+| Referenz | 9.9171 | 3.2018 | 75.21 % | 26.3184 |
+| Baseline B2 | 9.8063 | 3.2254 | 73.60 % | 25.5145 |
+| Gradient Boosting | **9.7923** | **3.1633** | 74.08 % | 24.8447 |
+
+Preise, Fehler und Breiten in ct/kWh. Boosting verbessert den Pinball-Loss gegenüber
+der Referenz um **1.20 %** und gegenüber B2 um **1.93 %**. An 58.24 % der Testtage
+liegt sein Loss unter der Referenz. Diese Verbesserungen sind klein; ein statistisch
+abgesicherter Vorteil wurde nicht nachgewiesen.
+
+- **Die Testhypothese ist im Mittel erfüllt.** Der Vorteil zeigt sich gegenüber beiden
+  Vergleichsmodellen. Die MAE-Verbesserung gegenüber B2 ist mit 0.0140 ct/kWh sehr gering.
+- **Die Wirkung hängt von der Richtung ab:** Bei short sinkt der Loss gegenüber B2
+  von 3.3041 auf 3.0836, bei long steigt er von 3.1360 auf 3.2539. Das Modell löst
+  die Unsicherheit über die tatsächliche Netzrichtung weiterhin nicht auf.
+- **Die Intervalle bleiben zu schmal:** 74.08 % Coverage statt 80 %, im August sogar
+  nur 68.51 %. Das engere Band ist deshalb nicht allein als Verbesserung zu werten.
+  Der August-Loss ist mit 3.3153 zudem praktisch gleich wie bei der Referenz (3.3136).
+- **Feiertage bleiben schwierig:** Nur fünf Testtage fallen unter die Definition
+  «PV-Feiertagsanteil > 0». Dort beträgt die Coverage 61.67 %; eine belastbare
+  Aussage über einzelne Feiertagseffekte lässt sich daraus nicht ableiten.
+- **Die grafische Auswertung zeigt Tageszeitunterschiede:** vormittags bis mittags
+  bringt Boosting Vorteile; abends ist die historische Referenz häufig besser.
+
+![Pinball Loss pro Stunde](../../../../docs/figures/gbm_quantile/test_pinball_by_hour.png)
+
+![Coverage pro Monat](../../../../docs/figures/gbm_quantile/test_coverage_by_month.png)
+
+**Entscheid:** Quantile Boosting bleibt als Kandidat für den gemeinsamen Holdout
+erhalten. Es schlägt die Referenz im vorab definierten Test leicht, erreicht aber noch
+keine verlässliche 80-%-Abdeckung. Eine Kalibrierung ist separat zu untersuchen;
+`CHOSEN` wird anhand dieser Testauswertung nicht geändert. Das Restrisiko nachträglich
+revidierter Swissgrid-Preise bleibt bestehen, siehe [Datengrundlage](../../../../docs/data.md).
 
 ## Starten
 
 ```bash
 make backtest MODEL=gbm_quantile STEP=tune TRACK=1 JOBS=2
-# Erst nach bestätigter täglicher Verfügbarkeit bis D−2:
+# D−2-Verfügbarkeit am 22.10.2026 bestätigt; finaler Test bereits durchgeführt:
 make backtest MODEL=gbm_quantile STEP=test TRACK=1 JOBS=2
 ```
 
@@ -122,11 +153,12 @@ Alternativ unter PowerShell, direkt mit dem bestehenden Environment:
 
 Ergebnisse und Auswahlprotokoll stehen in `reports/gbm_quantile/` (nicht versioniert).
 Der finale Test erzeugt zusätzlich Grafiken in `docs/figures/gbm_quantile/`.
-W&B enthält unter Gruppe `issue-17` alle acht Tuning-Kandidaten, Referenz und Baseline,
-mit Summary-Metriken und täglichen Pinball-Kurven. Die gewählte Variante enthält auch
-Importance-Grafik, Auswertungstabellen und ein Artefakt mit aggregierten Ergebnissen
-und dem tatsächlich verwendeten Quellcode. Die lokalen Run-Links stehen ausschliesslich
-in `reports/gbm_quantile/tune_wandb_urls.json`.
+W&B enthält unter Gruppe `issue-17` zehn Tuning-Läufe und drei finale Testläufe
+(Referenz, Boosting, Baseline B2), jeweils mit Summary-Metriken und täglichen
+Pinball-Kurven. Die gewählte Tuning-Variante enthält auch die Importance-Grafik.
+Der finale Boosting-Lauf enthält Auswertungstabellen und ein Artefakt mit aggregierten
+Ergebnissen und dem tatsächlich verwendeten Quellcode. Die lokalen Run-Links stehen
+ausschliesslich in `reports/gbm_quantile/tune_wandb_urls.json` und `test_wandb_urls.json`.
 
 Die Leakage-, Reproduzierbarkeits-, Importance- und Integrationstests stehen in
 `tests/test_gbm_quantile.py`, `tests/test_model_importance.py` und

@@ -8,7 +8,7 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 |---|---|---|---|---|
 | Referenz (letzte 56 Tage) | `models/shared/reference.py` | Massstab | 9.92 | 3.20 |
 | Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
-| Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | abgestimmt; finaler Test freigegeben | ausstehend | ausstehend |
+| Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | Test abgeschlossen; Teamreview offen | 9.79 | 3.16 |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
 
@@ -16,6 +16,9 @@ Quantile Boosting erreicht im **Tuning April/Mai** einen Pinball-Loss von 3.3087
 (Referenz 3.4485; Baseline B2 3.3112), bei 76.35 % Coverage. Das sind 4.05 % weniger
 Loss als die Referenz, aber praktisch gleich viel wie bei der linearen Baseline.
 Diese Tuning-Zahlen sind nicht mit den Testzahlen der Tabelle vergleichbar.
+Im **Test Juni bis August** erreicht Boosting 3.1633 gegenüber 3.2018 für die Referenz
+und 3.2254 für B2: 1.20 % bzw. 1.93 % weniger Loss. Die Coverage bleibt mit 74.08 %
+unter dem Ziel von 80 %. Der Holdout wurde nicht geöffnet; das Setting bleibt unverändert.
 
 ## 2. Aufbau eines Modellordners
 
