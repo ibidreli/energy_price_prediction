@@ -83,7 +83,7 @@ def _git(cwd: Path, *args: str) -> str | None:
     """Output of a git command, or None outside a repository or without git."""
     try:
         return subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
+            ["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8", check=True
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
