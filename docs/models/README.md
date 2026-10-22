@@ -8,8 +8,17 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 |---|---|---|---|---|
 | Referenz (letzte 56 Tage) | `models/shared/reference.py` | Massstab | 9.92 | 3.20 |
 | Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
+| Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | Test abgeschlossen; Teamreview offen | 9.79 | 3.16 |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
+
+Quantile Boosting erreicht im **Tuning April/Mai** einen Pinball-Loss von 3.3087
+(Referenz 3.4485; Baseline B2 3.3112), bei 76.35 % Coverage. Das sind 4.05 % weniger
+Loss als die Referenz, aber praktisch gleich viel wie bei der linearen Baseline.
+Diese Tuning-Zahlen sind nicht mit den Testzahlen der Tabelle vergleichbar.
+Im **Test Juni bis August** erreicht Boosting 3.1633 gegenüber 3.2018 für die Referenz
+und 3.2254 für B2: 1.20 % bzw. 1.93 % weniger Loss. Die Coverage bleibt mit 74.08 %
+unter dem Ziel von 80 %. Der Holdout wurde nicht geöffnet; das Setting bleibt unverändert.
 
 ## 2. Aufbau eines Modellordners
 
@@ -32,7 +41,8 @@ In `model.py` stehen drei Variablen:
 
 ## 3. Schritt für Schritt
 
-Beispiel: das geplante Modell `gbm_quantile`.
+Beispiel: `gbm_quantile`. Dieses Modell ist inzwischen implementiert; die Kopierschritte
+gelten für einen neuen Modellordner, nicht zum Überschreiben der bestehenden Implementierung.
 
 **1. Vorlage kopieren**
 
@@ -82,13 +92,26 @@ CHOSEN = {"gbm": {"feature_set": "B2", "window": "expanding", "learning_rate": 0
 make backtest MODEL=gbm_quantile STEP=tune
 ```
 
-Probiert alle Settings aus `GRID` auf April und Mai aus. Das Ergebnis steht in `reports/gbm_quantile/tune_scores.csv`, eine Zeile pro Setting, zum Beispiel `B2|expanding|0.1`.
+Probiert alle Settings aus `GRID` auf April und Mai aus. Das Ergebnis steht in `reports/gbm_quantile/tune_scores.csv`, eine Zeile pro Setting. `tune_selection.json` enthält das Setting mit dem tiefsten Pinball-Loss. Dazu werden Prognosen, tägliche Scores, Auswertungen nach Uhrzeit, Monat, Tagtyp und tatsächlicher Richtung sowie die Code-/Datenversion gespeichert. Andere Modelle werden im Tuning zusätzlich mit der frisch berechneten Baseline B2 verglichen.
+
+Mit `TRACK=1` werden auch die Tuning-Varianten, die Referenz und die Baseline B2 in W&B geloggt.
+`JOBS=2` begrenzt die parallelen Wochen-Fits, zum Beispiel:
+
+```bash
+make backtest MODEL=gbm_quantile STEP=tune TRACK=1 JOBS=2
+```
+
+Wenn ein Modell `IMPORTANCE_GROUPS` definiert, wird die beste Tuning-Variante zusätzlich mit gruppierter Permutation Importance erklärt. Die Modelle werden dafür nur auf früheren Daten bis D−2 trainiert; die Merkmale werden ausschliesslich in den folgenden Validierungswochen permutiert. Ergebnisse stehen in `tune_feature_importance.csv` und `tune_feature_importance_repeats.csv`, bei Tracking zusätzlich als Tabelle und Balkengrafik in W&B.
 
 **4. Bestes Setting als `CHOSEN` eintragen**
 
 Die Zeile mit dem tiefsten Pinball Loss (Spalte `pinball`) in `model.py` als `CHOSEN` eintragen. Der Pinball Loss ist die Hauptkennzahl, weil er P10, P50 und P90 zusammen bewertet; MAE (`mae_q50`) und Coverage (`coverage_80`) werden ergänzend angeschaut. Der Name links (`"gbm"`) erscheint in den Ergebnissen und Grafiken. Danach wird `CHOSEN` nicht mehr geändert.
 
 **5. Test**
+
+Die tägliche Swissgrid-Verfügbarkeit bis D−2 wurde am 22.10.2026 vom Nutzer im Projekt
+bestätigt. Damit ist der finale Test für `gbm_quantile` gemäss Issue #17 freigegeben.
+Der Holdout bleibt gesperrt.
 
 ```bash
 make backtest MODEL=gbm_quantile STEP=test
@@ -107,9 +130,12 @@ Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile 
 | Feature-Sets `B1`, `B2` | `features/design.py` | B1 Kalender, B2 Kalender plus Sonnenprognose; neue Features als Block dort ergänzen |
 | `PerQuantileModel` | `models/shared/base.py` | Grundgerüst für jedes Modell |
 | `LinearQuantileModel` | `models/shared/linear.py` | lineare Quantilregression der Baseline |
+| `GradientBoostingQuantileModel` | `models/shared/boosting.py` | regularisiertes Quantile Boosting mit festem Seed und ohne zufälliges Early Stopping |
+| Gruppierte Permutation Importance | `models/shared/importance.py` | wiederverwendbare Bedeutung einer Datenquelle, gemessen am Anstieg des Pinball-Loss |
 | Referenz | `models/shared/reference.py` | Massstab für jedes Modell |
 | Backtest und Ablauf | `evaluation/backtest.py`, `evaluation/experiment.py` | Training bis D−2, wöchentlich neu, `make backtest` |
 | Kennzahlen | `evaluation/scores.py` | MAE, Pinball Loss, Coverage, Skill Score |
+| Diagnostik | `evaluation/diagnostics.py` | zeitlich getrennte Feature Importance und Auswertung nach Stunde, Monat, Tagtyp und tatsächlichem short/long |
 | Grafiken, W&B | `evaluation/figures.py`, `evaluation/tracking.py` | gleiche Grafiken und Tracking für jedes Modell |
 
 ## 5. Regeln
@@ -121,7 +147,7 @@ Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile 
 
 ## 6. To-do: geplante Modelle
 
-Die Baseline erreicht die Referenz, schlägt sie aber nicht. Die drei geplanten Modelle setzen an ihren Schwächen an: zu schmale Unsicherheitsbänder, fehlende Wechselwirkungen zwischen den Einflussgrössen und zwei sehr unterschiedliche Preissituationen im Netz.
+Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder und das Regime-Modell sind noch geplant. Quantile Boosting ist implementiert; den aktuellen Stand und die Ergebnisse beschreibt sein Modell-README.
 
 **Kalibrierte Bänder** · [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/)
 
@@ -131,12 +157,12 @@ Korrigiert die Bänder der Baseline anhand der Fehler der letzten Wochen, damit 
 - Ein verlässliches Band ist für den Use Case zentral, weil eine Bilanzgruppe damit ihr Risiko abschätzt.
 - Einfach umzusetzen, und der Korrekturschritt lässt sich später auf jedes Modell anwenden.
 
-**Gradient Boosting** · [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/)
+**Gradient Boosting (implementiert)** · [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/)
 
 Viele kleine Entscheidungsbäume, die nacheinander die Fehler der vorherigen korrigieren und direkt P10, P50 und P90 vorhersagen.
 
 - Der Preis hängt von Kombinationen ab, zum Beispiel wirkt die Sonne je nach Uhrzeit und Jahreszeit anders. Ein lineares Modell bildet solche Wechselwirkungen nur ab, wenn man sie von Hand vorgibt; ein Baummodell findet sie selbst.
-- Es zeigt, wie viel jede Datenquelle zur Prognose beiträgt (Feature Importance). Das wurde im Review ausdrücklich verlangt.
+- Die gruppierte Permutation Importance zeigt, wie stark das Modell auf Kalender, Feiertage und Strahlung angewiesen ist. Sie beschreibt die Nutzung der Merkmale durch das Modell, keinen kausalen Beitrag. Das wurde im Review ausdrücklich verlangt.
 
 **Regime-Modell short/long** · [`regime_mixture/`](../../src/energy_price/models/regime_mixture/)
 

@@ -28,6 +28,21 @@ The repository contains the setup, never credentials: no API key and no links to
 
 ## Logging a run
 
+For model backtests, use `make backtest MODEL=gbm_quantile STEP=tune TRACK=1 JOBS=2`
+(or `STEP=test`; daily D−2 availability was confirmed by the user on 2026-10-22). Tracking works for
+both tuning and evaluation. Each tuning candidate, the historical reference and baseline B2
+get separate runs with summary scores and daily pinball curves. `gbm_quantile` explicitly
+sets `ISSUE = 17`, so the runs share `issue-17` even when the branch name does not match
+the usual convention.
+
+The selected tuning run also contains grouped permutation importance as a table and bar
+chart, score breakdowns, and an evaluation artifact with aggregate CSV/JSON results and
+an explicit snapshot of the Python source and dependency declarations. The source snapshot
+also makes uncommitted runs inspectable; `git_dirty` still records their actual state.
+Raw datasets and local settings/credentials are excluded. Run URLs remain in ignored
+`reports/<model>/<period>_wandb_urls.json`, never in committed documentation. Evaluation
+also logs the cached baseline B2 for a direct comparison in the same issue group.
+
 Use `start_run` instead of calling `wandb.init` directly. It fills in the team entity and project, groups runs by hypothesis (the GitHub issue) and records which data and code the run used.
 
 One hypothesis is one issue; every candidate model is its own run in that issue's group. Give each run a `name` and put the model into `config`, so the runs table shows which row is which model:

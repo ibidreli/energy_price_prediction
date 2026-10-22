@@ -177,8 +177,12 @@ Der Pinball Loss misst, wie gut die drei Grenzen liegen. Er bestraft Bänder, di
 | Punkt | Woher es kommt | Was zu tun ist |
 |---|---|---|
 | **Schlusstest September** | Swissgrid veröffentlicht finale Preise bis zum 15. Arbeitstag des Folgemonats, für September also bis etwa 21.10. ([`data.md`](../data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)) | einmal mit unveränderten Einstellungen laufen lassen |
-| **Grenze D−2** | Beobachtet wurde bisher nur **ein** Abruf: Am 04.10.2026 um 03:21 enthielt die Swissgrid-Datei alle Daten bis 03.10. 23:45. Die Swissgrid-Webseite spricht aber von einer **wöchentlichen** Veröffentlichung ([`data.md`](../data.md#1-die-regel-gegen-datenlecks)) | Lucas täglicher Abruf um 10:30 (bis etwa 18.10.) zeigt, ob die Daten jeden Tag nachgeführt werden. Falls nicht, muss die Grenze in `availability.py` nach hinten, und der Backtest wird neu gerechnet |
 | **Hauptkennzahl** | Festgelegt ist der Pinball Loss (Wahl von `CHOSEN`, Vergleich der Modelle), MAE und Coverage ergänzend. `docs/metric.md` (PR #9) nennt noch den MAE | PR #9 an den Pinball Loss angleichen |
+
+**Grenze D−2:** Am 22.10.2026 hat der Nutzer die tägliche Verfügbarkeit bis D−2 am
+Prognosezeitpunkt im Projekt bestätigt. Die bisher verwendete Grenze bleibt bestehen;
+siehe [`data.md`](../data.md#1-die-regel-gegen-datenlecks). Das Restrisiko nachträglicher
+Preisrevisionen bleibt davon unabhängig bestehen.
 
 ## 8. Ergebnisse
 

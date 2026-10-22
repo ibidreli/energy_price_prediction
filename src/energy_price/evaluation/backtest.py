@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_config
 
 from energy_price.availability import known_at_issue
 from energy_price.evaluation.scores import COLUMNS, daily_pinball, score, skill_score
@@ -91,9 +91,12 @@ def run_model(table: pd.DataFrame, days: list[pd.Timestamp], make_model: Callabl
     ``window_days`` limits the training rows to the last days before D-2 (None: all since 2026-01-01).
     If the model has a ``coefficients()`` method, its coefficients of every fit are returned as well.
     """
-    results = Parallel(n_jobs=jobs)(
-        delayed(_fit_and_predict)(table, block, make_model, window_days) for block in folds(days)
-    )
+    # HGB uses OpenMP internally. One native thread per worker avoids nested parallelism
+    # when the weekly fits already run in separate processes.
+    with parallel_config(backend="loky", inner_max_num_threads=1):
+        results = Parallel(n_jobs=jobs)(
+            delayed(_fit_and_predict)(table, block, make_model, window_days) for block in folds(days)
+        )
     forecasts = pd.concat([r[0] for r in results], ignore_index=True).assign(model=name)
     coefs = [r[1] for r in results if r[1] is not None]
     coefficients = pd.concat(coefs).rename_axis("feature").reset_index() if coefs else None
@@ -146,7 +149,8 @@ def run_info(extra: dict | None = None) -> dict:
 
     def git(*args: str) -> str | None:
         try:
-            return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+            return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True,
+                                  encoding="utf-8", check=True).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             return None
 
@@ -197,7 +201,8 @@ def log_daily(run, split: str, daily: pd.Series, reference_daily: pd.Series | No
 
 def track(split: str, name: str, config: dict, metrics: pd.Series, n_folds: int, period: tuple[str, str],
           issue: int | None = None, daily: pd.Series | None = None,
-          reference_daily: pd.Series | None = None) -> None:
+          reference_daily: pd.Series | None = None, tables: dict[str, pd.DataFrame] | None = None,
+          files: list[Path] | None = None) -> str | None:
     """Log one model as a W&B run (job type eval, group ``issue-<issue>``, else from the branch name).
 
     ``metrics`` go to the summary; ``daily`` (and ``reference_daily``) to the history, see ``log_daily``.
@@ -213,10 +218,26 @@ def track(split: str, name: str, config: dict, metrics: pd.Series, n_folds: int,
         for key, value in metrics.items():
             if pd.notna(value):
                 run.summary[f"{split}/{key}"] = float(value)
+        if tables or files:
+            import wandb
+
+            for key, frame in (tables or {}).items():
+                table = wandb.Table(dataframe=frame)
+                run.log({f"{split}/{key}": table})
+                if key == "feature_importance":
+                    run.log({f"{split}/feature_importance_plot": wandb.plot.bar(
+                        table, "group", "importance_mean", title="Grouped permutation importance (pinball increase)")})
+            if files:
+                artifact = wandb.Artifact(f"{config.get('model', 'model')}-{split}-{run.id}", type="evaluation")
+                for path in files:
+                    name = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else f"outputs/{path.name}"
+                    artifact.add_file(str(path), name=name)
+                run.log_artifact(artifact)
+        return run.url
 
 
 def track_reference(split: str, scores: pd.DataFrame, n_folds: int, issue: int | None = None,
-                    daily: pd.Series | None = None) -> None:
+                    daily: pd.Series | None = None) -> str | None:
     """Log the reference of a period as a W&B run, next to the models of the same issue."""
-    track(split, REFERENCE, {"model": REFERENCE, "window": f"rolling_{REFERENCE_WINDOW_DAYS}d"},
-          scores.loc[REFERENCE], n_folds, PERIODS[split], issue, daily)
+    return track(split, REFERENCE, {"model": REFERENCE, "window": f"rolling_{REFERENCE_WINDOW_DAYS}d"},
+                 scores.loc[REFERENCE], n_folds, PERIODS[split], issue, daily)

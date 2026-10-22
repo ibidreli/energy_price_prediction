@@ -40,6 +40,12 @@ def on_branch(monkeypatch, branch):
     monkeypatch.setattr(tr, "git_state", lambda: {**NO_GIT, "git_branch": branch})
 
 
+def test_git_state_preserves_unicode_branch_names_on_windows(repo):
+    branch = "exp/17-für-quantilprognosen"
+    git(repo, "branch", "-m", branch)
+    assert tr.git_state(repo)["git_branch"] == branch
+
+
 @pytest.mark.parametrize(
     ("branch", "issue"),
     [
