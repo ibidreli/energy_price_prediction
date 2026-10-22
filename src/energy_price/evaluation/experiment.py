@@ -6,7 +6,7 @@ Usage (from the repository root, ``make backtest MODEL=<name> STEP=<step>`` does
 ``python -m energy_price.evaluation.experiment <name> holdout --unlock-holdout``   only once, at the very end
 
 ``--track`` logs every variant as a W&B run, grouped by the issue number in the branch name
-(``exp/15-...`` gives ``issue-15``, docs/experiment_tracking.md). Results go to
+(``exp/15-...`` gives ``issue-15``, or set ``ISSUE`` in model.py, docs/experiment_tracking.md). Results go to
 ``reports/<name>/`` (not versioned), figures to ``docs/figures/<name>/``. Every model except the
 baseline is also compared with the baseline B2 when ``make baseline`` has run.
 
@@ -18,12 +18,14 @@ A model folder only needs a ``model.py`` with:
 
 Settings are keyword arguments of ``MODEL``; the key ``window`` is taken by the backtest
 (``"expanding"``: all prices since 2026-01-01, ``"rolling_56d"``: the last 56 days). Optional:
-``COEFFICIENTS_SHOWN`` and ``COEFFICIENTS_OF`` for a coefficient figure, ``RUN_INFO`` for notes.
+``COEFFICIENTS_SHOWN`` and ``COEFFICIENTS_OF`` for a coefficient figure, ``RUN_INFO`` for notes,
+``ISSUE`` for W&B grouping and ``IMPORTANCE_GROUPS`` for tuning-fold permutation importance.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 from functools import partial
 from importlib import import_module
 from pathlib import Path
@@ -49,6 +51,7 @@ from energy_price.evaluation.backtest import (
 from energy_price.features.dataset import build_table, load_inputs
 from energy_price.paths import FIGURES_DIR, REPORTS_DIR, ROOT
 from energy_price.evaluation.figures import backtest_figures, coefficients_figure
+from energy_price.evaluation.diagnostics import backtest_importance, breakdown_scores, importance_summary
 
 WINDOWS = {"expanding": None, "rolling_56d": 56}
 BASELINE, BASELINE_VARIANT = "baseline_model", "B2"
@@ -76,17 +79,85 @@ def label(settings: dict) -> str:
     return "|".join(str(v) for v in settings.values())
 
 
-def tune(name: str, table: pd.DataFrame, jobs: int, out_dir: Path) -> pd.DataFrame:
-    """Every entry of ``GRID`` on the tuning period, against the reference."""
+def diagnostic_scores(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Join actual direction only for evaluation, if the processed balance table exists."""
+    path = ROOT / "data" / "processed" / "control_area_balance.parquet"
+    balance = pd.read_parquet(path, columns=["timestamp_utc", "tsi_mw"]) if path.exists() else None
+    return breakdown_scores(forecasts, balance)
+
+
+def tracking_files(out_dir: Path, period: str) -> list[Path]:
+    """Explicit allowlist: source code and aggregate results, never credentials or raw data.
+
+    Include the source snapshot so an uncommitted run is reproducible beyond its git SHA.
+    """
+    return [*sorted((ROOT / "src" / "energy_price").rglob("*.py")),
+            ROOT / "pyproject.toml", ROOT / "requirements.lock",
+            *sorted(out_dir.glob(f"{period}_*.csv")), *sorted(out_dir.glob(f"{period}_*.json"))]
+
+
+def tune(name: str, table: pd.DataFrame, jobs: int, out_dir: Path, do_track: bool = False) -> pd.DataFrame:
+    """Every GRID entry on April/May, plus baseline, diagnostics and optional W&B runs."""
     module = load(name)
     days = period_days("tune")
     frames = [run_reference(table, days)]
-    for settings in module.GRID:
+    settings_by_name = {label(settings): settings for settings in module.GRID}
+    if not settings_by_name or len(settings_by_name) != len(module.GRID):
+        raise ValueError("GRID must be nonempty and contain distinct settings")
+    for index, settings in enumerate(module.GRID, start=1):
+        print(f"tune {index}/{len(module.GRID)}: {label(settings)}", flush=True)
         forecast, _ = run_variant(module, table, days, label(settings), settings, jobs)
         frames.append(forecast)
-    scores, _ = evaluate(pd.concat(frames, ignore_index=True))
-    out_dir.mkdir(parents=True, exist_ok=True)
-    scores.to_csv(out_dir / "tune_scores.csv")
+    baseline_name = f"baseline_{BASELINE_VARIANT}"
+    baseline_settings = None
+    if name != BASELINE:
+        baseline_module = load(BASELINE)
+        baseline_settings = baseline_module.CHOSEN[BASELINE_VARIANT]
+        baseline, _ = run_variant(baseline_module, table, days, baseline_name, baseline_settings, jobs)
+        frames.append(baseline)
+    forecasts = pd.concat(frames, ignore_index=True)
+    scores, daily = evaluate(forecasts)
+    best = scores.loc[list(settings_by_name), "pinball"].idxmin()
+    selection = {"variant": best, "settings": settings_by_name[best], "metric": "pinball",
+                 "value": float(scores.loc[best, "pinball"]), "period": list(PERIODS["tune"])}
+    info = run_info({"model": name, "period": "tune", "grid": module.GRID,
+                     "selection": selection, "refit_days": REFIT_DAYS,
+                     "reference_window_days": REFERENCE_WINDOW_DAYS, **getattr(module, "RUN_INFO", {})})
+    write_outputs(out_dir, "tune", forecasts, scores, daily, info)
+    (out_dir / "tune_selection.json").write_text(json.dumps(selection, indent=2), encoding="utf-8")
+    breakdown = diagnostic_scores(forecasts)
+    breakdown.to_csv(out_dir / "tune_breakdowns.csv", index=False)
+
+    importance = None
+    groups = getattr(module, "IMPORTANCE_GROUPS", None)
+    if groups:
+        print("tune: grouped permutation importance of the best candidate on validation folds", flush=True)
+        window, params = split(settings_by_name[best])
+        details = backtest_importance(table, days, partial(module.MODEL, **params), groups, window,
+                                     getattr(module, "IMPORTANCE_REPEATS", 5), jobs=jobs)
+        details.to_csv(out_dir / "tune_feature_importance_repeats.csv", index=False)
+        importance = importance_summary(details)
+        importance.to_csv(out_dir / "tune_feature_importance.csv", index=False)
+
+    if do_track:
+        issue = getattr(module, "ISSUE", None)
+        n_folds = len(folds(days))
+        track_reference("tune", scores, n_folds, issue=issue, daily=daily[REFERENCE])
+        urls = {}
+        for variant, settings in settings_by_name.items():
+            tables = {"breakdowns": breakdown[breakdown["model"] == variant].reset_index(drop=True)}
+            if variant == best and importance is not None:
+                tables["feature_importance"] = importance
+            urls[variant] = track("tune", variant, {"model": name, **settings,
+                                  **getattr(module, "RUN_INFO", {}), "selected": variant == best},
+                                  scores.loc[variant], n_folds, PERIODS["tune"], issue=issue,
+                                  daily=daily[variant], reference_daily=daily[REFERENCE], tables=tables,
+                                  files=tracking_files(out_dir, "tune") if variant == best else None)
+        if baseline_settings is not None:
+            urls[baseline_name] = track("tune", baseline_name, {"model": BASELINE, **baseline_settings},
+                                       scores.loc[baseline_name], n_folds, PERIODS["tune"], issue=issue,
+                                       daily=daily[baseline_name], reference_daily=daily[REFERENCE])
+        (out_dir / "tune_wandb_urls.json").write_text(json.dumps(urls, indent=2), encoding="utf-8")
     return scores
 
 
@@ -103,6 +174,8 @@ def evaluate_period(name: str, table: pd.DataFrame, period: str, jobs: int, out_
                     unlock_holdout: bool = False, do_track: bool = False) -> pd.DataFrame:
     """Reference and every variant of ``CHOSEN`` on ``period``; writes forecasts, scores and coefficients."""
     module = load(name)
+    if not module.CHOSEN:
+        raise ValueError("CHOSEN is empty: run tuning and fix the selected settings before testing")
     days = period_days(period, unlock_holdout)
     frames, coefficients = [run_reference(table, days)], []
     for variant, settings in module.CHOSEN.items():
@@ -121,13 +194,19 @@ def evaluate_period(name: str, table: pd.DataFrame, period: str, jobs: int, out_
                      "refit_days": REFIT_DAYS, **getattr(module, "RUN_INFO", {})})
     write_outputs(out_dir, period, forecasts, scores, daily, info,
                   pd.concat(coefficients, ignore_index=True) if coefficients else None)
+    breakdown = diagnostic_scores(forecasts)
+    breakdown.to_csv(out_dir / f"{period}_breakdowns.csv", index=False)
 
     if do_track:
         n_folds = len(folds(days))
-        track_reference(period, scores, n_folds, daily=daily[REFERENCE])
+        issue = getattr(module, "ISSUE", None)
+        track_reference(period, scores, n_folds, issue=issue, daily=daily[REFERENCE])
         for variant, settings in module.CHOSEN.items():
-            track(period, variant, {"model": name, **settings}, scores.loc[variant], n_folds, PERIODS[period],
-                  daily=daily[variant], reference_daily=daily[REFERENCE])
+            track(period, variant, {"model": name, **settings, **getattr(module, "RUN_INFO", {})},
+                  scores.loc[variant], n_folds, PERIODS[period], issue=issue,
+                  daily=daily[variant], reference_daily=daily[REFERENCE],
+                  tables={"breakdowns": breakdown[breakdown["model"] == variant].reset_index(drop=True)},
+                  files=tracking_files(out_dir, period))
     return scores
 
 
@@ -156,7 +235,7 @@ def main(argv: list[str] | None = None) -> None:
     table = build_table(load_inputs())
     pd.set_option("display.width", 160)
     if args.step == "tune":
-        scores = tune(args.model, table, args.jobs, out)
+        scores = tune(args.model, table, args.jobs, out, args.track)
     else:
         scores = evaluate_period(args.model, table, args.step, args.jobs, out, args.unlock_holdout, args.track)
         for path in figures(args.model, out, args.step, FIGURES_DIR / args.model):
