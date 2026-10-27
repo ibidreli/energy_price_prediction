@@ -8,6 +8,7 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 |---|---|---|---|---|
 | Referenz (letzte 56 Tage) | `models/shared/reference.py` | Massstab | 9.92 | 3.20 |
 | Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
+| Regime-Modell R2 | [`regime_mixture/`](../../src/energy_price/models/regime_mixture/) | abgeschlossen, nicht übernommen | 9.80 | 3.23 |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
 
@@ -145,3 +146,4 @@ Schätzt zuerst, ob im Netz Strom fehlt (short) oder zu viel da ist (long), und 
 - Fehlt Strom, ist der Preis meist hoch; gibt es zu viel Strom, ist er tief und teils negativ. Ein einzelnes Modell mittelt die beiden Situationen und landet dazwischen, wo kaum echte Preise liegen.
 - Im Review wurde dieser Sprung bei unterdeckter Regelzone als zentraler Punkt genannt.
 - Die geschätzte Richtung zeigt zusätzlich, ob eine Bilanzgruppe bei einer Abweichung zahlt oder vergütet wird.
+- **Ergebnis (#16):** gleich gut wie die Baseline, nicht besser als die Referenz. Die Richtung ist am Vortag nur schwach vorhersagbar (AUC 0.62), Details im [Steckbrief](../../src/energy_price/models/regime_mixture/README.md).
