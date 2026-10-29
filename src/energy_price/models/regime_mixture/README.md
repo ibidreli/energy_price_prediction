@@ -14,7 +14,7 @@ Der Preis liegt bei short meist um 19 ct/kWh (Preis A), bei long um 6 ct/kWh mit
 
 Features für beide Teile: B1 (Kalender) oder B2 (Kalender plus Sonne), wie die Baseline. Zusätzlich liefert das Modell `p_short`, die Wahrscheinlichkeit, dass die Regelzone short ist.
 
-## Tuning (April und Mai)
+## Tuning April und Mai
 
 | Variante | Pinball Loss | gegenüber Referenz |
 |---|---|---|
@@ -24,7 +24,7 @@ Features für beide Teile: B1 (Kalender) oder B2 (Kalender plus Sonne), wie die 
 | **B2, alle Daten ab 01.01.** | **3.323** | **+3.7 %** |
 | B2, letzte 56 Tage | 3.664 | −6.3 % |
 
-B2 mit allen Daten ab 01.01. wurde vor dem Test als `CHOSEN` (Variante `R2`) festgelegt und danach nicht mehr verändert.
+B2 mit allen Daten ab 01.01. wurde vor dem Test als `CHOSEN` (Variante `regime_mixture`) festgelegt und danach nicht mehr verändert.
 
 ## Ergebnis (Test Juni bis August, 91 Tage)
 
@@ -32,7 +32,7 @@ B2 mit allen Daten ab 01.01. wurde vor dem Test als `CHOSEN` (Variante `R2`) fes
 |---|---|---|---|---|
 | Referenz | 9.92 | **3.20** | 75.2 % | 26.3 |
 | Baseline B2 | 9.81 | 3.23 | 73.6 % | 25.5 |
-| Regime-Modell R2 | **9.80** | 3.23 | 74.9 % | 25.9 |
+| Regime-Modell | **9.80** | 3.23 | 74.9 % | 25.9 |
 
 | Klassifikator P(short) im Test | Wert |
 |---|---|
@@ -55,7 +55,7 @@ B2 mit allen Daten ab 01.01. wurde vor dem Test als `CHOSEN` (Variante `R2`) fes
 
 **Entscheid:** nicht übernommen. Das Gradient Boosting (`gbm_quantile`, Pinball Loss 3.16) ist besser. Der Ansatz bleibt als dokumentiertes negatives Ergebnis: Der Sprung zwischen Preis A und Preis B ist real, aber am Vortag um 11:00 ist zu wenig über die Richtung bekannt, um ihn auszunutzen. Eine bessere Richtungsprognose bräuchte Informationen, die erst kurz vor der Lieferung entstehen (Intraday-Handel, aktuelle Systembilanz).
 
-## Ausführen
+## Starten
 
 ```bash
 make backtest MODEL=regime_mixture STEP=tune   # Varianten auf April und Mai
