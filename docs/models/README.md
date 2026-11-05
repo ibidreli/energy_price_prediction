@@ -172,4 +172,4 @@ Schätzt zuerst, ob im Netz Strom fehlt (short) oder zu viel da ist (long), und 
 - Fehlt Strom, ist der Preis meist hoch; gibt es zu viel Strom, ist er tief und teils negativ. Ein einzelnes Modell mittelt die beiden Situationen und landet dazwischen, wo kaum echte Preise liegen.
 - Im Review wurde dieser Sprung bei unterdeckter Regelzone als zentraler Punkt genannt.
 - Die geschätzte Richtung zeigt zusätzlich, ob eine Bilanzgruppe bei einer Abweichung zahlt oder vergütet wird.
-- **Ergebnis (#16):** gleich gut wie die Baseline, nicht besser als die Referenz. Die Richtung ist am Vortag nur schwach vorhersagbar (AUC 0.62), Details im [Steckbrief](../../src/energy_price/models/regime_mixture/README.md).
+- **Ergebnis (#16):** gleich gut wie die Baseline, nicht besser als die Referenz. Mit bekannter Richtung läge der Pinball Loss 39 % unter der Referenz; die Richtung ist am Vortag aber nur schwach vorhersagbar (AUC 0.62, kaum besser als der Anteil short pro Viertelstunde). Details im [Steckbrief](../../src/energy_price/models/regime_mixture/README.md).
