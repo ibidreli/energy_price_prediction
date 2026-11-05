@@ -5,7 +5,7 @@ flowchart LR
     TRAIN["Training<br/>Januar bis März"]
     VAL["Validation (tune)<br/>April und Mai<br/>Einstellungen wählen"]
     TEST["Test<br/>Juni bis August<br/>Modelle vergleichen"]
-    HOLD["Holdout<br/>September, Oktober offen<br/>einmal ganz am Schluss"]
+    HOLD["Holdout<br/>September und Oktober<br/>gesperrt bis zur Freigabe"]
 
     TRAIN --> VAL --> TEST --> HOLD
 
@@ -36,8 +36,14 @@ gantt
 
     section Holdout
     Training beim Start      :done, 2026-01-01, 2026-09-01
-    September bewertet       :crit, 2026-09-01, 2026-10-01
-    Oktober offen            :crit, 2026-10-01, 2026-11-01
+    September Holdout        :crit, 2026-09-01, 2026-10-01
+    Oktober Holdout          :crit, 2026-10-01, 2026-11-01
 ```
 
-Das Training wächst wöchentlich mit und nutzt für den Liefertag D nur Preise bis D−2.
+Der Holdout umfasst September und Oktober 2026 und bleibt gemäss Modell-Dokumentation
+gesperrt, bis er ausdrücklich einmal freigegeben wird. Für jedes Liefertag D nutzt
+das Training nur Preise bis D−2. Die Verfügbarkeitsgrenze ist D−2, 24:00, basierend
+auf der Projektbestätigung vom 22.10.2026. Der Laptop-Task wurde getestet, seine Logs
+gingen wegen eines Scriptfehlers verloren; die Projektentscheidung ist, die Daten
+aufgrund der verfügbaren Indizien weiter zu verwenden. Details:
+[Datengrundlage](data.md#prüfung-des-laptop-tasks).
