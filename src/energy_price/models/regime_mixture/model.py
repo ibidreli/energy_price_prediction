@@ -97,16 +97,26 @@ class RegimeMixtureModel:
     def _regime_quantiles(self, z: np.ndarray, name: str) -> np.ndarray:
         return np.column_stack([self.quantile_models[name][tau].predict(z) for tau in GRID_QUANTILES])
 
-    def predict(self, table: pd.DataFrame) -> pd.DataFrame:
+    def components(self, table: pd.DataFrame) -> tuple[pd.Series, np.ndarray, np.ndarray, np.ndarray]:
+        """Rows with complete features, P(short) and the ``GRID_QUANTILES`` of both directions for them.
+
+        ``predict`` mixes these parts; ``diagnostics`` reuses the same price parts with other values of p.
+        """
         if self.classifier is None:
             raise RuntimeError("fit the model first")
+        z, rows = self._standardised(table)
+        if not rows.any():
+            empty = np.empty((0, len(GRID_QUANTILES)))
+            return rows, np.empty(0), empty, empty
+        p = self.classifier.predict_proba(z)[:, list(self.classifier.classes_).index(1.0)]
+        return rows, p, self._regime_quantiles(z, "short"), self._regime_quantiles(z, "long")
+
+    def predict(self, table: pd.DataFrame) -> pd.DataFrame:
         columns = [COLUMNS[tau] for tau in QUANTILES] + ["p_short"]
         out = pd.DataFrame(np.nan, index=table.index, columns=columns)
-        z, rows = self._standardised(table)
+        rows, p, q_short, q_long = self.components(table)
         if rows.any():
-            p = self.classifier.predict_proba(z)[:, list(self.classifier.classes_).index(1.0)]
-            mixed = mixture_quantiles(p, self._regime_quantiles(z, "short"), self._regime_quantiles(z, "long"))
-            out.loc[rows, columns[:3]] = np.sort(mixed, axis=1)
+            out.loc[rows, columns[:3]] = np.sort(mixture_quantiles(p, q_short, q_long), axis=1)
             out.loc[rows, "p_short"] = p
         return out
 

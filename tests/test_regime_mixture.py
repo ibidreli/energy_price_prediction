@@ -94,3 +94,57 @@ def test_backtest_runs_end_to_end_against_the_reference():
 
     assert set(scores.index) == {"reference", "R1"}
     assert scores.loc["R1", "n_days"] == len(days)
+
+
+def test_slot_share_is_the_share_of_short_per_quarter_hour_of_the_day():
+    from energy_price.models.regime_mixture.diagnostics import slot_share
+
+    train = synthetic_table(days=20)
+    target = synthetic_table(first="2026-05-01", days=1)
+
+    share = slot_share(train, target)
+
+    expected = train.groupby(["hour", "position"])["short"].mean()
+    keys = list(zip(target["hour"], target["position"]))
+    assert share == pytest.approx(expected.loc[keys].to_numpy())
+
+
+def test_oracle_uses_the_actual_direction_and_the_forecasts_do_not():
+    from energy_price.models.regime_mixture.diagnostics import p_variants
+
+    train = synthetic_table(days=20)
+    target = synthetic_table(first="2026-05-01", days=1, seed=1)
+    p_model = np.full(len(target), 0.3)
+
+    flipped = target.assign(short=1.0 - target["short"])
+    p, p_flipped = p_variants(train, target, p_model), p_variants(train, flipped, p_model)
+
+    assert p["oracle"] == pytest.approx(target["short"].to_numpy())
+    for variant in ("constant", "slot", "model"):
+        assert p[variant] == pytest.approx(p_flipped[variant])
+
+
+def test_diagnostics_rank_the_oracle_first_on_a_clear_direction_pattern():
+    from energy_price.models.regime_mixture.diagnostics import direction_scores, run
+
+    table = synthetic_table(days=40)
+    days = list(pd.date_range("2026-05-01", "2026-05-03", freq="D"))
+
+    forecasts = run(table, days, {"feature_set": "B1", "window": "expanding"}, jobs=1)
+    scores, _ = evaluate(forecasts)
+
+    assert set(scores.index) == {"reference", "p_constant", "p_slot", "p_model", "p_oracle"}
+    assert scores.loc["p_oracle", "pinball"] < scores.loc["p_model", "pinball"] < scores.loc["p_constant", "pinball"]
+    assert direction_scores(forecasts).loc["p_model", "auc"] > 0.7
+
+
+def test_diagnostics_score_the_reference_on_the_same_days_when_features_are_missing():
+    from energy_price.models.regime_mixture.diagnostics import run
+
+    table = synthetic_table(days=40)
+    days = list(pd.date_range("2026-05-01", "2026-05-03", freq="D"))
+    table.loc[table["delivery_day"] == days[1], "radiation"] = np.nan
+
+    scores, _ = evaluate(run(table, days, {"feature_set": "B2", "window": "expanding"}, jobs=1))
+
+    assert (scores["n_days"] == len(days) - 1).all()
