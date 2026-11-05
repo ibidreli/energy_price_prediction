@@ -50,10 +50,11 @@ ausgewertet. September/Oktober bleiben gesperrt.
 ```bash
 make backtest MODEL=calibrated_bands STEP=tune JOBS=1
 # chosen aus reports/calibrated_bands/tune_selection.json als CHOSEN festschreiben
-make backtest MODEL=calibrated_bands STEP=test JOBS=1
+make backtest MODEL=calibrated_bands STEP=test JOBS=1 TRACK=1
 ```
 
-`TRACK=1` aktiviert das bestehende W&B-Tracking. Ergebnisse, tägliche Scores,
+`TRACK=1` aktiviert das bestehende W&B-Tracking. Die Testläufe stehen im Projekt
+`fhnw-cds1/energy-price-prediction` in der Gruppe `issue-19`. Ergebnisse, tägliche Scores,
 Auswertungen nach Monat/Stunde und Reproduktionsmetadaten stehen unter
 `reports/calibrated_bands/`, Grafiken unter `docs/figures/calibrated_bands/`.
 Der lokale Joblib-Cache unter `reports/calibrated_bands/cache/` speichert
