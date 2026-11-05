@@ -48,7 +48,7 @@
 | Wetterlücken 24.06.2026 (Strahlung, Sonnenscheindauer, Wind 10 m, Luftfeuchte) und 12.06.2026 (Luftfeuchte) | Archivlücke, unabhängig vom Wetter; leer lassen |
 | **Wetter: Jeder Wert um 00:00 Lokalzeit steht zweimal in der Tabelle**, als letzte Stunde des Laufs für D−1 und als erste des Laufs für D | Wer nach Zeitstempel mittelt, mischt den Lauf für D in D−1 23:00 bis 23:45 ein. Dieser Lauf erscheint erst nach der Prognose für D−1: ein Datenleck. `eda.weather_to_quarter_hours` nimmt nur die Zeile des passenden Liefertags (getestet) |
 | Preis stark linksschief (−688 bis +172 ct/kWh), rund 5 % Ausreisser nach IQR-Regel | echte Werte, nicht entfernen; robuste Verluste und Quantile verwenden |
-| **Swissgrid überschreibt ältere Werte:** Zwischen den Snapshots vom 04.10. und 07.10. hat sich genau eine Viertelstunde geändert: Die Lücke vom 02.10. 14:00 wurde gefüllt, die TSI dort um 0.1 MW korrigiert. Preise (auch die provisorischen vom September) blieben gleich | beobachten; die grosse Korrektur kommt mit den finalen Septemberpreisen bis 21.10.2026 |
+| **Swissgrid überschreibt ältere Werte:** Die EDA-Notiz berichtet für Snapshots vom 04.10. und 07.10. eine gefüllte Lücke am 02.10. 14:00 und eine TSI-Korrektur um 0.1 MW. Im aktuellen Checkout ist nur der Snapshot vom 04.10. vorhanden, deshalb ist dieser Vergleich hier nicht reproduzierbar. | Frühere Momentaufnahme, nicht als aktuelle Logserie verwenden; Korrekturen müssen mit archivierten Versionen neu gemessen werden |
 | Knappheitsschwellen −1200 / +1000 MW wurden nie erreicht (TSI −1072 bis +792 MW) | geklärt: ohne Wirkung auf unsere Daten, siehe [`overview.md`](overview.md#preisformel-seit-2026-einpreissystem) |
 
 Zuordnung von Wetter zu Viertelstunden: Die Viertelstunden h−1:00 bis h−1:45 erhalten den Wert mit Zeitstempel h:00. Das passt genau zu Strahlung und Niederschlag (Wert der vorangehenden Stunde); Momentwerte wie Bewölkung liegen dann höchstens 45 Minuten neben ihrem Zeitstempel. Mittel über die sechs Standorte gewichtet nach PV-Anteil.
@@ -266,7 +266,7 @@ Verglichen auf denselben 186 Liefertagen ab 27.02.2026. Das ist eine Vorschau au
 
 ## Merkmals-Kandidaten
 
-Nur Merkmale, die um **11:00 an D−1** bekannt sind. Swissgrid-Merkmale gelten als vorläufig, bis die Grenze D−2 bestätigt ist (ca. 18.10.2026), und beruhen auf finalen statt provisorischen Werten (messbar ab ca. 21.10.2026).
+Nur Merkmale, die um **11:00 an D−1** bekannt sind. Für Swissgrid gilt die am 22.10.2026 im Projekt bestätigte Grenze D−2, 24:00. Der Laptop-Task wurde getestet, seine Abruflogs gingen wegen eines Scriptfehlers verloren. Die Projektentscheidung ist, die Daten weiter zu verwenden, da die verfügbaren Indizien ihre Verwendbarkeit stützen; die vollständige tägliche Logserie ist nicht erhalten. Vergangene Swissgrid-Preise stammen aus der heutigen Datei und können finale Werte enthalten, obwohl um 11:00 damals provisorische Werte vorlagen. Die Grösse dieser Revisionen ist mit den eingecheckten Snapshots nicht messbar. Details stehen in [`data.md`](data.md#prüfung-des-laptop-tasks).
 
 | Merkmal | Quelle | Verfügbarkeit um 11:00 | erwarteter Nutzen | Begründung aus der EDA |
 |---|---|---|---|---|
@@ -277,9 +277,9 @@ Nur Merkmale, die um **11:00 an D−1** bekannt sind. Swissgrid-Merkmale gelten 
 | Wochentag bzw. Wochenende | Kalender | immer | mittel | H4: hohe Extreme an Werktagen, tiefe am Wochenende; H6: Wochenenden doppelt so oft negativ |
 | Anteil der PV-Leistung mit Feiertag, Tagtyp | Feiertage und PV-Register | immer | mittel, unsicher | H6: 26 % negativ an Feiertagen, aber nur 5 Tage |
 | Saison (Monat oder Tageslänge) | Kalender | immer | mittel, mit Risiko | H7: Profil hängt stark von der Saison ab; nur 8 Monate Daten, darum eher über die Strahlung abbilden |
-| Mittlere TSI bzw. short-Anteil an D−2 | Swissgrid über `known_at_issue()` | vermutlich (Annahme D−2) | gering | H2: Autokorrelation 0.15 nach 2 Tagen |
-| Richtung zur gleichen Uhrzeit an D−2 oder D−7 | Swissgrid über `known_at_issue()` | vermutlich (Annahme D−2) | gering | H2: 54 % gegenüber 50.5 % Zufall |
-| Preisniveau der Vergangenheit (Quantile je Viertelstunde über 8 Wochen bis D−2) | Swissgrid über `known_at_issue()` | vermutlich; um 11:00 nur provisorische Werte | gering, als Ausgangspunkt der Baseline | H11: Rangkorrelation 0.16 nach 2 Tagen; Quantile über 56 Tage decken 75 % statt 80 % ab |
+| Mittlere TSI bzw. short-Anteil an D−2 | Swissgrid über `known_at_issue()` | D−2, 24:00 gemäss Projektbestätigung vom 22.10.; Task getestet, Logdaten durch Scriptfehler verloren | gering | H2: Autokorrelation 0.15 nach 2 Tagen |
+| Richtung zur gleichen Uhrzeit an D−2 oder D−7 | Swissgrid über `known_at_issue()` | D−2, 24:00 gemäss Projektbestätigung vom 22.10.; Task getestet, Logdaten durch Scriptfehler verloren | gering | H2: 54 % gegenüber 50.5 % Zufall |
+| Preisniveau der Vergangenheit (Quantile je Viertelstunde über 8 Wochen bis D−2) | Swissgrid über `known_at_issue()` | zeitlich D−2, 24:00 gemäss Projektbestätigung; Werte können heute final statt damals provisorisch sein | gering, als Ausgangspunkt der Baseline | H11: Rangkorrelation 0.16 nach 2 Tagen; Quantile über 56 Tage decken 75 % statt 80 % ab |
 | Bewölkung bzw. Streuung der Strahlungsprognose zwischen den Standorten | ECMWF, Lauf D−2 18 UTC | ja | mittel für die Grösse von \|TSI\|, gering für das Preisband | H9: mittags 62 gegenüber 106 MW \|TSI\| bei klar und bedeckt, ab März in jedem Monat |
 | Temperatur, Wind, Feuchte, Niederschlag, übrige Strahlungsvariablen | ECMWF, Lauf D−2 18 UTC | ja | **keiner**, vorerst weglassen | H10: bei gleicher Uhrzeit und Strahlung alle Mediane nahe null; Strahlungsvariablen untereinander 0.92 bis 0.99 |
 | Steigung der Lastprognose über die Stunde | ENTSO-E (nicht erhoben) | **unbelegt**, siehe Teamfrage | vermutlich hoch für Abend, Nacht und Morgen | H8: dort kippt die TSI ohne Sonne; die Strahlung erklärt diese Stunden nicht |

@@ -185,8 +185,9 @@ baseline: data ## Backtest reference and baseline on June to August (docs/models
 # TRACK=1 logs to W&B, UNLOCK=1 releases the holdout (STEP=holdout) once.
 MODEL ?= baseline_model
 STEP  ?= test
+JOBS  ?= -1
 backtest: data ## Backtest MODEL (default baseline_model) on STEP tune, test or holdout (docs/models/README.md)
-	$(PY) -m energy_price.evaluation.experiment $(MODEL) $(STEP) $(if $(TRACK),--track) $(if $(UNLOCK),--unlock-holdout)
+	$(PY) -m energy_price.evaluation.experiment $(MODEL) $(STEP) --jobs $(JOBS) $(if $(TRACK),--track) $(if $(UNLOCK),--unlock-holdout)
 
 clean-data: ## Delete the processed data (raw data stays untouched)
 	rm -rf $(OUT_DIR)

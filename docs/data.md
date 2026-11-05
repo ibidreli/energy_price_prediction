@@ -2,12 +2,20 @@
 
 > Stand der Erhebung: 2026-10-04; Stauseen ergänzt und geprüft am 12.10.2026. Alle Zahlen in diesem Dokument sind aus den Daten gemessen und lassen sich mit `make data` und `make figures` reproduzieren. Wo etwas eine Vermutung ist, steht es ausdrücklich so da.
 
+> Verfügbarkeitsstatus: Am 22.10.2026 wurde im Projekt bestätigt, dass Swissgrid-Daten
+> täglich bis Ende D−2 am Prognosezeitpunkt D−1 11:00 verfügbar sind. Der Laptop-Task
+> wurde getestet, jedoch gingen die dabei erzeugten Abrufdaten wegen eines Scriptfehlers
+> verloren. Im Projekt wurde entschieden, die Daten weiter zu verwenden: Die verfügbaren
+> Indizien sprechen dafür, dass sie zum Prognosezeitpunkt bekannt waren. Diese Entscheidung
+> ist von der fehlenden erhaltenen Logserie zu unterscheiden. Details stehen in
+> [Prüfung des Laptop-Tasks](#prüfung-des-laptop-tasks).
+
 ## Kurzfassung
 
 | Quelle | Was sie sagt | Zeitraum | Um 11:00 am Vortag bekannt? |
 |---|---|---|---|
 | **Ausgleichsenergiepreis** (Swissgrid, final) | die Zielgrösse | 01.01. bis 31.08.2026 | nur Vergangenheit, siehe Regel unten |
-| **Regelzonenbilanz** (Swissgrid) | ob in der Schweiz Strom fehlte oder zu viel da war | 01.01. bis 03.10.2026 | vermutlich bis Ende D−2, **wird bis ca. 18.10. geprüft** |
+| **Regelzonenbilanz** (Swissgrid) | ob in der Schweiz Strom fehlte oder zu viel da war | 01.01. bis 03.10.2026 | bis Ende D−2; im Projekt am 22.10.2026 bestätigt |
 | **Wetterprognosen** (ECMWF, 6 Standorte) | Sonne, Wolken, Temperatur, Wind, Niederschlag für den Liefertag | Liefertage 01.01. bis 05.10.2026 | ja, Lauf von D−2 18 UTC |
 | **Feiertage** (alle 26 Kantone) | arbeitsfreie Tage | 2026 und 2027 | ja, gesetzlich festgelegt |
 | **Stauseen** (BFE) | verfügbare Speicherenergie | Wochenwerte 04.01. bis 04.10.2026 | nur rechtzeitig beobachtete Snapshots, siehe [Abschnitt 6](#6-stauseen-bfe) |
@@ -51,7 +59,7 @@ gantt
 
 | Quelle | Grenze | Beleg |
 |---|---|---|
-| Swissgrid (Preis und Bilanz) | Daten bis **D−2, 24:00** (**Annahme, wird geprüft**) | Die Grenze setzt voraus, dass Swissgrid die Datei **täglich** aktualisiert. Belegt ist bisher nur **eine** Beobachtung: Am Sonntag, 04.10.2026, um 01:21 UTC (03:21 Schweizer Zeit) enthielt sie alles bis 03.10., 23:45. Die Swissgrid-Webseite spricht aber von einer Publikation „on a weekly basis“, und im Web-Archiv gibt es keine älteren Versionen. Wird die Datei nur wöchentlich aktualisiert, leckt die Grenze D−2 um bis zu 5 Tage. Siehe [Prüfung des Aktualisierungsrhythmus](#prüfung-des-aktualisierungsrhythmus). Eine Echtzeit-Datei mit 30 Minuten Verzug, wie sie die Bilanzgruppenvorschriften erwähnen, war auf der Webseite nicht auffindbar. |
+| Swissgrid (Preis und Bilanz) | Daten bis **D−2, 24:00** | Tägliche Verfügbarkeit um D−1 11:00 am 22.10.2026 durch den Nutzer im Projekt bestätigt. Der bisher archivierte Einzelbeleg stammt vom 04.10.2026, 01:21 UTC (03:21 Schweizer Zeit), mit Daten bis 03.10., 23:45. Der frühere Widerspruch zur Webseite („on a weekly basis“) und die Prüfung sind unten historisch dokumentiert. Eine Echtzeit-Datei mit 30 Minuten Verzug wird weiterhin nicht vorausgesetzt. |
 | Wetter | Lauf **D−2, 18 UTC** | Laut Open-Meteo sind Läufe globaler Modelle 4 bis 6 Stunden nach dem Start abrufbar. Mit 6 Stunden gerechnet bleiben bis 11:00 **9 Stunden Reserve im Sommer und 10 im Winter**, an jedem Tag 2026, auch an den Umstellungstagen. Das prüft der Test `test_every_run_of_2026_is_available_at_least_9_hours_before_issue`. |
 | Feiertage | keine | durch kantonales Recht Jahre im Voraus festgelegt |
 | Stauseen | letzter tatsächlich vor D−1, 11:00 abgerufener Wochenbericht | `latest_reservoir_report` prüft Abrufzeit und Berichtswoche; historische Publikationszeiten sind nicht belegt. Details in [Abschnitt 6](#6-stauseen-bfe). |
@@ -132,16 +140,46 @@ Weil sich die Datei nachträglich ändert, wird **jede neue Version als Snapshot
 
 `fetch_log.csv` protokolliert zusätzlich **jeden** Abruf, auch wenn sich nichts geändert hat: Zeitpunkt, `Last-Modified`, letzter Zeitstempel in der Datei und `days_behind`, also wie viele Tage der letzte vollständige Tag hinter dem Abruftag liegt.
 
-### Prüfung des Aktualisierungsrhythmus
+### Prüfung des Laptop-Tasks
 
-Von 05.10. bis ca. 18.10.2026 ruft ein Hintergrundjob auf dem Rechner von Luca (macOS `launchd`, Label `ch.fhnw.energy-price.fetch-cab`) täglich um **10:30** `make fetch-cab` auf, eine halbe Stunde vor der Prognosezeit. Auswertung:
+Der tägliche Abruf mit `make fetch-cab` um 10:30 auf Lucas Laptop wurde über macOS
+`launchd` mit dem Label `ch.fhnw.energy-price.fetch-cab` getestet. Bei einem Fehler
+im Script gingen die dabei erzeugten Abrufdaten verloren. Im aktuellen Checkout ist
+die tägliche Serie deshalb nicht mehr vollständig nachvollziehbar:
 
-- `days_behind = 1` an **jedem** Tag: Die Grenze D−2 ist bestätigt.
-- `days_behind` grösser als 1 an einzelnen Tagen: Die Grenze muss in `src/energy_price/availability.py` nach hinten verschoben werden, auf den schlechtesten beobachteten Fall.
+- `data/control_area_balance/snapshots/fetch_log.csv` enthält genau einen Eintrag,
+  vom 04.10.2026 um 17:21 Schweizer Zeit. Er weist Daten bis 03.10.2026, 23:45 aus
+  (`days_behind = 1`).
+- Eine tägliche Logserie vom 05. bis 18.10. ist nicht eingecheckt, weil die Taskdaten
+  durch den Scriptfehler verloren gingen.
+- Das `launchd`-Manifest und ein eigener Shell-Task sind nicht im Repository vorhanden.
+- `src/energy_price/data/fetch_swissgrid.py` protokolliert jeden ausgeführten Abruf
+  im Log und speichert geänderte Dateien als Snapshots. Der Code allein belegt nicht,
+  dass der Task täglich lief oder vor 11:00 endete.
 
-War der Rechner um 10:30 im Ruhezustand, holt `launchd` den Abruf beim Aufwachen nach; die tatsächliche Zeit steht im Log. Solche Abrufe nach 11:00 zählen für den Nachweis nicht. Bis die Prüfung abgeschlossen ist, gelten alle Ergebnisse, die Swissgrid-Daten als Merkmal verwenden, als **vorläufig**.
+Am 22.10.2026 wurde die tägliche Verfügbarkeit bis Ende D−2 im Projekt bestätigt.
+Die Entscheidung ist, die Swissgrid-Daten gemäss dieser Grenze weiter zu verwenden,
+weil die verfügbaren Indizien dafür sprechen, dass sie zulässig sind. Der verlorene
+Task-Log bedeutet, dass die tägliche Serie nicht mehr nachträglich aus diesem Checkout
+reproduziert werden kann. Die Projektentscheidung und der erhaltene Einzelabruf sind
+die dokumentierte Grundlage; ein vollständiger Abrufnachweis liegt nicht vor.
 
-Nebenbei hält der Job jede neue Version als Snapshot fest. So lässt sich später messen, wie stark Swissgrid korrigiert.
+### Bereinigung zukünftiger Zeilen
+
+Die Quelldateien und Snapshots dürfen Zeilen enthalten, die relativ zu einem
+bestimmten Liefertag noch in der Zukunft liegen. Die Aufbereitung entfernt diese
+Zeilen nicht global aus den Rohdaten, sondern begrenzt Swissgrid-Merkmale je
+Liefertag: `known_at_issue(frame, day)` in `src/energy_price/availability.py`
+behält nur Zeitstempel vor D−1 00:00 Schweizer Zeit. Damit gelangen weder Daten
+von D−1 noch vom Liefertag D in Swissgrid-Features. Die Regel wird in
+`tests/test_availability.py` geprüft.
+
+Für Wettermerkmale wird der archivierte ECMWF-Lauf D−2 18 UTC gewählt. Die
+Aufbereitung ordnet Wetterwerte dem passenden Liefertag zu, statt zukünftige
+Läufe über Zeitstempel hinweg einzumischen. Stausee-Merkmale werden über
+`latest_reservoir_report` zusätzlich nach Abrufzeit begrenzt. Diese Prüfungen
+schützen die Modellmerkmale; sie ersetzen keinen nachträglichen Abruflog-Audit,
+da die Laptop-Task-Logs durch den Scriptfehler verloren gingen.
 
 ---
 
@@ -386,8 +424,8 @@ flowchart LR
 
 ## 9. Offene Punkte
 
-1. **Aktualisierungsrhythmus von Swissgrid bestätigen** (bis ca. 18.10.2026, siehe [Prüfung](#prüfung-des-aktualisierungsrhythmus)). Davon hängt die Grenze D−2 ab.
-2. **Korrekturen von Swissgrid messen,** sobald die finalen Septemberpreise publiziert sind. Bis dahin ist offen, wie stark provisorische und finale Werte abweichen.
+1. **Laptop-Task dokumentieren:** Die Ausführung wurde getestet, die Logdaten gingen wegen eines Scriptfehlers verloren. Die Projektentscheidung ist, die Daten aufgrund der verfügbaren Indizien weiter zu verwenden; die erhaltene Evidenz bleibt entsprechend begrenzt.
+2. **Korrekturen von Swissgrid messen,** sobald passende frühere Snapshots verfügbar sind. Mit dem aktuellen Checkout lässt sich die Differenz provisorischer und finaler Werte nicht vollständig auswerten.
 3. **Knappheitsschwellen klären:** Gelten die Werte von der Swissgrid-Webseite (−1200 / +1000 MW) für 2026? Frage an den Owner oder an Swissgrid.
 4. **ENTSO-E-Token:** entscheiden, ob die Lastprognose geprüft werden soll.
 5. **Historische Stausee-Verfügbarkeit belegen:** archivierte BFE-/Energy-Charts-Versionen und Publikationszeitpunkte suchen, bevor die neuen Werte im Backtest ab Januar als Merkmale verwendet werden.

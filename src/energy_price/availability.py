@@ -1,10 +1,10 @@
 """What is known when the forecast for delivery day D is issued (D-1, 11:00 Swiss local time).
 
-Swissgrid data (balance energy prices and the control area balance) is assumed to be known up to
-the end of D-2. ASSUMPTION, not yet verified: the file is updated daily. It was observed once
-(Sunday 2026-10-04, 03:21 Swiss time, data until 2026-10-03 23:45); Swissgrid's web page speaks
-of weekly publication. ``data/control_area_balance/snapshots/fetch_log.csv`` collects the
-evidence (see docs/data.md). If the file turns out to lag more, move ``swissgrid_cutoff`` back.
+Swissgrid data (balance energy prices and the control area balance) is known up to the end
+of D-2 at the issue time. Daily availability was confirmed by the user in the project
+conversation on 2026-10-22; this is a project confirmation, not a newly collected publication
+log. Earlier snapshot observations remain in ``data/control_area_balance/snapshots/fetch_log.csv``
+(see docs/data.md). If availability changes, move ``swissgrid_cutoff`` back.
 
 Use ``known_at_issue`` to select the history for a delivery day. Do not shift by a fixed lag:
 the allowed distance depends on the target quarter hour (24 h 15 min for D 00:00, 48 h for
