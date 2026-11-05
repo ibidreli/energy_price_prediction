@@ -2,12 +2,16 @@
 
 > Stand der Erhebung: 2026-10-04; Stauseen ergänzt und geprüft am 12.10.2026. Alle Zahlen in diesem Dokument sind aus den Daten gemessen und lassen sich mit `make data` und `make figures` reproduzieren. Wo etwas eine Vermutung ist, steht es ausdrücklich so da.
 
+> Ergänzung vom 22.10.2026: Der Nutzer hat die tägliche Verfügbarkeit der Swissgrid-Daten
+> bis Ende D−2 am Prognosezeitpunkt D−1 11:00 im Projekt bestätigt. Diese Projektbestätigung
+> gibt den Modelltest frei; sie ist kein zusätzlicher archivierter Abrufnachweis.
+
 ## Kurzfassung
 
 | Quelle | Was sie sagt | Zeitraum | Um 11:00 am Vortag bekannt? |
 |---|---|---|---|
 | **Ausgleichsenergiepreis** (Swissgrid, final) | die Zielgrösse | 01.01. bis 31.08.2026 | nur Vergangenheit, siehe Regel unten |
-| **Regelzonenbilanz** (Swissgrid) | ob in der Schweiz Strom fehlte oder zu viel da war | 01.01. bis 03.10.2026 | vermutlich bis Ende D−2, **wird bis ca. 18.10. geprüft** |
+| **Regelzonenbilanz** (Swissgrid) | ob in der Schweiz Strom fehlte oder zu viel da war | 01.01. bis 03.10.2026 | bis Ende D−2; im Projekt am 22.10.2026 bestätigt |
 | **Wetterprognosen** (ECMWF, 6 Standorte) | Sonne, Wolken, Temperatur, Wind, Niederschlag für den Liefertag | Liefertage 01.01. bis 05.10.2026 | ja, Lauf von D−2 18 UTC |
 | **Feiertage** (alle 26 Kantone) | arbeitsfreie Tage | 2026 und 2027 | ja, gesetzlich festgelegt |
 | **Stauseen** (BFE) | verfügbare Speicherenergie | Wochenwerte 04.01. bis 04.10.2026 | nur rechtzeitig beobachtete Snapshots, siehe [Abschnitt 6](#6-stauseen-bfe) |
@@ -51,7 +55,7 @@ gantt
 
 | Quelle | Grenze | Beleg |
 |---|---|---|
-| Swissgrid (Preis und Bilanz) | Daten bis **D−2, 24:00** (**Annahme, wird geprüft**) | Die Grenze setzt voraus, dass Swissgrid die Datei **täglich** aktualisiert. Belegt ist bisher nur **eine** Beobachtung: Am Sonntag, 04.10.2026, um 01:21 UTC (03:21 Schweizer Zeit) enthielt sie alles bis 03.10., 23:45. Die Swissgrid-Webseite spricht aber von einer Publikation „on a weekly basis“, und im Web-Archiv gibt es keine älteren Versionen. Wird die Datei nur wöchentlich aktualisiert, leckt die Grenze D−2 um bis zu 5 Tage. Siehe [Prüfung des Aktualisierungsrhythmus](#prüfung-des-aktualisierungsrhythmus). Eine Echtzeit-Datei mit 30 Minuten Verzug, wie sie die Bilanzgruppenvorschriften erwähnen, war auf der Webseite nicht auffindbar. |
+| Swissgrid (Preis und Bilanz) | Daten bis **D−2, 24:00** | Tägliche Verfügbarkeit um D−1 11:00 am 22.10.2026 durch den Nutzer im Projekt bestätigt. Der bisher archivierte Einzelbeleg stammt vom 04.10.2026, 01:21 UTC (03:21 Schweizer Zeit), mit Daten bis 03.10., 23:45. Der frühere Widerspruch zur Webseite („on a weekly basis“) und die Prüfung sind unten historisch dokumentiert. Eine Echtzeit-Datei mit 30 Minuten Verzug wird weiterhin nicht vorausgesetzt. |
 | Wetter | Lauf **D−2, 18 UTC** | Laut Open-Meteo sind Läufe globaler Modelle 4 bis 6 Stunden nach dem Start abrufbar. Mit 6 Stunden gerechnet bleiben bis 11:00 **9 Stunden Reserve im Sommer und 10 im Winter**, an jedem Tag 2026, auch an den Umstellungstagen. Das prüft der Test `test_every_run_of_2026_is_available_at_least_9_hours_before_issue`. |
 | Feiertage | keine | durch kantonales Recht Jahre im Voraus festgelegt |
 | Stauseen | letzter tatsächlich vor D−1, 11:00 abgerufener Wochenbericht | `latest_reservoir_report` prüft Abrufzeit und Berichtswoche; historische Publikationszeiten sind nicht belegt. Details in [Abschnitt 6](#6-stauseen-bfe). |
