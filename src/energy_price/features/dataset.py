@@ -8,7 +8,9 @@ Every feature is known when the forecast for delivery day D is issued (D-1, 11:0
   next hour. Only from the run of D-2 18 UTC (``weather_forecasts.parquet`` holds no other run),
   available about nine hours before the issue time (docs/data.md, section 1).
 
-The target ``aep_ct_kwh`` is the price of the quarter hour itself and never a feature. Past prices
+The target ``aep_ct_kwh`` is the price of the quarter hour itself and never a feature. The same holds
+for the direction label ``short`` (1 if the control area was short, TSI < 0): it is a second training
+target for models that forecast the direction first, never an input. Past prices
 enter the models only as training targets, selected with ``known_at_issue`` (data until D-2).
 Rows follow Swiss local time: the switch to summer time has 92, the switch to winter time
 100 quarter hours.
@@ -28,6 +30,7 @@ TZ = "Europe/Zurich"
 # Owner decision of 2026-10-01: the single price system applies since 2026-01-01.
 FIRST_DAY = pd.Timestamp("2026-01-01")
 TARGET = "aep_ct_kwh"
+DIRECTION = "short"
 RADIATION = "shortwave_radiation"
 
 
@@ -38,6 +41,7 @@ class Inputs:
     sites: pd.DataFrame
     holidays: pd.DataFrame
     pv_capacity: pd.DataFrame
+    balance: pd.DataFrame | None = None
 
 
 def load_inputs(root: Path = ROOT) -> Inputs:
@@ -49,6 +53,7 @@ def load_inputs(root: Path = ROOT) -> Inputs:
         sites=pd.read_csv(meta / "weather_sites.csv"),
         holidays=pd.read_csv(meta / "holidays_ch.csv"),
         pv_capacity=pd.read_csv(meta / "pv_capacity_by_canton.csv"),
+        balance=pd.read_parquet(processed / "control_area_balance.parquet"),
     )
 
 
@@ -57,6 +62,17 @@ def single_prices(prices: pd.DataFrame) -> pd.DataFrame:
     local_day = prices["timestamp_local"].dt.tz_localize(None).dt.normalize()
     keep = (local_day >= FIRST_DAY) & prices[TARGET].notna()
     return prices.loc[keep, ["timestamp_utc", "timestamp_local", TARGET]].reset_index(drop=True)
+
+
+def direction_label(balance: pd.DataFrame) -> pd.DataFrame:
+    """Per quarter hour: 1.0 if the control area was short (TSI < 0), 0.0 if long, NaN without TSI.
+
+    Same definition as the EDA (``eda.py``). In 2026 the price was never negative when short (price A)
+    and never above 27.6 ct/kWh when long (price B), see docs/overview.md.
+    """
+    tsi = balance["tsi_mw"]
+    short = (tsi < 0).astype(float).where(tsi.notna())
+    return pd.DataFrame({"timestamp_utc": balance["timestamp_utc"], DIRECTION: short})
 
 
 def quarter_hours(days: list[pd.Timestamp]) -> pd.DataFrame:
@@ -130,8 +146,8 @@ def build_table(inputs: Inputs, days: list[pd.Timestamp] | None = None) -> pd.Da
     """Target and features for every quarter hour of ``days`` (default: all days with a price or weather).
 
     Columns: ``delivery_day``, ``timestamp_local``, ``timestamp_utc``, ``hour``, ``position``,
-    ``weekend``, ``holiday_pv_share``, ``radiation``, ``radiation_change``, ``aep_ct_kwh``.
-    Missing radiation stays NaN; the target is NaN where no price exists yet.
+    ``weekend``, ``holiday_pv_share``, ``radiation``, ``radiation_change``, ``aep_ct_kwh``, ``short``.
+    Missing radiation stays NaN; target and direction are NaN where no value exists yet.
     """
     prices = single_prices(inputs.prices)
     if days is None:
@@ -153,6 +169,13 @@ def build_table(inputs: Inputs, days: list[pd.Timestamp] | None = None) -> pd.Da
 
     prices["timestamp_utc"] = prices["timestamp_utc"].astype(table["timestamp_utc"].dtype)
     table = table.merge(prices[["timestamp_utc", TARGET]], on="timestamp_utc", how="left", validate="one_to_one")
+
+    if inputs.balance is None:
+        table[DIRECTION] = np.nan
+    else:
+        label = direction_label(inputs.balance)
+        label["timestamp_utc"] = label["timestamp_utc"].astype(table["timestamp_utc"].dtype)
+        table = table.merge(label, on="timestamp_utc", how="left", validate="one_to_one")
     return table.drop(columns="hour_stamp_utc")
 
 

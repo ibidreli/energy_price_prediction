@@ -3,13 +3,16 @@ import pandas as pd
 import pytest
 
 from energy_price.features.dataset import (
+    DIRECTION,
     Inputs,
     build_table,
     calendar_features,
+    direction_label,
     holiday_pv_share,
     quarter_hours,
     radiation_by_hour,
 )
+from energy_price.features.design import FEATURE_SETS, design_matrix
 
 TZ = "Europe/Zurich"
 SITES = pd.DataFrame({"site": ["A", "B"], "pv_share": [0.75, 0.25]})
@@ -115,3 +118,33 @@ def test_target_comes_only_from_the_own_quarter_hour():
     table = build_table(inputs(weather_for("2026-07-16"), prices), days=[day])
 
     assert table["aep_ct_kwh"].tolist() == list(range(96))
+
+
+def test_direction_label_is_short_when_tsi_is_negative():
+    balance = pd.DataFrame({"timestamp_utc": pd.date_range("2026-07-16", periods=3, freq="15min", tz="UTC"),
+                            "tsi_mw": [-12.0, 8.0, np.nan]})
+
+    label = direction_label(balance)
+
+    assert label[DIRECTION].iloc[:2].tolist() == [1.0, 0.0]
+    assert np.isnan(label[DIRECTION].iloc[2])
+
+
+def test_direction_is_a_target_and_never_a_feature():
+    day = pd.Timestamp("2026-07-16")
+    grid = quarter_hours([day])
+    balance = pd.DataFrame({"timestamp_utc": grid["timestamp_utc"], "tsi_mw": np.where(np.arange(len(grid)) % 2, 5.0, -5.0)})
+    data = inputs(weather_for("2026-07-16"))
+    data = Inputs(**{**data.__dict__, "balance": balance})
+
+    table = build_table(data, days=[day])
+
+    assert table[DIRECTION].tolist() == [1.0, 0.0] * 48
+    for feature_set in FEATURE_SETS:
+        assert DIRECTION not in design_matrix(table, feature_set).columns
+
+
+def test_direction_is_missing_without_balance_data():
+    table = build_table(inputs(weather_for("2026-07-16")), days=[pd.Timestamp("2026-07-16")])
+
+    assert table[DIRECTION].isna().all()
