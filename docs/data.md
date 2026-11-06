@@ -80,6 +80,57 @@ Ein fester Abstand ist darum falsch. Beispiel: „35 Stunden zurück“ ergibt f
 
 **Im Code:** Die Funktion `known_at_issue(tabelle, liefertag)` in `src/energy_price/availability.py` gibt nur die Zeilen zurück, die zum Prognosezeitpunkt bekannt waren. Alle Merkmale aus Swissgrid-Daten werden damit gebildet, nie durch Verschieben um einen festen Lag. Die Tests in `tests/test_availability.py` halten die Grenze fest, auch an den Umstellungstagen.
 
+### Zeitumstellung: Uhrzeiten, die fehlen oder doppelt vorkommen
+
+Merkmale „zur gleichen Uhrzeit“ (`direction_d2`, `direction_d7`, die Preisquantile) suchen in der Vergangenheit dieselbe Schweizer Uhrzeit. Zweimal im Jahr gibt es diese Uhrzeit nicht genau einmal. **Es fehlen dabei keine Daten:** Die Ursache ist allein die Umrechnung von UTC in die Lokalzeit `Europe/Zurich`.
+
+| Umstellung 2026 | Moment | Uhr | Lokaler Tag | Folge für 02:00 bis 02:45 |
+|---|---|---|---|---|
+| 29.03. (Winter- zu Sommerzeit) | 01:00 UTC | springt von 02:00 auf 03:00 | 92 Viertelstunden | **gibt es nicht** |
+| 25.10. (Sommer- zu Winterzeit) | 01:00 UTC | springt von 03:00 zurück auf 02:00 | 100 Viertelstunden | **gibt es zweimal**, zuerst in Sommerzeit (+02:00), dann in Winterzeit (+01:00) |
+
+**Gemessen:**
+
+- **Lückenlos in UTC:** Preise (128'540 Viertelstunden) und Regelzonenbilanz (26'492) liegen durchgehend im 15-Minuten-Raster, ohne Lücke und ohne Duplikat.
+- **Fehlende Stunde:** In der Regelzonenbilanz folgt auf 00:45 UTC (01:45+01:00) direkt 01:00 UTC (03:00+02:00). In den Preisdateien haben 26.03.2023, 31.03.2024, 30.03.2025 und 29.03.2026 je 92 Viertelstunden.
+- **Doppelte Stunde:** Swissgrid schreibt sie in den XML-Dateien mit eigenem Offset, zum Beispiel `2025-10-26T02:00:00+02:00` und eine Stunde später `2025-10-26T02:00:00+01:00`. Es sind also zwei verschiedene Viertelstunden und keine Duplikate. 29.10.2023, 27.10.2024 und 26.10.2025 haben je 100 Viertelstunden.
+- **Beide Durchgänge unterscheiden sich:** Am 26.10.2025 lag der Preis um 02:00 bei 20.87 und eine Stunde später, wieder um 02:00, bei −0.51 ct/kWh; um 02:45 bei −5.41 und −31.75 ct/kWh. Das dient nur als Beleg: Preise aus 2025 fliessen in keine Merkmale ein.
+
+**Nicht gemessen:** Die lokale Regelzonenbilanz beginnt am 01.01.2026 und endet vor dem 25.10.2026. Für die Richtung gibt es daher noch keinen echten Tag mit doppelter Stunde. Die Regel unten ist dafür nur mit synthetischen Daten getestet.
+
+**So behandeln wir es**, festgehalten in `direction_at_clock` in `src/energy_price/features/dataset.py` und in `tests/test_features_dataset.py`:
+
+| Fall | Wert der Richtung | Begründung |
+|---|---|---|
+| Normale Uhrzeit | +1 long, −1 short | `tsi_mw < 0` ist short, wie in der Auswertung |
+| Uhrzeit fehlt am Bezugstag | **0**, „keine Information“ | Ein fehlender Wert würde den ganzen Liefertag entfernen, und zwar für alle Modelle, weil alle auf denselben Viertelstunden verglichen werden |
+| Uhrzeit doppelt am Bezugstag | **Mittel beider Richtungen**: −1 oder +1 bei Übereinstimmung, sonst 0 | Beide Durchgänge sind echte Beobachtungen derselben Uhrzeit. Sie teilen sich auch in der Referenz einen Slot |
+| Bezugstag ganz ohne Daten | fehlend | Das ist eine echte Datenlücke und keine Folge der Uhr |
+
+| Liefertag | Merkmal | Bezugstag | Betroffen |
+|---|---|---|---|
+| 31.03.2026 | `direction_d2` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
+| 05.04.2026 (Tuning) | `direction_d7` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
+| 27.10.2026 (Holdout) | `direction_d2` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
+| 01.11.2026 | `direction_d7` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
+
+**Tagesmerkmale** (`price_mean_d2`, `tsi_mean_d2`, `short_share_d2`) brauchen keine Sonderregel: Sie mitteln über alle Viertelstunden des Tages, also 92, 96 oder 100. Die **Preisquantile** rechnen wie die Referenz, nach einem kurzen Tag also mit einem Wert weniger für 02:xx und nach einem langen Tag mit einem mehr. Am **Liefertag 25.10.** erhalten beide Durchgänge von 02:xx dieselben Merkmale, weil sie dieselbe Uhrzeit haben.
+
+### Mindesthistorie der Preis- und Bilanzmerkmale
+
+Es zählen nur Daten ab 01.01.2026 (Owner-Entscheid Einpreissystem), auch wenn `BG-AEP` schon ab Juli 2025 publiziert ist. Die Quantile brauchen mindestens **28 Tage** (`MIN_HISTORY_DAYS`), das Fenster wächst danach bis auf 56 Tage. Vier volle Wochen enthalten jeden Wochentag gleich oft und lassen rund 3 Werte jenseits von P10 und P90.
+
+| Merkmal | Erster Liefertag mit Wert |
+|---|---|
+| `price_mean_d2`, `tsi_mean_d2`, `short_share_d2`, `direction_d2` | 03.01.2026 |
+| `direction_d7` | 08.01.2026 |
+| `price_mean_7d` | 09.01.2026 |
+| `price_q10_56d`, `price_q50_56d`, `price_q90_56d` | 30.01.2026 |
+
+Damit beginnt das Training von `B3` und `B4` am 30.01.2026, das von `B1` und `B2` weiterhin am 01.01.2026. Beim ersten Fit im Tuning (01.04.) sind das 60 statt 89 Tage. Ein Vergleich mit `B2` beruht also nicht auf identischen Trainingszeilen.
+
+**Unvollständige Tage:** Ohne vollständigen D−2 bleiben alle Merkmale der betroffenen Quelle leer. `price_mean_7d` braucht alle 7 Tage und `direction_d7` den vollständigen D−7, beide mitteln nie über weniger Tage. Die Quantile lassen einen unvollständigen Tag innerhalb des Fensters dagegen ganz weg und rechnen weiter, solange mindestens 28 ganze Tage bleiben. Nur in diesem Fall weichen sie von der Referenz ab, die auch die vorhandenen Viertelstunden eines solchen Tages verwendet. Von Januar bis August 2026 sind alle Preistage vollständig, die Abweichung kommt also bisher nicht vor.
+
 ### Bekanntes Restrisiko: Swissgrid überschreibt Werte
 
 Für Januar bis August ist der Preis in der Swissgrid-Datei **zu 100 % identisch mit dem finalen Monatspreis**. Swissgrid ersetzt die provisorischen Werte also später durch finale. Um 11:00 hätte man aber nur provisorische Werte gekannt. Das betrifft jedes Merkmal aus vergangenen Preisen, egal ob aus den Monatsdateien (`balance_prices.parquet`) oder aus der Regelzonenbilanz (`price_ct_kwh`). Ob Swissgrid auch die Systembilanz (`tsi_mw`) nachträglich ändert, ist unbekannt. Selbst die Einhaltung der Grenze aus dem vorherigen Abschnitt verhindert diesen Effekt nicht: Ein Rückblick mit diesen Daten ist darum leicht zu optimistisch. Wie gross die Korrekturen sind, ist **noch nicht gemessen**. Darum speichern wir jede Version als Snapshot (siehe [Abschnitt 3](#3-swissgrid-regelzonenbilanz)): Der Snapshot vom 04.10. enthält für September und Oktober noch provisorische Werte. Sobald die finalen Septemberpreise publiziert sind (bis zum 15. Arbeitstag im Oktober), lässt sich der Unterschied direkt vergleichen.
