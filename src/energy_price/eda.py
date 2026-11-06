@@ -175,7 +175,7 @@ def weather_to_quarter_hours(weather: pd.DataFrame, weights: pd.Series, columns:
 
     Mapping: the quarter hours from h-1:00 to h-1:45 take the value stamped h:00. This matches radiation,
     sunshine duration and precipitation, which describe the preceding hour. Momentary values (cloud cover,
-    temperature, wind) are then at most 45 minutes away from their stamp.
+    temperature, wind) are then at most 60 minutes away from their stamp.
 
     The value stamped D 00:00 exists twice, as the last hour of delivery day D-1 and as the first of D.
     Only the row of the delivery day that contains the quarter hours is kept: the run for D is published

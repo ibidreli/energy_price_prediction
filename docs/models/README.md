@@ -127,7 +127,7 @@ Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile 
 
 | Baustein | Datei | Wofür |
 |---|---|---|
-| Feature-Sets `B1`, `B2` | `features/design.py` | B1 Kalender, B2 Kalender plus Sonnenprognose; neue Features als Block dort ergänzen |
+| Feature-Sets `B1` bis `B4` | `features/design.py` | B1 Kalender, B2 Kalender plus Sonnenprognose, B3 zusätzlich Preisniveau bis D−2, B4 zusätzlich Systembilanz bis D−2 und Bewölkung ([Zeitumstellung](../data.md#zeitumstellung-uhrzeiten-die-fehlen-oder-doppelt-vorkommen), [Mindesthistorie](../data.md#mindesthistorie-der-preis--und-bilanzmerkmale)); neue Features als Block dort ergänzen |
 | `PerQuantileModel` | `models/shared/base.py` | Grundgerüst für jedes Modell |
 | `LinearQuantileModel` | `models/shared/linear.py` | lineare Quantilregression der Baseline |
 | `GradientBoostingQuantileModel` | `models/shared/boosting.py` | regularisiertes Quantile Boosting mit festem Seed und ohne zufälliges Early Stopping |
