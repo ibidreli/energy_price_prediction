@@ -9,6 +9,7 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 | Referenz (letzte 56 Tage) | `models/shared/reference.py` | Massstab | 9.92 | 3.20 |
 | Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
 | Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | Test abgeschlossen; Teamreview offen | 9.79 | 3.16 |
+| Regime-Modell | [`regime_mixture/`](../../src/energy_price/models/regime_mixture/) | abgeschlossen, nicht übernommen | 9.80 | 3.23 |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
 
@@ -147,7 +148,7 @@ Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile 
 
 ## 6. To-do: geplante Modelle
 
-Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder und das Regime-Modell sind noch geplant. Quantile Boosting ist implementiert; den aktuellen Stand und die Ergebnisse beschreibt sein Modell-README.
+Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder sind noch geplant. Quantile Boosting und das Regime-Modell sind implementiert; den aktuellen Stand und die Ergebnisse beschreiben ihre Modell-READMEs.
 
 **Kalibrierte Bänder** · [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/)
 
@@ -164,10 +165,11 @@ Viele kleine Entscheidungsbäume, die nacheinander die Fehler der vorherigen kor
 - Der Preis hängt von Kombinationen ab, zum Beispiel wirkt die Sonne je nach Uhrzeit und Jahreszeit anders. Ein lineares Modell bildet solche Wechselwirkungen nur ab, wenn man sie von Hand vorgibt; ein Baummodell findet sie selbst.
 - Die gruppierte Permutation Importance zeigt, wie stark das Modell auf Kalender, Feiertage und Strahlung angewiesen ist. Sie beschreibt die Nutzung der Merkmale durch das Modell, keinen kausalen Beitrag. Das wurde im Review ausdrücklich verlangt.
 
-**Regime-Modell short/long** · [`regime_mixture/`](../../src/energy_price/models/regime_mixture/)
+**Regime-Modell short/long (implementiert)** · [`regime_mixture/`](../../src/energy_price/models/regime_mixture/)
 
 Schätzt zuerst, ob im Netz Strom fehlt (short) oder zu viel da ist (long), und sagt den Preis dann für beide Situationen getrennt voraus.
 
 - Fehlt Strom, ist der Preis meist hoch; gibt es zu viel Strom, ist er tief und teils negativ. Ein einzelnes Modell mittelt die beiden Situationen und landet dazwischen, wo kaum echte Preise liegen.
 - Im Review wurde dieser Sprung bei unterdeckter Regelzone als zentraler Punkt genannt.
 - Die geschätzte Richtung zeigt zusätzlich, ob eine Bilanzgruppe bei einer Abweichung zahlt oder vergütet wird.
+- **Ergebnis (#16):** gleich gut wie die Baseline, nicht besser als die Referenz. Mit bekannter Richtung läge der Pinball Loss 39 % unter der Referenz; die Richtung ist am Vortag aber nur schwach vorhersagbar (AUC 0.62, kaum besser als der Anteil short pro Viertelstunde). Details im [Steckbrief](../../src/energy_price/models/regime_mixture/README.md).

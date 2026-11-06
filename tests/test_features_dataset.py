@@ -4,16 +4,18 @@ import pytest
 
 from energy_price.evaluation.backtest import PERIODS
 from energy_price.features.dataset import (
+    DIRECTION,
     HISTORY_COLUMNS,
     Inputs,
     build_table,
     calendar_features,
+    direction_label,
     holiday_pv_share,
     load_inputs,
     quarter_hours,
     radiation_by_hour,
 )
-from energy_price.features.design import design_matrix
+from energy_price.features.design import FEATURE_SETS, design_matrix
 from energy_price.models.shared.reference import reference_forecast
 from energy_price.paths import ROOT
 
@@ -462,3 +464,34 @@ def test_b3_and_b4_lose_no_delivery_day_that_b2_has(period):
     assert complete("B3") == complete("B2")
     assert complete("B4") == complete("B2")
     assert len(complete("B2")) >= len(days) - 1  # 2026-06-24 has no radiation
+
+
+def test_direction_label_is_short_when_tsi_is_negative():
+    balance = pd.DataFrame({"timestamp_utc": pd.date_range("2026-07-16", periods=3, freq="15min", tz="UTC"),
+                            "tsi_mw": [-12.0, 8.0, np.nan]})
+
+    label = direction_label(balance)
+
+    assert label[DIRECTION].iloc[:2].tolist() == [1.0, 0.0]
+    assert np.isnan(label[DIRECTION].iloc[2])
+
+
+def test_direction_is_a_target_and_never_a_feature():
+    day = pd.Timestamp("2026-07-16")
+    grid = quarter_hours([day])
+    balance = pd.DataFrame({"timestamp_utc": grid["timestamp_utc"], "timestamp_local": grid["timestamp_local"],
+                            "tsi_mw": np.where(np.arange(len(grid)) % 2, 5.0, -5.0)})
+    data = inputs(weather_for("2026-07-16"))
+    data = Inputs(**{**data.__dict__, "balance": balance})
+
+    table = build_table(data, days=[day])
+
+    assert table[DIRECTION].tolist() == [1.0, 0.0] * 48
+    for feature_set in FEATURE_SETS:
+        assert DIRECTION not in design_matrix(table, feature_set).columns
+
+
+def test_direction_is_missing_without_balance_data():
+    table = build_table(inputs(weather_for("2026-07-16")), days=[pd.Timestamp("2026-07-16")])
+
+    assert table[DIRECTION].isna().all()
