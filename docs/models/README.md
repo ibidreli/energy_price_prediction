@@ -14,6 +14,8 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 | Kalibriertes GBM | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | Test abgeschlossen; Coverage-Ziel verfehlt | 9.79 | 3.13 |
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Weitere Experimente und geplante Modelle stehen in Abschnitt 6.
 
+Ein Bandit über die Modelle wurde explorativ geprüft und nicht weiterverfolgt. Er ist kein Modellkandidat und steht deshalb nicht in dieser Tabelle: [`docs/exploration/bandit/`](../exploration/bandit/README.md).
+
 Quantile Boosting erreicht im **Tuning April/Mai** einen Pinball-Loss von 3.3087
 (Referenz 3.4485; Baseline B2 3.3112), bei 76.35 % Coverage. Das sind 4.05 % weniger
 Loss als die Referenz, aber praktisch gleich viel wie bei der linearen Baseline.
