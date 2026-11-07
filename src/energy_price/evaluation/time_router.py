@@ -225,7 +225,8 @@ def summarise(forecasts, design, period, out, do_track=False):
                               tables={"comparisons": pairs[pairs.model == name].reset_index(drop=True),
                                       "breakdowns": breakdowns[breakdowns.model == name].reset_index(drop=True)},
                               files=[DESIGN, out / f"{period}_comparisons.csv", out / f"{period}_scores.csv",
-                                     out / f"{period}_run_info.json"])
+                                     out / f"{period}_run_info.json", out / f"{period}_forecasts.parquet",
+                                     out / f"{period}_decisions.csv"])
         dump(out / f"{period}_wandb_urls.json", urls)
     return scores, pairs
 

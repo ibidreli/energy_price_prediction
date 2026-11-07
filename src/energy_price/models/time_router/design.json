@@ -37,7 +37,7 @@
     }
   },
   "pool_fingerprint": "155499731d8cebb87428180a0550c74d5f2d44a95a11acc9e3742f0bcff17663",
-  "policy_fingerprint": "82ad1bf34bb4867e846362b44ddcbe107741fbd4780924ed6d422602692f9129",
+  "policy_fingerprint": "72127e1ce53851f98a15c0ff34b027789ccecb82139d228b3ca1faf8636bede7",
   "default": "gbm_quantile",
   "tune_scores": {
     "reference": 3.448506762295082,
@@ -84,8 +84,8 @@
   "test_nomination": "lowest calibrated pinball among candidates; no causal claim from test",
   "test_is_blind": false,
   "info": {
-    "created_utc": "2026-11-07T15:08:59+00:00",
-    "git_commit": "739de0dc3aaa6a4e5a1cee1767f9ed4c7799f16a",
+    "created_utc": "2026-11-07T15:16:50+00:00",
+    "git_commit": "d1264d430e53827d4563dad2a4023d1160207a22",
     "git_dirty": true,
     "data_version": "278c3d9e7dd5",
     "python": "3.13.0",

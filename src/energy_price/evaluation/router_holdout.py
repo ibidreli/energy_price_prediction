@@ -105,8 +105,8 @@ def run(args):
     wide = wide_pool(pd.concat([*frames, holdout], ignore_index=True), list(design["pool"]))
     final_design = {**design, "candidates": [nominated["candidate"]]}
     forecasts, decisions = routed_history(wide, final_design, "2026-10-31")
-    scores, pairs = summarise(forecasts, final_design, "holdout", args.out, args.track)
     decisions.to_csv(args.out / "holdout_decisions.csv", index=False)
+    scores, pairs = summarise(forecasts, final_design, "holdout", args.out, args.track)
     experts = []
     for name, group in holdout.groupby("model"):
         # Exact same admissible quarters as the architecture comparison.
@@ -114,7 +114,11 @@ def run(args):
         experts.append({"model": name, **score_expert(group[group.timestamp_utc.isin(keys)])})
     pd.DataFrame(experts).to_csv(args.out / "holdout_expert_scores.csv", index=False)
     pair = pairs[pairs.model == "calibrated_" + nominated["candidate"]].iloc[0]
-    accepted = bool(pair.mean_difference < 0 and pair.ci95_high < 0 and pair.coverage_difference >= 0)
+    candidate_name = "calibrated_" + nominated["candidate"]
+    # The score is quarter-hour weighted, whereas inference averages days.
+    # These are distinct on October's 100-quarter-hour DST day: require both.
+    lower_pinball = scores.loc[candidate_name, "pinball"] < scores.loc["calibrated_default", "pinball"]
+    accepted = bool(lower_pinball and pair.ci95_high < 0 and pair.coverage_difference >= 0)
     record.update(status="completed", decision="time_architecture" if accepted else "calibrated_single",
                   comparison=pair.to_dict(), candidate=nominated["candidate"])
     dump(ledger_path, record)
