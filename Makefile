@@ -187,12 +187,15 @@ MODEL ?= baseline_model
 STEP  ?= test
 JOBS  ?= -1
 FINAL_DATA_EVIDENCE ?=
-.PHONY: time-router holdout-data-check
+.PHONY: time-router time-router-figures holdout-data-check
 time-router: data ## Pool, tune, test, readiness, freeze or one-shot holdout for issue 25 (STEP=...)
 	$(PY) -m energy_price.evaluation.time_router $(STEP) --jobs $(JOBS) $(if $(TRACK),--track) $(if $(FINAL_DATA_EVIDENCE),--final-data-evidence "$(FINAL_DATA_EVIDENCE)")
 
 holdout-data-check: data ## Check Sep/Oct quarter-hour completeness without evaluating prices
 	$(PY) -m energy_price.evaluation.time_router readiness
+
+time-router-figures: $(ENV_READY) ## Plot calibrated loss intervals and coverage from existing issue-25 outputs
+	$(PY) -m energy_price.evaluation.comparison_figure reports/time_router docs/figures/time_router/$(STEP)_comparison.png --period $(STEP)
 
 backtest: data ## Backtest MODEL (default baseline_model) on STEP tune, test or holdout (docs/models/README.md)
 	$(PY) -m energy_price.evaluation.experiment $(MODEL) $(STEP) --jobs $(JOBS) $(if $(TRACK),--track) $(if $(UNLOCK),--unlock-holdout)
