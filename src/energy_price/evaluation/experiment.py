@@ -247,6 +247,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--unlock-holdout", action="store_true", help="release the holdout period once")
     parser.add_argument("--out", type=Path, default=None, help="default reports/<model>/")
     args = parser.parse_args(argv)
+    runner = getattr(load(args.model), "EXPERIMENT_RUNNER", None)
+    if runner:
+        # Forecast combinations consume OOS expert tables, not raw feature rows.
+        command = [args.step, "--jobs", str(args.jobs)]
+        if args.out:
+            command += ["--out", str(args.out)]
+        if args.track:
+            command += ["--track"]
+        return import_module(runner).main(command)
     out = args.out or REPORTS_DIR / args.model
 
     table = build_table(load_inputs())

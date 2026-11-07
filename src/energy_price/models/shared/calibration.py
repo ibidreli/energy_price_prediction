@@ -54,6 +54,50 @@ def upper_quantile(values: np.ndarray, alpha: float = 0.1) -> float:
     return float(np.partition(values, rank - 1)[rank - 1])
 
 
+class ResidualCalibrator:
+    """The same asymmetric correction on an already generated OOS output.
+
+    Used after routing: historical residuals must come from the historical
+    decisions, never from applying today's router retrospectively. The caller
+    supplies the weekly fit day; this class enforces its D-2 boundary again.
+    """
+
+    def __init__(self, calibration_days=56, grouping="6h"):
+        if calibration_days not in (28, 56) or grouping not in ("global", "6h", "hour"):
+            raise ValueError("unsupported calibration setting")
+        self.calibration_days, self.grouping = calibration_days, grouping
+
+    def _groups(self, table):
+        return (pd.Series(0, index=table.index) if self.grouping == "global"
+                else table.hour // (6 if self.grouping == "6h" else 1))
+
+    def fit(self, history, fit_day):
+        cutoff = pd.Timestamp(fit_day) - pd.Timedelta(days=2)
+        first = cutoff - pd.Timedelta(days=self.calibration_days - 1)
+        rows = history[history.delivery_day.between(first, cutoff)].copy()
+        rows = rows[np.isfinite(rows[[TARGET, "q10", "q90"]]).all(axis=1)]
+        if len(rows) < 20:
+            raise ValueError("insufficient out-of-sample residuals")
+        lower, upper = rows.q10 - rows[TARGET], rows[TARGET] - rows.q90
+        self.pooled_ = upper_quantile(lower), upper_quantile(upper)
+        self.last_day_ = rows.delivery_day.max()
+        self.corrections_ = {}
+        for group in self._groups(rows).unique():
+            mask = self._groups(rows) == group
+            if mask.sum() >= 20:
+                self.corrections_[group] = upper_quantile(lower[mask]), upper_quantile(upper[mask])
+        return self
+
+    def predict(self, forecast):
+        out = forecast.copy()
+        corrections = np.asarray([self.corrections_.get(g, self.pooled_) for g in self._groups(out)])
+        if len(out):
+            out["q10"] = np.minimum(out.q10 - corrections[:, 0], out.q50)
+            out["q90"] = np.maximum(out.q90 + corrections[:, 1], out.q50)
+        out["calibration_last_day"] = self.last_day_
+        return out
+
+
 class CalibratedQuantileModel:
     """Wrap a frozen named base model; independently correct each 10% tail.
 
