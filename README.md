@@ -12,6 +12,7 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/metric.md`](docs/metric.md) | Evaluation metric (MAE, pinball loss, coverage) and baseline |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/models/README.md`](docs/models/README.md) | Model structure: one folder per model, shared backtest, how to start a new model from the template |
+| [`time_router/README.md`](src/energy_price/models/time_router/README.md) | Configurable OOS model pool, D-2-safe selection and combination, final calibration, development results and locked holdout protocol (#25) |
 | [`docs/models/baseline_model.md`](docs/models/baseline_model.md) | Baseline: linear quantile regression against a historical reference, backtest and results |
 | [`docs/exploration/bandit/README.md`](docs/exploration/bandit/README.md) | Explorative architecture check of a bandit over the models, not a model candidate; notebook [`notebooks/03_bandit_architektur.ipynb`](notebooks/03_bandit_architektur.ipynb) |
 | [`docs/experiment_tracking.md`](docs/experiment_tracking.md) | W&B setup per person, run conventions, what never goes online |

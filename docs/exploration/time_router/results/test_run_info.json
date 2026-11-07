@@ -1,0 +1,116 @@
+{
+  "created_utc": "2026-11-07T15:34:21+00:00",
+  "git_commit": "cc1dbd2e15427fb9ec096edd9936c4cd513bfde2",
+  "git_dirty": false,
+  "data_version": "278c3d9e7dd5",
+  "python": "3.13.0",
+  "packages": {
+    "pandas": "3.0.6",
+    "numpy": "2.5.4",
+    "scikit-learn": "1.9.1",
+    "joblib": "1.6.0"
+  },
+  "design": {
+    "issue": 25,
+    "pool": {
+      "reference": {
+        "kind": "reference",
+        "window_days": 56
+      },
+      "B2": {
+        "module": "baseline_model",
+        "settings": {
+          "feature_set": "B2",
+          "window": "expanding",
+          "alpha": 0.0
+        }
+      },
+      "gbm_quantile": {
+        "module": "gbm_quantile",
+        "settings": {
+          "feature_set": "B2",
+          "window": "expanding",
+          "learning_rate": 0.05,
+          "max_iter": 150,
+          "max_leaf_nodes": 7,
+          "min_samples_leaf": 50,
+          "l2_regularization": 1.0,
+          "random_state": 0
+        }
+      },
+      "regime_mixture": {
+        "module": "regime_mixture",
+        "settings": {
+          "feature_set": "B2",
+          "window": "expanding",
+          "C": 1.0,
+          "alpha": 0.0
+        }
+      }
+    },
+    "pool_fingerprint": "155499731d8cebb87428180a0550c74d5f2d44a95a11acc9e3742f0bcff17663",
+    "policy_fingerprint": "72127e1ce53851f98a15c0ff34b027789ccecb82139d228b3ca1faf8636bede7",
+    "default": "gbm_quantile",
+    "tune_scores": {
+      "reference": 3.448506762295082,
+      "B2": 3.311187698140502,
+      "gbm_quantile": 3.3086848336904047,
+      "regime_mixture": 3.3226113320644894
+    },
+    "layout": "global",
+    "edges": [
+      0,
+      24
+    ],
+    "block_cap": 1,
+    "power_supported_layouts": [],
+    "planning_effect_fraction": 0.01,
+    "planning_power": 0.8,
+    "power_requirement": "all challenger/block comparisons; fallback pooled block if unsupported",
+    "robustness_edges": [
+      0,
+      6,
+      12,
+      18,
+      24
+    ],
+    "weekday_weekend_split": false,
+    "candidates": [
+      "mean",
+      "selection",
+      "weights"
+    ],
+    "bootstrap_reps": 5000,
+    "bootstrap_block_days": 7,
+    "seed": 0,
+    "selection_history": "expanding OOS since 2026-01-30",
+    "min_history_days": 28,
+    "multiplicity": "Bonferroni across (pool_size-1)*blocks at each refit",
+    "weight_method": "simplex pinball LP, 56 calendar days, 50% shrinkage to default",
+    "calibration": {
+      "calibration_days": 56,
+      "grouping": "6h"
+    },
+    "pool_freeze_date": "2026-11-27",
+    "holdout_status": "locked; final data and final pool freeze required",
+    "test_nomination": "lowest calibrated pinball among candidates; no causal claim from test",
+    "test_is_blind": false,
+    "info": {
+      "created_utc": "2026-11-07T15:16:50+00:00",
+      "git_commit": "d1264d430e53827d4563dad2a4023d1160207a22",
+      "git_dirty": true,
+      "data_version": "278c3d9e7dd5",
+      "python": "3.13.0",
+      "packages": {
+        "pandas": "3.0.6",
+        "numpy": "2.5.4",
+        "scikit-learn": "1.9.1",
+        "joblib": "1.6.0"
+      }
+    }
+  },
+  "period": "test",
+  "test_is_blind": false,
+  "calibration_stage": "once, after routing",
+  "holdout_executed": false
+}

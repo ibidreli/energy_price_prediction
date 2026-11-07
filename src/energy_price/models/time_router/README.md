@@ -1,6 +1,7 @@
 # Zeitabhängige Modellarchitektur · Issue #25
 
-Stand 07.11.2026: Implementierung und April/Mai-Festlegung. Der gemeinsame
+Stand 07.11.2026: Implementierung, April/Mai-Festlegung und Entwicklungsvergleich
+Juni–August abgeschlossen. Der gemeinsame
 Holdout bleibt bis zum endgültigen Pool-Freeze am 27.11. und zur Bestätigung
 finaler Daten gesperrt. Juni–August sind Entwicklungsdaten, kein blinder Test.
 
@@ -127,17 +128,92 @@ Backtest, beseitigt aber diese Einschränkung historischer Revisionen nicht.
 
 ## Juni–August und Entscheid
 
-Noch nicht ausgeführt beim Commit der Festlegung. Nach dem Lauf werden hier
-Kennzahlen, gepaarte Intervalle und der nominierte Holdout-Kandidat ergänzt.
-Die drei Kandidaten werden nach kalibriertem Pinball verglichen. Der tiefste
-Wert nominiert einen Kandidaten; daraus folgt keine Übernahme. Der einzige
-blinde Entscheid erfolgt später im Holdout: Pinball tiefer, 95-%-Intervall ganz
-negativ und Coverage mindestens so hoch wie beim kalibrierten Standardmodell.
+Festlegung vor dem Test: Commits `d1264d4` und `c61d016`, dokumentiert in
+[Issue #25](https://github.com/ibidreli/energy_price_prediction/issues/25#issuecomment-6708782368)
+und [Ergänzung vor den Scores](https://github.com/ibidreli/energy_price_prediction/issues/25#issuecomment-6708853111).
+Alle Vergleiche verwenden **8736 Viertelstunden an 91 Tagen**, ohne 24.06.
+Ein vorzeitig beendeter Befehl hatte nur Experten-Fits erzeugt; deren
+inhaltsbasierter Cache wurde im vollständigen Lauf wiederverwendet.
+
+| Variante | Pinball | MAE P50 | Coverage | Bandbreite |
+|---|---:|---:|---:|---:|
+| Boosting, roh | 3.163293 | 9.792303 | 74.08 % | 24.844705 |
+| Gleichgewichte, roh | 3.169655 | 9.774233 | 75.98 % | 25.646652 |
+| Auswahl, roh | 3.163293 | 9.792303 | 74.08 % | 24.844705 |
+| Gelernte Gewichte, roh | 3.147265 | 9.766201 | 75.30 % | 25.146728 |
+| Boosting, kalibriert | 3.125098 | 9.792303 | 77.53 % | 26.622195 |
+| Gleichgewichte, kalibriert | 3.135896 | 9.774233 | 77.27 % | 26.177901 |
+| Auswahl, kalibriert | 3.125098 | 9.792303 | 77.53 % | 26.622195 |
+| **Gelernte Gewichte, kalibriert** | **3.116821** | **9.766201** | **77.67 %** | **26.419347** |
+
+Loss, MAE und Breite in ct/kWh. Gegenüber dem jeweiligen Standardmodell:
+
+| Kandidat | Tägliche Pinball-Differenz | 95-%-Intervall | Coverage-Differenz |
+|---|---:|---:|---:|
+| Gleichgewichte, roh | +0.006362 | [−0.008382, +0.025176] | +1.900 Prozentpunkte |
+| Auswahl, roh | 0 | [0, 0] | 0 |
+| Gewichte, roh | −0.016028 | [−0.024489, −0.008647] | +1.213 Prozentpunkte |
+| Gleichgewichte, kalibriert | +0.010797 | [−0.002576, +0.029457] | −0.263 Prozentpunkte |
+| Auswahl, kalibriert | 0 | [0, 0] | 0 |
+| **Gewichte, kalibriert** | **−0.008277** | **[−0.015809, −0.000333]** | **+0.137 Prozentpunkte** |
+
+**Für den Holdout nominiert: globale gelernte Gewichte mit anschliessender
+Kalibrierung**, gespeichert in `nomination.json`. Der kalibrierte Pinball sinkt
+im Entwicklungsvergleich um 0.265 %, die Coverage steigt leicht. Das Intervall
+liegt knapp unter null; dieser bereits zur Kandidatenwahl verwendete Test ist
+kein unabhängiger Signifikanznachweis. Die Coverage bleibt unter nominalen 80 %.
+Es gibt noch keine Übernahmeentscheidung.
+
+Die Auswahlregel wechselt in keiner der 14 Testwochen vom Standardmodell weg.
+Sie ist auf dem Test exakt identisch zu Boosting. Auch die Boosting-Quantile
+selbst stimmen auf allen gemeinsamen Testviertelstunden mit dem bisherigen
+GBM-Experiment überein. Es wurden keine Expertenparameter angepasst.
+
+Der kalibrierte Standard hat hier 3.125098 statt der 3.1254 aus #19. Die
+Korrekturregel ist unverändert; ihre OOS-Fehler stammen jetzt aus der gemeinsamen
+Prognosetabelle mit den etablierten April-/Juni-Fitankern. #19 erzeugt seine
+inneren historischen Prognosen auf einem durchlaufenden Wochenraster ab 30.01.
+Deshalb werden beide Seiten des neuen Vergleichs konsistent mit dem neuen
+gemeinsamen OOS-Protokoll kalibriert; Werte unterschiedlicher Protokolle werden
+nicht als gepaarter Vergleich ausgegeben.
+
+**Domänenbezug:** Die hohe Fehlerkorrelation und die ausbleibenden belegten
+Expertenwechsel sprechen gegen eine belastbare Tageszeit-Zuordnung mit dieser
+Historie. Eine kleine globale Kombination kann trotzdem helfen. Die mittleren
+Boosting-Gewichte liegen bei rund 79 % (P10), 68 % (P50) und 80 % (P90);
+Referenz ergänzt vor allem die Ränder, B2 und Regime-Mischung stärker den Median.
+Das sind beschreibende Gewichte, keine kausalen Beiträge.
+
+Der kalibrierte Gewinn liegt im Juni (3.0019 statt 3.0162) und Juli (3.1231 statt
+3.1351); im August ist die Kombination leicht schlechter (3.2181 statt 3.2170).
+Auf tatsächlichen long-Viertelstunden verbessert sich der Loss von 3.2897 auf
+3.2512, bei short verschlechtert er sich von 2.9803 auf 2.9986. Der Vorteil ist
+also weder über Monate noch Richtungen gleichmässig. Daraus wird keine neue
+monatliche oder richtungsabhängige Auswahlregel abgeleitet.
+
+**Robustheit 4×6h, keine zusätzliche Wahlmöglichkeit:** Kalibrierte Gewichte
+erreichen diagnostisch 3.111040 mit Intervall der Differenz
+[−0.022240, −0.005348], Coverage 77.518 % gegenüber 77.530 % beim Standard
+(eine Viertelstunde weniger abgedeckt). Dieses Raster war aufgrund der
+April/Mai-Power-Abschätzung nicht für die Hauptvariante zugelassen und wird
+nach Testeinsicht nicht übernommen. Auch hier schaltet die Auswahl nie um.
+
+![Kalibrierter Entwicklungsvergleich](../../../../docs/figures/time_router/test_comparison.png)
+
+Grafik reproduzieren: `make time-router-figures STEP=test`.
+Kuratierte CSV-Ergebnisse und W&B-Links liegen in
+[`docs/exploration/time_router/results/`](../../../../docs/exploration/time_router/results/).
+Vollständige Prognosen, Gewichte und Entscheidungen stehen zusätzlich als
+W&B-Artefakte bereit: [kalibrierte Gewichte](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/nekqk66k),
+[kalibriertes Standardmodell](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ivxmx3iw),
+Gruppe `issue-25`. Der bestehende Chartname `daily_pinball_vs_reference` meint
+hier den jeweiligen Standardmodell-Vergleichspartner aus der Vergleichstabelle.
 
 ## Holdout: erst nach finalen Daten und Pool-Freeze
 
 Der Nutzer hat am 07.11. bestätigt, den Zeitplan beizubehalten. Deshalb gibt es
 hier noch **keinen Holdout-Lauf und keinen endgültigen Architekturentscheid**.
+Der terminierte Abschluss ist als [Issue #32](https://github.com/ibidreli/energy_price_prediction/issues/32) nachgeführt.
 26 fehlende ECMWF-Läufe wurden archiviert; die Wetterfeatures sind für alle
 5860 erwarteten Viertelstunden September/Oktober vollständig. Preise fehlen
 lokal noch für alle 5860 Viertelstunden, Richtungslabels für 2692.
@@ -194,3 +270,7 @@ eingeschränkte LP-Gewichte und die atomare Holdout-Sperre.
 Die Branches aus #19 und #21 wurden in diesen Arbeitsbranch integriert. Das ist
 keine Freigabe durch ein Teammitglied und kein Merge nach `main`. Teamreview
 und der spätere gemeinsame Holdout bleiben offene Abschlussbedingungen.
+Die Kalibrierung ist separat in [PR #31](https://github.com/ibidreli/energy_price_prediction/pull/31)
+prüfbar; die explorative Vorarbeit bleibt in [PR #22](https://github.com/ibidreli/energy_price_prediction/pull/22).
+Prüfstand: 297 Tests bestanden; zusätzlich die vollständigen Testprognosen auf
+D−2-Grenzen, unveränderte GBM-Prognosen und Quantilordnung geprüft.

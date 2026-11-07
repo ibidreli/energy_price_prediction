@@ -12,9 +12,23 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 | Regime-Modell | [`regime_mixture/`](../../src/energy_price/models/regime_mixture/) | abgeschlossen, nicht übernommen | 9.80 | 3.23 |
 | Kalibrierte B2 | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | Test abgeschlossen; Coverage-Ziel verfehlt | 9.81 | 3.17 |
 | Kalibriertes GBM | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | Test abgeschlossen; Coverage-Ziel verfehlt | 9.79 | 3.13 |
+| Kalibrierte Modellkombination | [`time_router/`](../../src/energy_price/models/time_router/) | Entwicklungsvergleich abgeschlossen; Holdout und Teamreview offen | 9.77 | 3.12 |
+
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Weitere Experimente und geplante Modelle stehen in Abschnitt 6.
 
 Ein Bandit über die Modelle wurde explorativ geprüft und nicht weiterverfolgt. Er ist kein Modellkandidat und steht deshalb nicht in dieser Tabelle: [`docs/exploration/bandit/`](../exploration/bandit/README.md).
+
+Issue #25 findet auf April/Mai keine ausreichend abgesicherten Tageszeitblöcke
+für einen geplanten Vorteil von 1 %. Hauptvariante ist deshalb ein gemeinsamer
+Tagesblock mit drei vorab festgelegten Kombinationsregeln. Im nicht blinden
+Vergleich Juni–August erreichen gelernte globale Gewichte mit Kalibrierung
+3.116821 gegenüber 3.125098 beim konsistent kalibrierten GBM (−0.265 %;
+95-%-Intervall der täglichen Differenz [−0.015809, −0.000333]). Coverage:
+77.67 % gegenüber 77.53 %, weiterhin unter nominalen 80 %. Die Auswahlregel
+bleibt vollständig bei GBM. Nominiert sind globale Gewichte; das belegt noch
+keine Tageszeit-Spezialisierung. Der Holdout bleibt bis zum endgültigen
+Pool-Freeze am 27.11. und finalen Daten gesperrt ([Abschluss #32](https://github.com/ibidreli/energy_price_prediction/issues/32)).
+Details, gemeinsame OOS-Prognosen, Literatur und W&B-Links im [Modell-README](../../src/energy_price/models/time_router/README.md).
 
 Quantile Boosting erreicht im **Tuning April/Mai** einen Pinball-Loss von 3.3087
 (Referenz 3.4485; Baseline B2 3.3112), bei 76.35 % Coverage. Das sind 4.05 % weniger
@@ -33,7 +47,13 @@ src/energy_price/models/<name>/
 └── model.py      das Modell und seine Einstellungen
 ```
 
-In `model.py` stehen drei Variablen:
+Modelle, die vorhandene Expertenprognosen kombinieren, können zusätzlich
+`EXPERIMENT_RUNNER` definieren. Dieser Runner verarbeitet die gemeinsame
+OOS-Prognosetabelle statt Rohfeatures. `time_router` hält die eingefrorene
+Entwicklungseinstellung in `design.json` und die Testnominierung in
+`nomination.json`; dieselben `make backtest`-Befehle bleiben nutzbar.
+
+In `model.py` stehen für gewöhnliche Einzelmodelle drei Variablen:
 
 | Variable | Inhalt | Wann |
 |---|---|---|
