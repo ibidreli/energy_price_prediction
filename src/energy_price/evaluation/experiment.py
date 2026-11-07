@@ -20,6 +20,9 @@ Settings are keyword arguments of ``MODEL``; the key ``window`` is taken by the 
 (``"expanding"``: all prices since 2026-01-01, ``"rolling_56d"``: the last 56 days). Optional:
 ``COEFFICIENTS_SHOWN`` and ``COEFFICIENTS_OF`` for a coefficient figure, ``RUN_INFO`` for notes,
 ``ISSUE`` for W&B grouping and ``IMPORTANCE_GROUPS`` for tuning-fold permutation importance.
+An optional ``select_candidates(scores, settings_by_name)`` returns named CHOSEN settings
+for experiments that select separately for multiple base models; these are stored under
+``chosen`` in the tuning selection record.
 """
 
 from __future__ import annotations
@@ -120,6 +123,10 @@ def tune(name: str, table: pd.DataFrame, jobs: int, out_dir: Path, do_track: boo
     best = scores.loc[list(settings_by_name), "pinball"].idxmin()
     selection = {"variant": best, "settings": settings_by_name[best], "metric": "pinball",
                  "value": float(scores.loc[best, "pinball"]), "period": list(PERIODS["tune"])}
+    selected = {best}
+    if hasattr(module, "select_candidates"):
+        selection["chosen"] = module.select_candidates(scores, settings_by_name)
+        selected = {key for key, value in settings_by_name.items() if value in selection["chosen"].values()}
     info = run_info({"model": name, "period": "tune", "grid": module.GRID,
                      "selection": selection, "refit_days": REFIT_DAYS,
                      "reference_window_days": REFERENCE_WINDOW_DAYS, **getattr(module, "RUN_INFO", {})})
@@ -149,7 +156,7 @@ def tune(name: str, table: pd.DataFrame, jobs: int, out_dir: Path, do_track: boo
             if variant == best and importance is not None:
                 tables["feature_importance"] = importance
             urls[variant] = track("tune", variant, {"model": name, **settings,
-                                  **getattr(module, "RUN_INFO", {}), "selected": variant == best},
+                                  **getattr(module, "RUN_INFO", {}), "selected": variant in selected},
                                   scores.loc[variant], n_folds, PERIODS["tune"], issue=issue,
                                   daily=daily[variant], reference_daily=daily[REFERENCE], tables=tables,
                                   files=tracking_files(out_dir, "tune") if variant == best else None)
