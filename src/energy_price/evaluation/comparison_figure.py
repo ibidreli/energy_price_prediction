@@ -49,7 +49,9 @@ def comparison_figure(out: Path, period: str, path: Path) -> Path:
         coverage.set_xlim(min(base, 100 * scores.loc[pairs.model, "coverage_80"].min()) - .5, max(80, base) + 1)
         coverage.legend(frameon=False, fontsize=8, loc="lower right")
         fig.suptitle(f"{period}: kalibrierte Kandidaten gegen kalibriertes Standardmodell", x=.02, ha="left", fontsize=12)
-        fig.text(.02, .015, "7-Kalendertage-Bootstrap · 5000 Wiederholungen · Test ist Entwicklungsvergleich, kein blinder Nachweis",
+        note = ("Test ist Entwicklungsvergleich, kein blinder Nachweis" if period == "test"
+                else "Einmaliger blinder Holdout; keine nachträgliche Anpassung")
+        fig.text(.02, .015, "7-Kalendertage-Bootstrap · 5000 Wiederholungen · " + note,
                  fontsize=8, color=INK_SECONDARY)
         fig.tight_layout(rect=(0, .07, 1, .92))
         fig.savefig(path, dpi=160)
