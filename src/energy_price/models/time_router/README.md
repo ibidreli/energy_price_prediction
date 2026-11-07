@@ -206,6 +206,7 @@ Kuratierte CSV-Ergebnisse und W&B-Links liegen in
 Vollständige Prognosen, Gewichte und Entscheidungen stehen zusätzlich als
 W&B-Artefakte bereit: [kalibrierte Gewichte](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/nekqk66k),
 [kalibriertes Standardmodell](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ivxmx3iw),
+[Quellcode-/Ergebnispaket mit Grafik](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ydbc8i90),
 Gruppe `issue-25`. Der bestehende Chartname `daily_pinball_vs_reference` meint
 hier den jeweiligen Standardmodell-Vergleichspartner aus der Vergleichstabelle.
 
@@ -272,5 +273,7 @@ keine Freigabe durch ein Teammitglied und kein Merge nach `main`. Teamreview
 und der spätere gemeinsame Holdout bleiben offene Abschlussbedingungen.
 Die Kalibrierung ist separat in [PR #31](https://github.com/ibidreli/energy_price_prediction/pull/31)
 prüfbar; die explorative Vorarbeit bleibt in [PR #22](https://github.com/ibidreli/energy_price_prediction/pull/22).
+Die vollständige Architektur ist in [PR #33](https://github.com/ibidreli/energy_price_prediction/pull/33)
+zur Prüfung bereit. Beide Implementierungs-PRs bleiben bis zum Teamreview offen.
 Prüfstand: 297 Tests bestanden; zusätzlich die vollständigen Testprognosen auf
 D−2-Grenzen, unveränderte GBM-Prognosen und Quantilordnung geprüft.
