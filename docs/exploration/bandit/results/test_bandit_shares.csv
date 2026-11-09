@@ -1,0 +1,5 @@
+arm,share_test
+reference,0.2468
+B1,0.2345
+B2,0.2577
+gbm_quantile,0.2610

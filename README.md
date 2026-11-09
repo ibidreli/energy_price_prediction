@@ -13,6 +13,7 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/models/README.md`](docs/models/README.md) | Model structure: one folder per model, shared backtest, how to start a new model from the template |
 | [`docs/models/baseline_model.md`](docs/models/baseline_model.md) | Baseline: linear quantile regression against a historical reference, backtest and results |
+| [`docs/exploration/bandit/README.md`](docs/exploration/bandit/README.md) | Explorative architecture check of a bandit over the models, not a model candidate; notebook [`notebooks/03_bandit_architektur.ipynb`](notebooks/03_bandit_architektur.ipynb) |
 | [`docs/experiment_tracking.md`](docs/experiment_tracking.md) | W&B setup per person, run conventions, what never goes online |
 | [`docs/meetings/`](docs/meetings/) | Meeting notes, one file per meeting (`YYYY-MM-DD_<who>.md`) |
 
