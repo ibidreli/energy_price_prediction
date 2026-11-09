@@ -8,7 +8,7 @@ Lesbarer Einstieg: [`notebooks/03_bandit_architektur.ipynb`](../../../notebooks/
 
 ## Herkunft und Frage
 
-Die Idee stammt aus einem Vortrag von CH Media ([Folien](slides/)): Dort verteilt ein Bandit mit Thompson Sampling den Traffic live auf mehrere Empfehlungs-Blends, weil sich die Nachfrage mit der Nachrichtenlage ändert.
+Die Idee stammt aus einem Vortrag von CH Media: Dort verteilt ein Bandit mit Thompson Sampling den Traffic live auf mehrere Empfehlungs-Blends, weil sich die Nachfrage mit der Nachrichtenlage ändert.
 
 **Frage:** Kann ein Bandit pro Viertelstunde das beste bestehende Modell laufend wählen und so `gbm_quantile` im Pinball Loss schlagen (3.1633, Juni bis August)?
 
@@ -100,4 +100,4 @@ pytest tests/test_bandit_exploration.py
 
 - **Code:** [`src/energy_price/exploration/bandit/`](../../../src/energy_price/exploration/bandit/). Die Tests prüfen unter anderem, dass keine Entscheidung Preise nach D−2 sieht und der Bandit nur vom gewählten Modell lernt. Ein Holdout-Schritt existiert nicht.
 - **Kontrolle:** Die Arme reproduzieren die dokumentierten Test-Scores der Modelle (Boosting 3.1633, Referenz 3.2018, B2 3.2254).
-- **Vorlauf:** [`vorlauf/`](vorlauf/) enthält die Skripte und die Rohausgabe unverändert. Die Skripte brauchen die Prognosen aller fünf Modelle, das Regime-Modell liegt auf dem Branch `exp/16-regime-mixture`.
+- **Vorlauf:** [`vorlauf/`](vorlauf/) enthält die Skripte und die Rohausgabe unverändert. Die Skripte brauchen die Prognosen aller fünf Modelle, das Regime-Modell ist seit #29 in `main`.
