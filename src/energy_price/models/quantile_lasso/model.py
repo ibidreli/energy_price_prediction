@@ -20,8 +20,13 @@ GRID = [
     for a in (0.001, 0.003, 0.01, 0.03)
 ]
 
-# Empty until the tuning has run: the test step refuses to start without it.
-CHOSEN: dict[str, dict] = {}
+# Fixed after tuning on April and May (2026-11-06, commit 95c7787), before the test. The best setting
+# overall uses B2. Issue #27 asks whether data until D-2 help, so the best setting with such data (B4,
+# 0.0009 below B3) is tested as well. Not changed after the test.
+CHOSEN = {
+    "quantile_lasso": {"feature_set": "B2", "window": "expanding", "alpha": 0.001},
+    "quantile_lasso_d2": {"feature_set": "B4", "window": "expanding", "alpha": 0.03},
+}
 
 RUN_INFO = {
     "deterministic": "QuantileRegressor with the HiGHS solver has no random component; no seed needed",

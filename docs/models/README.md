@@ -10,6 +10,7 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 | Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
 | Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | Test abgeschlossen; Teamreview offen | 9.79 | 3.16 |
 | Regime-Modell | [`regime_mixture/`](../../src/energy_price/models/regime_mixture/) | abgeschlossen, nicht übernommen | 9.80 | 3.23 |
+| Quantil-LASSO mit Daten bis D−2 | [`quantile_lasso/`](../../src/energy_price/models/quantile_lasso/) | Tuning abgeschlossen, Test offen | offen | offen |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
 
@@ -148,7 +149,7 @@ Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile 
 
 ## 6. To-do: geplante Modelle
 
-Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder sind noch geplant. Quantile Boosting und das Regime-Modell sind implementiert; den aktuellen Stand und die Ergebnisse beschreiben ihre Modell-READMEs.
+Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder sind noch geplant. Quantile Boosting, das Regime-Modell und das Quantil-LASSO sind implementiert; den aktuellen Stand und die Ergebnisse beschreiben ihre Modell-READMEs.
 
 **Kalibrierte Bänder** · [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/)
 
@@ -173,3 +174,10 @@ Schätzt zuerst, ob im Netz Strom fehlt (short) oder zu viel da ist (long), und 
 - Im Review wurde dieser Sprung bei unterdeckter Regelzone als zentraler Punkt genannt.
 - Die geschätzte Richtung zeigt zusätzlich, ob eine Bilanzgruppe bei einer Abweichung zahlt oder vergütet wird.
 - **Ergebnis (#16):** gleich gut wie die Baseline, nicht besser als die Referenz. Mit bekannter Richtung läge der Pinball Loss 39 % unter der Referenz; die Richtung ist am Vortag aber nur schwach vorhersagbar (AUC 0.62, kaum besser als der Anteil short pro Viertelstunde). Details im [Steckbrief](../../src/energy_price/models/regime_mixture/README.md).
+
+**Quantil-LASSO mit Daten bis D−2 (implementiert)** · [`quantile_lasso/`](../../src/energy_price/models/quantile_lasso/)
+
+Lineare Quantilregression wie die Baseline, aber mit L1-Strafe und zusätzlich mit Preisniveau (`B3`) sowie Systembilanz und Bewölkung bis D−2 (`B4`). Das Modell wählt selbst, welche Merkmale es behält.
+
+- Beantwortet die offene Frage, ob vergangene Preise und die Systembilanz bis D−2 der Prognose am Vortag helfen. Ein negatives Ergebnis spricht auch gegen ein Sequenzmodell wie ein LSTM.
+- **Tuning (#27):** Auf April und Mai helfen die Daten bis D−2 nicht. Gewählt wird `B2` mit `alpha` 0.001 (Pinball Loss 3.323, Referenz 3.449); das beste Setting mit Daten bis D−2 (`B4`, `alpha` 0.03, 3.426) ist um 0.103 schlechter, das 95-%-Intervall liegt ganz über 0. Systembilanz und Bewölkung nutzt das Modell fast nie. Beide Settings stehen als `CHOSEN` fest, der Test Juni bis August folgt nach dem Review der Merkmale (#30). Details im [Steckbrief](../../src/energy_price/models/quantile_lasso/README.md).
