@@ -1,10 +1,10 @@
 {
-  "calibrated_default": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ivxmx3iw",
-  "calibrated_mean": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/batphvl1",
-  "calibrated_selection": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/uo319r9d",
-  "calibrated_weights": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/nekqk66k",
-  "default": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/tsb8gl4l",
-  "mean": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/5khdx7uw",
-  "selection": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/4127h5yz",
-  "weights": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/jhg3ra1w"
+  "calibrated_default": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/57k9tnuy",
+  "calibrated_mean": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/fdmuppx8",
+  "calibrated_selection": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/8tdp0pgc",
+  "calibrated_weights": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/6yfaasao",
+  "default": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ya8qjzpd",
+  "mean": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/pt2wrtca",
+  "selection": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ibh5zfq7",
+  "weights": "https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/nivhrlq7"
 }

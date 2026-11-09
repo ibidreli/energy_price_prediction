@@ -1,8 +1,25 @@
 {
-  "status": "pending_hourly_evaluation",
-  "candidate": null,
+  "candidate": "selection",
+  "design_sha256": "984d67d8464fc8ec502ac175bff17ca0f8ebd2a7727012aa6aabc46b260d9748",
   "design_revision": "hourly_v2",
-  "design_sha256": null,
+  "layout": "hourly",
+  "selection_mode": "significant",
+  "lowest_test_pinball_candidate": "weights",
+  "nomination_reason": "requested hourly selection is primary; other candidates are comparisons; no adoption before holdout",
+  "selection_period": "June-August; not blind",
   "final_pool_frozen": false,
-  "holdout_executed": false
+  "holdout_executed": false,
+  "info": {
+    "created_utc": "2026-11-09T14:51:52+00:00",
+    "git_commit": "8a316a8941af301973ecbafb6e5eb455ebe7724e",
+    "git_dirty": true,
+    "data_version": "278c3d9e7dd5",
+    "python": "3.13.0",
+    "packages": {
+      "pandas": "3.0.6",
+      "numpy": "2.5.4",
+      "scikit-learn": "1.9.1",
+      "joblib": "1.6.0"
+    }
+  }
 }

@@ -1,17 +1,24 @@
 {
-  "n_tests_passed": 297,
-  "evaluation_days": 91,
-  "quarters_per_variant": 8736,
-  "test_has_no_dst_change": true,
-  "future_error_cutoff_checks_passed": true,
-  "future_calibration_cutoff_checks_passed": true,
-  "quantile_order_checks_passed": true,
-  "gbm_expert_matches_existing_test_forecasts": true,
-  "selection_chosen_experts": [
+  "revision": "hourly_v2",
+  "n_tests_passed": 302,
+  "n_clock_hours": 24,
+  "n_weekly_fits": 14,
+  "n_hourly_decisions": 336,
+  "selection_mode": "significant",
+  "empirical_winner_models": [
+    "B2",
+    "gbm_quantile",
+    "reference",
+    "regime_mixture"
+  ],
+  "actually_selected_models": [
     "gbm_quantile"
   ],
-  "selection_weekly_fits": 14,
-  "weights_crossing_rows": 0,
-  "holdout_executed": false,
-  "holdout_followup": "https://github.com/ibidreli/energy_price_prediction/issues/32"
+  "quarters_per_variant": 8736,
+  "evaluation_days": 91,
+  "same_hour_schedule_matches_forecasts": true,
+  "d2_error_cutoffs_passed": true,
+  "d2_calibration_cutoffs_passed": true,
+  "quantile_order_passed": true,
+  "holdout_executed": false
 }

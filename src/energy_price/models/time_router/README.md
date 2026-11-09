@@ -120,10 +120,51 @@ mit April/Mai-basierten Einstellungen; danach Entwicklung und Design wiederholen
 
 ## Entwicklungsresultate hourly_v2
 
-Noch nicht ausgewertet beim Commit der Stundenfestlegung. Hier folgen
-Vergleich, Stundentabelle und neue W&B-Links. V1-Resultate stehen im historischen
-Ordner und werden nicht als Stundenergebnisse ausgegeben. W&B-Namen:
-time_router/hourly_v2/<variante>, Gruppe issue-25.
+Die Stundenauflösung und Regeln wurden in Commit 8a316a8 festgehalten und
+[vor den neuen Scores in Issue #25 dokumentiert](https://github.com/ibidreli/energy_price_prediction/issues/25#issuecomment-6742982196).
+Der Lauf verwendet 8736 gemeinsame Viertelstunden an 91 Tagen Juni–August;
+der 24.06. bleibt wegen fehlenden Wetters für alle ausgeschlossen.
+
+Es entstehen **14 Wochenkarten mit je 24 Entscheidungen**, insgesamt 336
+Stundenzuordnungen. Als historische Gewinner kommen alle vier Experten vor.
+Die ursprüngliche statistische Wechselbedingung lässt jedoch keinen Wechsel zu:
+Alle 336 tatsächlich gewählten Experten sind GBM. Keines der 1008 bereinigten
+Vergleichsintervalle liegt ganz unter null. Die direkte historische Bestwahl ist
+implementiert und funktional getestet; sie wurde ohne Antwort auf die offene
+Regelfrage nicht als Hauptlauf aktiviert.
+
+| Variante | Pinball | MAE P50 | Coverage |
+|---|---:|---:|---:|
+| GBM, roh | 3.163293 | 9.792303 | 74.08 % |
+| Stundenauswahl mit Nachweisschwelle, roh | 3.163293 | 9.792303 | 74.08 % |
+| GBM, kalibriert | 3.125098 | 9.792303 | 77.53 % |
+| Stundenauswahl mit Nachweisschwelle, kalibriert | 3.125098 | 9.792303 | 77.53 % |
+| Stundenweise Quantilgewichte, kalibriert (Vergleich) | 3.111396 | 9.744212 | 77.55 % |
+
+Die Gewichtsvariante kombiniert Modelle. Sie ersetzt die verlangte Stundenauswahl
+nicht automatisch. Ihr Intervall der täglichen Differenz zum kalibrierten GBM
+ist [−0.023220, −0.002784]; die Coverage bleibt unter 80 %.
+
+Die Power-Näherung für einen Planungseffekt von 1 % ergibt für die Stundenvergleiche
+532 bis 27578 benötigte Tage (Median 4452.5), vorhanden sind 61 April/Mai-Tage.
+Das sind grobe Planungswerte, keine garantierten Stichprobengrössen bei veränderlichen
+Preisverteilungen. Sie lösen keine automatische globale Zuordnung mehr aus.
+
+![Historischer Gewinner und tatsächliche Auswahl je Uhrzeit](../../../../docs/figures/time_router/test_hourly_schedule.png)
+
+![Kalibrierter Entwicklungsvergleich](../../../../docs/figures/time_router/test_comparison.png)
+
+Die obere Stundenkarte verwendet nur Fehler bis zum damaligen Wochenbeginn−2;
+sie zeigt keine aus der Prognosewoche im Nachhinein gewählten Sieger. Die untere
+Karte macht die Nachweisschwelle sichtbar. Alle Viertelstunden stimmen mit ihrer
+Stundenkarte überein; D−2 und Quantilordnung wurden auf den tatsächlichen Ausgaben geprüft.
+
+W&B: [Stundenauswahl](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/8tdp0pgc),
+[kalibriertes GBM](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/57k9tnuy),
+[stundenweise Gewichte](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/6yfaasao).
+Laufnamen time_router/hourly_v2/<variante>, Gruppe issue-25. Artefakte enthalten
+die vollständigen Wochen-/Stundentabellen; CSVs und Prüfprotokoll stehen unter
+docs/exploration/time_router/results/. Juni–August bleiben Entwicklungsdaten.
 
 ## Holdout bleibt gesperrt
 
@@ -154,6 +195,7 @@ Tests prüfen unterschiedliche Experten je Uhrzeit innerhalb desselben Tages,
 vier zusammengehörige Viertelstunden, wöchentliche Konstanz der Stundenkarte,
 Lernen nur aus derselben Uhrzeit, Zukunftspreis-Poisoning, Unsicherheitsausweis,
 Quantilordnung, damalige Router-Ausgaben in der Kalibrierung, DST und Einmal-Sperre.
+Gesamtlauf vor der Auswertung: **302 Tests bestanden**.
 
 Die Korrektur liegt auf exp/25-hourly-model-selection. Der frühere PR #33 ist
 geschlossen und wird nicht wieder geöffnet. Teamreview und der spätere blinde

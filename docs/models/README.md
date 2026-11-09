@@ -13,7 +13,7 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 | Kalibrierte B2 | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | Test abgeschlossen; Coverage-Ziel verfehlt | 9.81 | 3.17 |
 | Kalibriertes GBM | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | Test abgeschlossen; Coverage-Ziel verfehlt | 9.79 | 3.13 |
 | Globale Modellkombination v1 | [historischer Stand](../exploration/time_router/history/global_v1_2026-11-07/) | historische Auswertung; durch Stundenrouting abgelöst | 9.77 | 3.12 |
-| Stundenweises Modellrouting v2 | [`time_router/`](../../src/energy_price/models/time_router/) | 24 getrennte Uhrzeitentscheidungen; Neuauswertung vorbereitet | — | — |
+| Stundenweises Modellrouting v2 | [`time_router/`](../../src/energy_price/models/time_router/) | 24 Uhrzeitentscheidungen; Nachweisschwelle hält alle bei GBM | 9.79 | 3.13 |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Weitere Experimente und geplante Modelle stehen in Abschnitt 6.
 
@@ -29,6 +29,14 @@ stundenweise Auswahl mit abschliessender Kalibrierung. Der Holdout bleibt bis
 zum endgültigen Pool-Freeze am 27.11. und finalen Daten gesperrt
 ([Abschluss #32](https://github.com/ibidreli/energy_price_prediction/issues/32)).
 Verfahren, Stundentabellen und Auswertungsstand im [Modell-README](../../src/energy_price/models/time_router/README.md).
+
+Im aktualisierten Entwicklungsvergleich entstehen 14 Wochenkarten mit je 24
+Stundenzuordnungen. Die historischen Gewinner unterscheiden sich nach Uhrzeit;
+mit der ursprünglichen statistischen Wechselbedingung bleiben alle 336 gewählten
+Experten GBM (kalibriert 3.125098, Coverage 77.53 %). Eine direkte historische
+Bestwahl ist als alternative Regel implementiert. Stundenweise Quantilgewichte
+erreichen vergleichend 3.111396 mit 77.55 % Coverage; sie werden nicht automatisch
+anstelle der verlangten Einzelmodellauswahl nominiert.
 
 Quantile Boosting erreicht im **Tuning April/Mai** einen Pinball-Loss von 3.3087
 (Referenz 3.4485; Baseline B2 3.3112), bei 76.35 % Coverage. Das sind 4.05 % weniger
