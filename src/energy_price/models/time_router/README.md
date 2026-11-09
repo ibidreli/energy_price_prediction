@@ -200,3 +200,8 @@ Gesamtlauf vor der Auswertung: **302 Tests bestanden**.
 Die Korrektur liegt auf exp/25-hourly-model-selection. Der frühere PR #33 ist
 geschlossen und wird nicht wieder geöffnet. Teamreview und der spätere blinde
 Architekturentscheid bleiben Abschlussbedingungen.
+Die Korrektur ist als [Entwurf PR #34](https://github.com/ibidreli/energy_price_prediction/pull/34)
+bereitgestellt; die offene Wahl zwischen direktem Gewinner und Nachweisschwelle
+ist dort ausdrücklich benannt. [Stundenkarten und vollständiges Ergebnispaket](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/abfjfnkj)
+sind zusätzlich in W&B verfügbar. Alle acht neuen Auswertungsläufe wurden als
+abgeschlossen mit Revision hourly_v2 verifiziert.
