@@ -79,11 +79,14 @@ class TimeRouterModel:
     """
 
     def __init__(self, names, default, edges=(0, 24), strategy="selection", fit_day=None,
-                 min_days=28, reps=5000, seed=0, shrinkage=.5):
+                 min_days=28, reps=5000, seed=0, shrinkage=.5, selection_mode="significant"):
         block_ids([], edges)
         if default not in names or strategy not in ("default", "mean", "selection", "weights"):
             raise ValueError("invalid default expert or strategy")
+        if selection_mode not in ("significant", "empirical"):
+            raise ValueError("selection_mode must be significant or empirical")
         self.names, self.default, self.edges, self.strategy = list(names), default, list(edges), strategy
+        self.selection_mode = selection_mode
         self.fit_day, self.min_days, self.reps, self.seed = fit_day, min_days, reps, seed
         if not 0 <= shrinkage <= 1:
             raise ValueError("shrinkage must be in [0, 1]")
@@ -97,7 +100,7 @@ class TimeRouterModel:
         cols = [f"{n}:{q}" for n in self.names for q in Q]
         known = known[np.isfinite(known[cols + [TARGET]]).all(axis=1)]
         self.error_last_day_ = known.delivery_day.max()
-        self.weights_, self.choices_, self.diagnostics_ = {}, {}, []
+        self.weights_, self.choices_, self.diagnostics_, self.schedule_ = {}, {}, [], []
         default = np.eye(len(self.names))[self.names.index(self.default)]
         groups = block_ids(known.hour, self.edges)
         losses = daily_expert_losses(known, self.names, self.edges) if len(known) else None
@@ -106,32 +109,58 @@ class TimeRouterModel:
             w = np.tile(default, (3, 1))
             choice = self.default
             rows = known[groups == group]
+            daily = losses.xs(group, level=1) if len(rows) else pd.DataFrame(columns=self.names)
+            means = daily.mean()
+            empirical_best = (min(self.names, key=lambda name: (means[name], name != self.default, name))
+                              if len(rows) else self.default)
+            reason = "default"
+            eligible = []
             if self.strategy == "mean":
                 w[:] = 1 / len(self.names)
                 choice = "mixture"
+                reason = "equal_weights"
             elif rows.delivery_day.nunique() >= self.min_days and self.strategy == "selection":
-                daily = losses.xs(group, level=1)
-                eligible = []
                 for name in self.names:
                     if name == self.default:
                         continue
                     diff = daily[name] - daily[self.default]
-                    ordinary = difference_interval(diff, reps=self.reps, seed=self.seed)
-                    adjusted = difference_interval(diff, comparisons, self.reps, self.seed)
+                    draws = bootstrap_means(diff, reps=self.reps, seed=self.seed)
+                    ordinary = np.quantile(draws, [.025, .975])
+                    adjusted = np.quantile(draws, [.025 / comparisons, 1 - .025 / comparisons])
                     self.diagnostics_.append({"block": group, "expert": name, "mean_difference": diff.mean(),
                                               "ci95_low": ordinary[0], "ci95_high": ordinary[1],
                                               "family_low": adjusted[0], "family_high": adjusted[1], "n_days": len(diff)})
                     if adjusted[1] < 0:
                         eligible.append(name)
-                if eligible:
+                if self.selection_mode == "empirical":
+                    choice = empirical_best
+                    reason = "lowest_past_hour_loss"
+                elif eligible:
                     choice = min(eligible, key=lambda name: (daily[name].mean(), name))
-                    w[:] = np.eye(len(self.names))[self.names.index(choice)]
+                    reason = "supported_past_hour_advantage"
+                else:
+                    reason = "no_supported_advantage"
+                w[:] = np.eye(len(self.names))[self.names.index(choice)]
             elif rows.delivery_day.nunique() >= self.min_days and self.strategy == "weights":
                 for i, (q, tau) in enumerate(zip(Q, (.1, .5, .9))):
                     raw = convex_weights(rows[[f"{n}:{q}" for n in self.names]], rows[TARGET], tau)
                     w[i] = self.shrinkage * default + (1 - self.shrinkage) * raw
                 choice = "mixture"
+                reason = "learned_weights"
+            elif self.strategy in ("selection", "weights"):
+                reason = "insufficient_history"
             self.weights_[group], self.choices_[group] = w, choice
+            self.schedule_.append({
+                "block": group, "start_hour": self.edges[group], "end_hour": self.edges[group + 1],
+                "fit_day": pd.Timestamp(self.fit_day), "history_last_day": rows.delivery_day.max(),
+                "n_history_days": len(daily), "empirical_best": empirical_best, "chosen_expert": choice,
+                "selection_mode": self.selection_mode, "reason": reason,
+                "chosen_supported_vs_default": choice in eligible,
+                "empirical_best_pinball": float(means[empirical_best]) if len(rows) else np.nan,
+                "default_pinball": float(means[self.default]) if len(rows) else np.nan,
+                "chosen_pinball": float(means[choice]) if choice in self.names and len(rows) else np.nan,
+                **{f"history_pinball:{name}": float(means[name]) if len(rows) else np.nan for name in self.names},
+            })
         return self
 
     def predict(self, table):
@@ -154,6 +183,8 @@ class TimeRouterModel:
         for i, q in enumerate(Q):
             out[f"preorder_{q}"] = original[:, i]
         out["block"] = groups
+        out["empirical_best"] = [self.schedule_[g]["empirical_best"] for g in groups]
+        out["selection_reason"] = [self.schedule_[g]["reason"] for g in groups]
         out["fit_day"] = pd.Timestamp(self.fit_day)
         out["error_last_day"] = self.error_last_day_
         return out

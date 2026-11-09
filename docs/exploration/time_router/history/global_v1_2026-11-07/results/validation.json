@@ -1,0 +1,17 @@
+{
+  "n_tests_passed": 297,
+  "evaluation_days": 91,
+  "quarters_per_variant": 8736,
+  "test_has_no_dst_change": true,
+  "future_error_cutoff_checks_passed": true,
+  "future_calibration_cutoff_checks_passed": true,
+  "quantile_order_checks_passed": true,
+  "gbm_expert_matches_existing_test_forecasts": true,
+  "selection_chosen_experts": [
+    "gbm_quantile"
+  ],
+  "selection_weekly_fits": 14,
+  "weights_crossing_rows": 0,
+  "holdout_executed": false,
+  "holdout_followup": "https://github.com/ibidreli/energy_price_prediction/issues/32"
+}

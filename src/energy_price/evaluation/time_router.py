@@ -65,7 +65,15 @@ def design_analysis(tune, out):
             values = pd.Series(pinball(tune[TARGET], tune[f"{name}:{q}"], tau), index=tune.index)
             hourly.extend({"model": name, "quantile": q, "hour": int(h), "pinball": float(v)}
                           for h, v in values.groupby(tune.hour).mean().items())
-    pd.DataFrame(hourly).to_csv(out / "tune_hourly.csv", index=False)
+    hourly = pd.DataFrame(hourly)
+    hourly.to_csv(out / "tune_hourly.csv", index=False)
+    by_hour = hourly.groupby(["hour", "model"]).pinball.mean().unstack().reindex(columns=names)
+    hour_winners = []
+    for hour, scores in by_hour.iterrows():
+        winner = min(names, key=lambda name: (scores[name], name != default, name))
+        hour_winners.append({"hour": int(hour), "empirical_best": winner,
+                             **{f"pinball:{name}": float(scores[name]) for name in names}})
+    pd.DataFrame(hour_winners).to_csv(out / "tune_hourly_best.csv", index=False)
     pd.DataFrame({n: tune[TARGET] - tune[f"{n}:q50"] for n in names}).corr().to_csv(out / "tune_error_correlation.csv")
     losses.corr().to_csv(out / "tune_loss_correlation.csv")
     # A 1% reduction is the predeclared planning effect. Required days are an
@@ -91,19 +99,25 @@ def design_analysis(tune, out):
                 power.append({"layout": layout, "block": group, "expert": name, "comparisons": comparisons,
                               "n_days": len(diff), "planning_effect": effect, "required_days_80pct": days,
                               "difference": diff.mean(), "family_low": low, "family_high": high})
-        # All declared challenger/block comparisons must support the planning
-        # effect. If none do, keep one pooled block and report inadequate power.
+        # Diagnostic only: report power without overriding the user-requested
+        # clock-hour routing resolution.
         if max(required, default=0) <= tune.delivery_day.nunique():
             supported.append(layout)
     pd.DataFrame(power).to_csv(out / "tune_power.csv", index=False)
     cap = max([len(config.LAYOUTS[n]) - 1 for n in supported], default=1)
-    layout = "domain" if cap >= 3 else "global"
-    return {"issue": 25, "pool": config.POOL, "pool_fingerprint": pool_fingerprint(config.POOL),
+    layout = config.MAIN_LAYOUT
+    return {"issue": 25, "revision": config.REVISION, "pool": config.POOL,
+            "pool_fingerprint": pool_fingerprint(config.POOL),
             "policy_fingerprint": policy_fingerprint(),
             "default": default, "tune_scores": {n: float(losses[n].mean()) for n in names},
-            "layout": layout, "edges": config.LAYOUTS[layout], "block_cap": cap,
+            "layout": layout, "edges": config.LAYOUTS[layout], "block_cap": len(config.LAYOUTS[layout]) - 1,
+            "selection_mode": config.SELECTION_MODE, "primary_strategy": config.PRIMARY_STRATEGY,
+            "layout_reason": "user clarification: choose separately for each local clock hour",
+            "refit_frequency_days": 7, "routing_resolution_hours": 1,
+            "power_supported_block_cap": cap, "power_is_diagnostic_only": True,
+            "power_warning": layout not in supported,
             "power_supported_layouts": supported, "planning_effect_fraction": .01, "planning_power": .8,
-            "power_requirement": "all challenger/block comparisons; fallback pooled block if unsupported",
+            "power_requirement": "all challenger/block comparisons; diagnostic, no automatic layout downgrade",
             "robustness_edges": config.LAYOUTS["6h"], "weekday_weekend_split": False,
             "candidates": [s["strategy"] for s in config.GRID], "bootstrap_reps": 5000,
             "bootstrap_block_days": 7, "seed": 0, "selection_history": "expanding OOS since 2026-01-30",
@@ -111,7 +125,7 @@ def design_analysis(tune, out):
             "weight_method": "simplex pinball LP, 56 calendar days, 50% shrinkage to default",
             "calibration": config.CALIBRATION, "pool_freeze_date": config.POOL_FREEZE_DATE,
             "holdout_status": "locked; final data and final pool freeze required",
-            "test_nomination": "lowest calibrated pinball among candidates; no causal claim from test",
+            "test_nomination": "requested hourly selection is primary; other candidates are comparisons; no adoption before holdout",
             "test_is_blind": False, "info": run_info()}
 
 
@@ -143,7 +157,7 @@ def routed_history(wide, design, through, robustness=False):
     names = list(design["pool"])
     edges = design["robustness_edges"] if robustness else design["edges"]
     strategies = ["default", *design["candidates"]]
-    histories, output, decisions = {s: [] for s in strategies}, [], []
+    histories, output, decisions, schedules = {s: [] for s in strategies}, [], [], []
     phases = [("2026-01-30", "2026-03-31"), PERIODS["tune"], PERIODS["test"]]
     if pd.Timestamp(through) >= pd.Timestamp(PERIODS["holdout"][0]):
         phases.append(PERIODS["holdout"])
@@ -161,7 +175,8 @@ def routed_history(wide, design, through, robustness=False):
                 if strategy == "weights":
                     train = known[known.delivery_day >= fit_day - pd.Timedelta(days=57)]
                 router = TimeRouterModel(names, design["default"], edges, strategy, fit_day,
-                                         min_days=design["min_history_days"], reps=design["bootstrap_reps"], seed=design["seed"])
+                                         min_days=design["min_history_days"], reps=design["bootstrap_reps"],
+                                         seed=design["seed"], selection_mode=design.get("selection_mode", "significant"))
                 router.fit(train)
                 # Explicitly remove outcome columns from the prediction call.
                 predicted = router.predict(target.drop(columns=[TARGET, "short"], errors="ignore"))
@@ -175,10 +190,28 @@ def routed_history(wide, design, through, robustness=False):
                 if past is not None and past.delivery_day.nunique() >= 28:
                     calibrated = ResidualCalibrator(**design["calibration"]).fit(past, fit_day).predict(raw)
                     output.append(calibrated.assign(model=f"calibrated_{strategy}"))
-                decisions.extend({"strategy": strategy, "fit_day": str(fit_day.date()),
-                                  "error_last_day": str(router.error_last_day_), **item}
+                schedules.extend({"strategy": strategy, "valid_through": days[-1], **item}
+                                 for item in router.schedule_)
+                decisions.extend({"strategy": strategy, "fit_day": fit_day,
+                                  "error_last_day": router.error_last_day_,
+                                  "start_hour": router.edges[item["block"]],
+                                  "end_hour": router.edges[item["block"] + 1],
+                                  "chosen_expert": router.choices_[item["block"]], **item}
                                  for item in router.diagnostics_)
-    return pd.concat(output, ignore_index=True), pd.DataFrame(decisions)
+    return pd.concat(output, ignore_index=True), pd.DataFrame(decisions), pd.DataFrame(schedules)
+
+
+def write_routing_tables(decisions, schedules, period, out):
+    """Expose the complete clock-hour map, including empirical vs chosen expert."""
+    start, end = PERIODS[period]
+    if len(decisions):
+        decisions = decisions[decisions.fit_day.between(start, end)]
+    decisions.to_csv(out / f"{period}_decisions.csv", index=False)
+    schedules = schedules[schedules.fit_day.between(start, end)]
+    schedules.to_csv(out / f"{period}_routing_schedule.csv", index=False)
+    selected = schedules[schedules.strategy == "selection"]
+    latest = selected[selected.fit_day == selected.fit_day.max()]
+    latest.to_csv(out / f"{period}_latest_hourly_schedule.csv", index=False)
 
 
 def summarise(forecasts, design, period, out, do_track=False):
@@ -218,15 +251,18 @@ def summarise(forecasts, design, period, out, do_track=False):
     if do_track:
         urls = {}
         for name in scores.index:
-            urls[name] = track(period, f"time_router/{name}", {"model": "time_router", "variant": name,
+            label = f"time_router/{design.get('revision', 'v1')}/{name}"
+            urls[name] = track(period, label, {"model": "time_router", "variant": name,
                               "window": "expanding", "design": design}, scores.loc[name],
                               len(folds(period_days(period, period == "holdout"))), PERIODS[period], issue=25,
                               daily=daily[name], reference_daily=daily["calibrated_default" if name.startswith("calibrated_") else "default"],
                               tables={"comparisons": pairs[pairs.model == name].reset_index(drop=True),
-                                      "breakdowns": breakdowns[breakdowns.model == name].reset_index(drop=True)},
+                                      "breakdowns": breakdowns[breakdowns.model == name].reset_index(drop=True),
+                                      "hourly_schedule": pd.read_csv(out / f"{period}_latest_hourly_schedule.csv")},
                               files=[DESIGN, out / f"{period}_comparisons.csv", out / f"{period}_scores.csv",
                                      out / f"{period}_run_info.json", out / f"{period}_forecasts.parquet",
-                                     out / f"{period}_decisions.csv"])
+                                     out / f"{period}_decisions.csv", out / f"{period}_routing_schedule.csv",
+                                     out / f"{period}_latest_hourly_schedule.csv"])
         dump(out / f"{period}_wandb_urls.json", urls)
     return scores, pairs
 
@@ -257,18 +293,23 @@ def main(argv=None):
         dump(DESIGN, design)
         print(json.dumps({k: design[k] for k in ("default", "layout", "block_cap", "power_supported_layouts")}, indent=2))
         return
-    forecasts, decisions = routed_history(wide, design, PERIODS["test"][1])
-    decisions.to_csv(args.out / "test_decisions.csv", index=False)
+    forecasts, decisions, schedules = routed_history(wide, design, PERIODS["test"][1])
+    write_routing_tables(decisions, schedules, "test", args.out)
     scores, pairs = summarise(forecasts, design, "test", args.out, args.track)
     # A robustness diagnostic is not a fourth candidate and cannot replace the
     # predeclared main layout after seeing its test results.
-    robust, robust_decisions = routed_history(wide, design, PERIODS["test"][1], robustness=True)
+    robust, robust_decisions, robust_schedules = routed_history(wide, design, PERIODS["test"][1], robustness=True)
     robust_dir = args.out / "robustness_6h"
     robust_dir.mkdir(exist_ok=True)
+    write_routing_tables(robust_decisions, robust_schedules, "test", robust_dir)
     summarise(robust, design, "test", robust_dir)
-    robust_decisions.to_csv(robust_dir / "test_decisions.csv", index=False)
-    candidate = min(design["candidates"], key=lambda n: (scores.loc[f"calibrated_{n}", "pinball"], n))
+    best_candidate = min(design["candidates"], key=lambda n: (scores.loc[f"calibrated_{n}", "pinball"], n))
+    candidate = design.get("primary_strategy", best_candidate)
     dump(NOMINATION, {"candidate": candidate, "design_sha256": json_fingerprint(DESIGN),
+                      "design_revision": design.get("revision", "v1"), "layout": design["layout"],
+                      "selection_mode": design.get("selection_mode", "significant"),
+                      "lowest_test_pinball_candidate": best_candidate,
+                      "nomination_reason": design["test_nomination"],
                       "selection_period": "June-August; not blind", "final_pool_frozen": False,
                       "holdout_executed": False, "info": run_info()})
     print(scores.round(5).to_string())

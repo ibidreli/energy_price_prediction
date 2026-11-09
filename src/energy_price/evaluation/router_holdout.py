@@ -59,7 +59,7 @@ def claim_once(path, record):
 
 def run(args):
     from energy_price.evaluation.time_router import (DOC, DESIGN, NOMINATION, dump, pool_phase,
-        read_design, require_committed, routed_history, summarise, json_fingerprint)
+        read_design, require_committed, routed_history, summarise, json_fingerprint, write_routing_tables)
     from energy_price.evaluation.backtest import run_info
 
     today = pd.Timestamp.now(tz="Europe/Zurich").tz_localize(None).normalize()
@@ -104,8 +104,8 @@ def run(args):
     holdout.to_parquet(args.out / "holdout_pool.parquet", index=False)
     wide = wide_pool(pd.concat([*frames, holdout], ignore_index=True), list(design["pool"]))
     final_design = {**design, "candidates": [nominated["candidate"]]}
-    forecasts, decisions = routed_history(wide, final_design, "2026-10-31")
-    decisions.to_csv(args.out / "holdout_decisions.csv", index=False)
+    forecasts, decisions, schedules = routed_history(wide, final_design, "2026-10-31")
+    write_routing_tables(decisions, schedules, "holdout", args.out)
     scores, pairs = summarise(forecasts, final_design, "holdout", args.out, args.track)
     experts = []
     for name, group in holdout.groupby("model"):

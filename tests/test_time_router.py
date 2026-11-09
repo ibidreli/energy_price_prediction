@@ -176,11 +176,11 @@ def test_complete_forward_pipeline_uses_historical_router_outputs_and_calibrates
     design = {"pool": {"anchor": {}, "other": {}}, "default": "anchor", "edges": [0, 8, 16, 24],
               "candidates": ["selection"], "min_history_days": 28, "bootstrap_reps": 200, "seed": 0,
               "calibration": {"calibration_days": 56, "grouping": "6h"}}
-    before, _ = routed_history(source, design, "2026-06-07")
+    before, _, _ = routed_history(source, design, "2026-06-07")
     poisoned = source.copy()
     poisoned.loc[poisoned.delivery_day >= "2026-05-31", TARGET] = 1e9
     poisoned["short"] = 0.
-    after, _ = routed_history(poisoned, design, "2026-06-07")
+    after, _, _ = routed_history(poisoned, design, "2026-06-07")
     columns = ["q10", "q50", "q90", "weights", "fit_day", "error_last_day", "calibration_last_day"]
     def evaluated(frame):
         return frame[frame.delivery_day >= "2026-06-01"][columns].reset_index(drop=True)
@@ -199,6 +199,81 @@ def test_design_analysis_refuses_test_rows_and_reports_current_pool(tmp_path, mo
         time_router.design_analysis(wide(end="2026-06-01"), tmp_path)
     result = time_router.design_analysis(wide("2026-04-01", "2026-05-31"), tmp_path)
     assert result["default"] == "other"
-    assert result["block_cap"] <= 4
+    assert result["block_cap"] == 24
+    assert result["edges"] == list(range(25))
+    assert result["layout"] == "hourly"
+    assert result["power_is_diagnostic_only"] is True
     assert result["weekday_weekend_split"] is False
     assert set(result["pool"]) == {"anchor", "other"}
+    hourly = pd.read_csv(tmp_path / "tune_hourly_best.csv")
+    assert hourly.hour.tolist() == list(range(24))
+    assert set(hourly.empirical_best) == {"other"}
+
+
+@pytest.mark.parametrize("selection_mode", ["empirical", "significant"])
+def test_hourly_schedule_selects_different_experts_within_same_day_and_week(selection_mode):
+    source = wide()
+    source[TARGET] = np.where(source.hour < 8, 3., 5.)
+    day = pd.Timestamp("2026-04-04")
+    router = TimeRouterModel(["anchor", "other"], "anchor", list(range(25)), fit_day=day,
+                             selection_mode=selection_mode, reps=200).fit(source)
+    target = source[source.delivery_day.between(day, day + pd.Timedelta(days=6))]
+    result = router.predict(target)
+    assert len(router.schedule_) == 24
+    assert (result.loc[target.hour < 8, "chosen_expert"] == "anchor").all()
+    assert (result.loc[target.hour >= 8, "chosen_expert"] == "other").all()
+    for hour in range(24):
+        assert result.loc[target.hour == hour, "chosen_expert"].nunique() == 1
+    assert result.fit_day.nunique() == 1
+    assert all(row["history_last_day"] <= day - pd.Timedelta(days=2) for row in router.schedule_)
+    poisoned = source.copy()
+    poisoned.loc[poisoned.delivery_day > day - pd.Timedelta(days=2), TARGET] = -1e9
+    after = TimeRouterModel(["anchor", "other"], "anchor", list(range(25)), fit_day=day,
+                            selection_mode=selection_mode, reps=200).fit(poisoned).predict(target)
+    pd.testing.assert_frame_equal(result, after)
+
+
+def test_hourly_winner_is_learned_only_from_same_local_hour():
+    source = wide()
+    day = pd.Timestamp("2026-04-04")
+    before = TimeRouterModel(["anchor", "other"], "anchor", list(range(25)), fit_day=day,
+                             selection_mode="empirical", reps=200).fit(source)
+    changed = source.copy()
+    changed.loc[changed.hour == 15, TARGET] = 3.
+    after = TimeRouterModel(["anchor", "other"], "anchor", list(range(25)), fit_day=day,
+                            selection_mode="empirical", reps=200).fit(changed)
+    assert before.choices_[15] == "other" and after.choices_[15] == "anchor"
+    assert all(before.choices_[h] == after.choices_[h] for h in range(24) if h != 15)
+
+
+def test_empirical_and_significant_modes_expose_uncertainty_instead_of_hiding_winner():
+    source = wide()
+    weeks = (source.delivery_day - source.delivery_day.min()).dt.days // 7
+    source[TARGET] = np.where(weeks % 2, 5., 3.)
+    arguments = {"names": ["anchor", "other"], "default": "anchor", "fit_day": "2026-04-04", "reps": 1000}
+    empirical = TimeRouterModel(**arguments, selection_mode="empirical").fit(source)
+    significant = TimeRouterModel(**arguments, selection_mode="significant").fit(source)
+    assert empirical.schedule_[0]["empirical_best"] == "other"
+    assert empirical.choices_[0] == "other"
+    assert significant.choices_[0] == "anchor"
+    assert empirical.schedule_[0]["chosen_supported_vs_default"] is False
+    assert empirical.diagnostics_[0]["ci95_low"] < 0 < empirical.diagnostics_[0]["ci95_high"]
+
+
+def test_forward_hourly_tables_match_predicted_expert_for_all_four_quarters(tmp_path):
+    from energy_price.evaluation.time_router import routed_history, write_routing_tables
+    source = wide(end="2026-06-07")
+    source[TARGET] = np.where(source.hour < 8, 3., 5.)
+    design = {"pool": {"anchor": {}, "other": {}}, "default": "anchor", "edges": list(range(25)),
+              "candidates": ["selection"], "selection_mode": "empirical", "min_history_days": 28,
+              "bootstrap_reps": 100, "seed": 0, "calibration": {"calibration_days": 56, "grouping": "6h"}}
+    forecasts, decisions, schedules = routed_history(source, design, "2026-06-07")
+    write_routing_tables(decisions, schedules, "test", tmp_path)
+    latest = pd.read_csv(tmp_path / "test_latest_hourly_schedule.csv", parse_dates=["fit_day", "history_last_day"])
+    assert len(latest) == 24
+    assert latest.start_hour.tolist() == list(range(24))
+    assert (latest.history_last_day <= latest.fit_day - pd.Timedelta(days=2)).all()
+    selected = forecasts[(forecasts.model == "selection") & (forecasts.delivery_day >= "2026-06-01")]
+    mapped = selected.merge(latest[["start_hour", "chosen_expert"]], left_on="hour", right_on="start_hour")
+    assert (mapped.chosen_expert_x == mapped.chosen_expert_y).all()
+    assert set(mapped.chosen_expert_x) == {"anchor", "other"}

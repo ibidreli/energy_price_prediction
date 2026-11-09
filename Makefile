@@ -196,6 +196,7 @@ holdout-data-check: data ## Check Sep/Oct quarter-hour completeness without eval
 
 time-router-figures: $(ENV_READY) ## Plot calibrated loss intervals and coverage from existing issue-25 outputs
 	$(PY) -m energy_price.evaluation.comparison_figure reports/time_router docs/figures/time_router/$(STEP)_comparison.png --period $(STEP)
+	$(PY) -m energy_price.evaluation.comparison_figure reports/time_router docs/figures/time_router/$(STEP)_hourly_schedule.png --period $(STEP) --schedule
 
 backtest: data ## Backtest MODEL (default baseline_model) on STEP tune, test or holdout (docs/models/README.md)
 	$(PY) -m energy_price.evaluation.experiment $(MODEL) $(STEP) --jobs $(JOBS) $(if $(TRACK),--track) $(if $(UNLOCK),--unlock-holdout)

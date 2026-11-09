@@ -1,6 +1,9 @@
 # Verfahren für Issue #25
 
-Gelesen am 07.11.2026; die Entscheidung unten verwendet keine neuen Testresultate.
+Literatur gelesen am 07.11.2026. Präzisierung am 09.11.2026: Die Hauptvariante
+trifft 24 getrennte Entscheidungen je lokaler Uhrzeit. Der wöchentliche Takt
+bestimmt die Aktualisierung dieser Tabelle, nicht eine einzige Wahl für die
+ganze Woche. Die bereits ausgewerteten Juni–August-Daten bleiben Entwicklungsdaten.
 
 | Quelle | Aussage und Verwendung |
 |---|---|
@@ -20,19 +23,24 @@ Standardmodell. Mögliche Quantilkreuzungen werden sortiert; Gewichte und Werte
 vor der Sortierung werden mitgespeichert. Anschliessend kommt einmal die
 asymmetrische Kalibrierung aus #19 (56 Tage, 6-Stunden-Gruppen).
 
-**Vorab festgelegte Power-Planung:** fachliche Blöcke 00–08, 08–16 und 16–24 Uhr;
-zusätzlich 4×6 Stunden als reine Robustheitsdiagnostik. Keine Wochentagstrennung.
+**Power-Diagnostik:** 24 einzelne Stunden als Hauptvariante; globale, fachliche
+Blöcke 00–08, 08–16 und 16–24 Uhr sowie 4×6 Stunden zur Einordnung.
+Keine Wochentagstrennung.
 Planungseffekt: 1 % des Standardmodell-Loss im jeweiligen Block, Power 80 %.
 Die langfristige Varianz wird aus einem 7-Kalendertage-Bootstrap mit 5000
 Wiederholungen und Seed 0 geschätzt. Die Normalapproximation für die benötigten
-Tage berücksichtigt `(Poolgrösse−1) × Blockzahl` Vergleiche. Alle Vergleiche
-müssen den Effekt mit der verfügbaren Zahl April/Mai-Tage unterstützen. Sonst
-wird die Blockzahl reduziert; wenn auch ein globaler Block nicht ausreichend
-Power hat, bleibt dieser als ausdrücklich unzureichend abgesicherter Fallback.
-Vier 6-Stunden-Blöcke dürfen im Test keinen vierten Kandidaten erzeugen.
+Tage berücksichtigt `(Poolgrösse−1) × Blockzahl` Vergleiche. Das Ergebnis wird
+als Einschränkung ausgewiesen und darf die Stundenauflösung nicht automatisch
+auf einen ganzen Tag reduzieren. Die frühere Reduktion auf einen Tagesblock
+bildete das präzisierte Ziel des Nutzers nicht ab. Der historische Stand ist
+unter `docs/exploration/time_router/history/global_v1_2026-11-07/` erhalten.
+Vier 6-Stunden-Blöcke bleiben diagnostisch und ersetzen nicht nachträglich die
+Stundenvariante.
 
 Das ist eine Planungsabschätzung, keine garantierte Power bei Extrempreisen oder
-Verteilungsänderung. Die Auswahl verlangt unabhängig davon ein vollständig
-negatives 95-%-Intervall, zusätzlich über die gleichzeitigen Blockvergleiche
-bereinigt. Die wöchentliche Wiederholung ist keine zeituniforme Signifikanzgarantie.
+Verteilungsänderung. Die bisherige Wechselregel `significant` verlangt ein
+vollständig negatives 95-%-Intervall, zusätzlich über die gleichzeitigen
+Stundenvergleiche bereinigt. Alternativ implementiert `empirical` den direkten
+historischen Gewinner je Stunde; das ist keine statistische Überlegenheitsbehauptung.
+Die wöchentliche Wiederholung ist keine zeituniforme Signifikanzgarantie.
 Für den Architekturentscheid zählt allein der spätere einzelne Holdout-Vergleich.

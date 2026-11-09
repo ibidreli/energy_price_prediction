@@ -59,13 +59,58 @@ def comparison_figure(out: Path, period: str, path: Path) -> Path:
     return path
 
 
+def routing_schedule_figure(out: Path, period: str, path: Path) -> Path:
+    """Show 24 independent clock-hour decisions for each weekly refit."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import BoundaryNorm, ListedColormap
+    from matplotlib.patches import Patch
+
+    table = pd.read_csv(out / f"{period}_routing_schedule.csv", parse_dates=["fit_day"])
+    table = table[(table.strategy == "selection") & (table.end_hour - table.start_hour == 1)]
+    if table.empty:
+        raise ValueError("no hourly selection schedule available")
+    names = [c.removeprefix("history_pinball:") for c in table.columns if c.startswith("history_pinball:")]
+    codes = {name: i for i, name in enumerate(names)}
+    colours = (CATEGORICAL[:len(names)] if len(names) <= len(CATEGORICAL)
+               else [plt.get_cmap("tab20")(i / len(names)) for i in range(len(names))])
+    cmap = ListedColormap(colours)
+    norm = BoundaryNorm(np.arange(len(names) + 1) - .5, len(names))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with plt.rc_context(RC):
+        fig, axes = plt.subplots(2, 1, figsize=(13, 8), sharex=True)
+        for ax, column, title in zip(axes, ("empirical_best", "chosen_expert"),
+                                     ("Historisch bestes Modell je Uhrzeit", "Tatsächlich gewähltes Modell je Uhrzeit")):
+            grid = table.pivot(index="fit_day", columns="start_hour", values=column).sort_index().reindex(columns=range(24))
+            values = grid.apply(lambda series: series.map(codes)).to_numpy(float)
+            ax.imshow(values, cmap=cmap, norm=norm, aspect="auto", interpolation="nearest")
+            ax.set_yticks(range(len(grid)), grid.index.strftime("%d.%m."), fontsize=8)
+            ax.set_ylabel("Wochenbeginn", fontsize=9)
+            ax.set_title(title, loc="left", fontsize=11)
+            ax.set_xticks(range(24), [f"{h:02d}" for h in range(24)], fontsize=8)
+            ax.tick_params(length=0)
+        axes[-1].set_xlabel("Schweizer Uhrzeit · eine Auswahl für alle vier Viertelstunden", fontsize=9)
+        fig.suptitle("Tageszeit-Routing: 24 Entscheidungen, wöchentlich neu bestimmt", x=.04, ha="left", fontsize=13)
+        fig.legend(handles=[Patch(facecolor=c, label=n) for c, n in zip(colours, names)],
+                   loc="lower center", bbox_to_anchor=(.5, .045), ncol=min(4, len(names)), frameon=False)
+        fig.text(.04, .012, "Gewinner aus damaligen Fehlern bis Wochenbeginn−2; keine nachträgliche Auswahl aus den Fehlern der Prognosewoche.",
+                 color=INK_SECONDARY, fontsize=8)
+        fig.tight_layout(rect=(.02, .11, 1, .94))
+        fig.savefig(path, dpi=160)
+        plt.close(fig)
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("out", type=Path)
     parser.add_argument("path", type=Path)
     parser.add_argument("--period", default="test")
+    parser.add_argument("--schedule", action="store_true", help="plot the weekly 24-hour expert map")
     args = parser.parse_args()
-    print(comparison_figure(args.out, args.period, args.path))
+    render = routing_schedule_figure if args.schedule else comparison_figure
+    print(render(args.out, args.period, args.path))
 
 
 if __name__ == "__main__":

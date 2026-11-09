@@ -18,9 +18,16 @@ POOL = {
         "feature_set": "B2", "window": "expanding", "C": 1.0, "alpha": 0.0}},
 }
 
-LAYOUTS = {"global": [0, 24], "domain": [0, 8, 16, 24], "6h": [0, 6, 12, 18, 24]}
+LAYOUTS = {"global": [0, 24], "domain": [0, 8, 16, 24], "6h": [0, 6, 12, 18, 24], "hourly": list(range(25))}
+REVISION = "hourly_v2"
+# Time-of-day resolution and refit frequency are separate: 24 clock-hour
+# decisions, rebuilt once per week. Low power is reported, never a silent
+# downgrade to one expert/weight vector for the whole day.
+MAIN_LAYOUT = "hourly"
+SELECTION_MODE = "significant"
+PRIMARY_STRATEGY = "selection"
 GRID = [{"strategy": name} for name in ("mean", "selection", "weights")]
-# Filled from the committed April/May design by the dedicated pool runner.
+# The pool runner reads design.json and nomination.json instead of CHOSEN.
 CHOSEN = {}
 SEED = 0
 BOOTSTRAP_REPS = 5000

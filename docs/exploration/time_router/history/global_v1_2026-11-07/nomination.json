@@ -1,0 +1,20 @@
+{
+  "candidate": "weights",
+  "design_sha256": "cb097c7adae1aa162474a34458b8b9d745b1a0dde346fe69b4adc6fb594bb10a",
+  "selection_period": "June-August; not blind",
+  "final_pool_frozen": false,
+  "holdout_executed": false,
+  "info": {
+    "created_utc": "2026-11-07T15:35:53+00:00",
+    "git_commit": "cc1dbd2e15427fb9ec096edd9936c4cd513bfde2",
+    "git_dirty": true,
+    "data_version": "278c3d9e7dd5",
+    "python": "3.13.0",
+    "packages": {
+      "pandas": "3.0.6",
+      "numpy": "2.5.4",
+      "scikit-learn": "1.9.1",
+      "joblib": "1.6.0"
+    }
+  }
+}

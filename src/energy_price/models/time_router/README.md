@@ -1,279 +1,160 @@
-# Zeitabhängige Modellarchitektur · Issue #25
+# Modellauswahl je Uhrzeit · Issue #25 · hourly_v2
 
-Stand 07.11.2026: Implementierung, April/Mai-Festlegung und Entwicklungsvergleich
-Juni–August abgeschlossen. Der gemeinsame
-Holdout bleibt bis zum endgültigen Pool-Freeze am 27.11. und zur Bestätigung
-finaler Daten gesperrt. Juni–August sind Entwicklungsdaten, kein blinder Test.
+Die Hauptvariante trifft **24 getrennte Entscheidungen für die Schweizer Uhrzeiten
+00–01, 01–02, …, 23–24 Uhr**. Für 14 Uhr zählen ausschliesslich historische
+Prognosefehler von 14:00, 14:15, 14:30 und 14:45. Die vollständige Stundentabelle
+wird alle sieben Tage aktualisiert. Innerhalb eines Tages dürfen verschiedene
+Modelle verwendet werden; für dieselbe Uhrzeit bleibt die Zuordnung innerhalb
+des Wochenblocks fest.
 
-## Pool und Struktur
+Die Nutzerpräzisierung vom 09.11.2026 ersetzt die vorherige globale Hauptvariante.
+Der [historische Stand v1](../../../../docs/exploration/time_router/history/global_v1_2026-11-07/)
+bleibt erhalten. Eine schwache Power darf die Stundenauflösung nicht automatisch
+wieder auf einen ganzen Tag reduzieren.
 
-`model.py` folgt dem Modellordner-Schema mit `MODEL`, `GRID`, `CHOSEN` und
-`ISSUE`. Der zusätzliche `EXPERIMENT_RUNNER` verarbeitet OOS-Prognosen statt
-Rohfeatures. Der normale Befehl funktioniert deshalb auch für dieses Modell:
+## Ablauf
 
-```bash
-make backtest MODEL=time_router STEP=tune JOBS=2
-# Design prüfen und committen; die Testphase verlangt den Commit.
-make backtest MODEL=time_router STEP=test JOBS=2 TRACK=1
-```
+1. Referenz, Baseline B2, GBM und Regime-Mischung erzeugen ihre unveränderten
+   OOS-Prognosen. Die Historie beginnt am 30.01.2026.
+2. Je Wochenbeginn, Uhrzeit und Experte wird der mittlere tägliche Pinball über
+   P10/P50/P90 berechnet. Verwendet werden ausschliesslich bekannte Fehler bis
+   Wochenbeginn minus zwei Tage. Die Auswahlhistorie wächst seit dem 30.01.
+3. Ein gewählter Experte liefert P10, P50 und P90 gemeinsam für alle vier
+   Viertelstunden seiner Stunde.
+4. Anschliessend wird die ausgegebene Prognose einmal kalibriert: 56 Tage
+   historischer Router-Ausgaben, getrennte Schwanzkorrekturen, 6-Stunden-Gruppen.
+   P50 bleibt unverändert.
 
-Alternativ `make time-router STEP=pool|tune|test|readiness JOBS=2`.
-`pool` erzeugt ausschliesslich Januar–Mai; `tune` erzeugt das Design.
-`make time-router STEP=test JOBS=2 TRACK=1` reproduziert den gesamten erlaubten
-Lauf aus Rohdaten und dem zuvor committeten Design mit einem Befehl.
-Ohne GNU Make: `.venv/Scripts/python.exe -m energy_price.evaluation.time_router test --jobs 2 --track`
-(vorher die verarbeiteten Datentabellen erzeugen).
+## Historischer Gewinner und Wechselregel
 
-Die vier Experten sind Referenz (56 Tage), lineare Baseline B2, Quantile Boosting
-und Regime-Mischung. Ihre Einstellungen stammen unverändert aus ihren bisherigen
-Experimenten auf April/Mai. Referenz bleibt täglich, die anderen Fits bleiben
-wöchentlich mit den bisherigen Ankern: 30.01., 01.04. und 01.06. Historische
-Preise und Richtungslabels reichen höchstens bis zum jeweiligen Fit-Tag minus
-zwei Tage. Die tatsächliche Richtung wird vom Router ausschliesslich in der
-nachfolgenden Auswertung verwendet.
+Die Stundenauflösung und die Wechselbedingung sind getrennte Einstellungen:
 
-`POOL` ist eine Einstellung, kein Namensschalter im Auswahlcode. Ein neuer
-Experte benötigt einen Eintrag mit `module` und seinen eingefrorenen `settings`
-(inklusive Trainingsfenster). Seine Modellklasse bietet `fit`/`predict` und
-P10/P50/P90 wie die vorhandene Vorlage. Aufnahme erfordert zusätzlich den
-Nachweis: gemeinsame Backtest-Folds, D−2-konforme Eingaben und ausschliesslich
-auf April/Mai gewählte Einstellungen. Danach Design und Test neu rechnen;
-vor dem finalen Freeze keine alten Gewichte oder Ergebnisse weiterverwenden.
+| SELECTION_MODE | Tatsächlich gewähltes Modell je Uhrzeit |
+|---|---|
+| empirical | Niedrigster vergangener Pinball in genau dieser Stunde; Unsicherheit separat ausweisen. |
+| significant | Wechsel von GBM nur bei vollständig negativem bereinigtem Bootstrap-Intervall; sonst GBM für diese Stunde. |
 
-Wiederverwendbare Bausteine liegen in `models/shared/forecast_pool.py`,
-`models/shared/routing.py` und `models/shared/calibration.py`; die Ausführung
-liegt unter `evaluation/time_router.py`. Der inhaltsbasierte Cache enthält
-Trainings- und Prognoseeingaben, Einstellungen, Expertencode und Paketversionen.
-Vorhandene Reportdateien anderer Experimente werden nicht ungeprüft übernommen.
+Aktuell bleibt die ursprüngliche Regel significant aktiv. Die Frage an den
+Nutzer, ob die direkten historischen Gewinner verwendet werden sollen, ist offen.
+Beide Regeln sind implementiert. Ein historischer Gewinner ist keine Behauptung
+statistisch abgesicherter Überlegenheit.
 
-## Festlegung ausschliesslich auf April/Mai
+Bootstrap: 7 Kalendertage, 5000 Wiederholungen, Seed 0. Die Bonferroni-Korrektur
+berücksichtigt je Wochenbeginn (Poolgrösse−1) × 24 Vergleiche. Bei weniger als
+28 beobachteten Tagen gilt der Standardexperte für die betroffene Stunde.
+Unterschiedliche Modelle werden nicht künstlich erzwungen.
 
-Diese Festlegung und `design.json` werden vor der ersten neuen
-Juni–August-Auswertung committet und in Issue #25 verlinkt.
+Die drei Varianten sind Gleichgewichte, stundenweise Auswahl und stundenweise
+gelernte Quantilgewichte. Die Gewichte minimieren Pinball auf den letzten 56
+verfügbaren Kalendertagen, sind nichtnegativ und summieren sich zu eins. Die
+Lösung wird zu 50 % zum Standardmodell geschrumpft.
+**Primärer Kandidat ist die verlangte stundenweise Einzelmodellauswahl.**
+Die Vergleichsvarianten ersetzen sie nicht automatisch durch eine globale
+Mischung. Eine Übernahme erfordert den späteren blinden Holdout.
 
-| Experte | Pinball April/Mai |
-|---|---:|
-| Referenz | 3.448507 |
-| B2 | 3.311188 |
-| Boosting | **3.308685** |
-| Regime-Mischung | 3.322611 |
+## Sichtbare Stundentabellen
 
-**Standardmodell: Boosting.** Die signierten P50-Fehler korrelieren zwischen den
-Experten mit 0.987 bis 0.997. Das begrenzt die erwartbare Diversifikation; eine
-hohe Korrelation allein beweist allerdings nicht, dass jede Kombination scheitert.
+Die Dateien unter reports/time_router/ enthalten:
 
-Fachliche Blöcke: 00–08 Uhr (Nacht/Frühmorgen), 08–16 Uhr (PV-Tagesabschnitt),
-16–24 Uhr (Abend). Robustheit: 4×6 Stunden, ohne Werktag/Wochenende-Aufteilung.
-Die vollständige Literaturentscheidung und die **vorab definierte** Power-Regel
-stehen in [research.md](research.md).
+| Datei | Inhalt |
+|---|---|
+| tune_hourly_best.csv | 24 empirische Gewinner ausschliesslich auf April/Mai; Diagnose. |
+| test_routing_schedule.csv | Pro Woche, Strategie und Stunde die tatsächliche Zuordnung. |
+| test_latest_hourly_schedule.csv | Die 24 Zuordnungen der letzten Testwoche; keine Live-Prognose für November. |
+| test_decisions.csv | Paarvergleiche und Unsicherheitsintervalle zur damaligen Auswahl. |
+| test_forecasts.parquet | P10/P50/P90 und Auswahl-/Kalibrierungsgrenzen je Viertelstunde. |
 
-Für einen Vorteil von 1 % und 80 % Power benötigen die gepaarten Vergleiche
-auf Basis von April/Mai näherungsweise:
+Die Stundentabelle enthält fit_day, valid_through, start_hour, end_hour,
+empirical_best, chosen_expert, history_last_day, n_history_days, historische
+Expertenverluste, Auswahlgrund und die Kennzeichnung eines abgesicherten Vorteils.
+So bleiben beobachteter Gewinner und tatsächlich gewählter Experte unterscheidbar.
 
-| Raster | Minimum benötigte Tage | Median | Maximum |
-|---|---:|---:|---:|
-| ein Tagesblock | 210 | 215 | 1930 |
-| drei fachliche Blöcke | 363 | 862 | 3583 |
-| vier 6-Stunden-Blöcke | 619 | 1019.5 | 6226 |
+Jede Woche entsteht eine vollständige Karte mit 24 Einträgen. Für 06 Uhr, 14 Uhr
+und 21 Uhr gibt es jeweils eine eigene Entscheidung. In der nächsten Woche
+werden diese drei Zuordnungen wieder getrennt aus derselben Uhrzeit gelernt.
+Keine Modellnamen werden für bestimmte Uhrzeiten hart codiert.
 
-Vorhanden sind 61 Tage. Damit wird **kein Raster für diesen kleinen Effekt
-ausreichend abgesichert**. Die Hauptvariante hat als Fallback einen Tagesblock;
-sie behauptet keine belastbare Tageszeit-Spezialisierung. Vier 6-Stunden-Blöcke
-bleiben eine diagnostische Robustheitsprüfung und dürfen nach Testeinsicht nicht
-zum Hauptkandidaten befördert werden. Die Zahlen sind grobe Planungswerte mit
-Normalapproximation, keine garantierte Stichprobengrösse bei Extrempreisen.
+## Methodik und zeitliche Grenzen
 
-Die drei Kandidaten sind:
+April/Mai bestimmen weiterhin den Standardexperten und die Diagnosen. Die
+Stundenauflösung und die primäre Auswahl folgen der Nutzerpräzisierung.
+Die 1-%-/80-%-Power-Planung wird auch für 24 Stunden als Einschränkung berichtet;
+sie ist keine Bedingung für eine gröbere Hauptvariante.
+[research.md](research.md) beschreibt Literatur und die Änderung der Planung.
 
-1. Gleiches Gewicht für alle Experten.
-2. Auswahl eines Experten für alle drei Quantile gemeinsam. Wöchentlich nur
-   wechseln, wenn das 95-%-Intervall der täglichen Pinball-Differenz unter null
-   liegt; zusätzlich Bonferroni über `(Poolgrösse−1) × Blockzahl` je Fit.
-   Sonst Standardmodell. Alle verfügbaren OOS-Fehler bis zum Wochenbeginn−2.
-3. Konvexe Gewichte je zugelassenem Block und Quantil: Pinball-LP, letzte 56
-   Kalendertage, 50 % Schrumpfung zum Standardmodell, mindestens 28 Tage.
+Juni–August wurden bereits für v1 betrachtet und sind ausdrücklich
+**Entwicklungsdaten**. Die Revision begründet keinen nachträglich blinden Test.
+Code und Design werden vor ihren neuen Scores committet. Am September/Oktober-
+Holdout wird nichts abgestimmt.
 
-Bootstrap: **7 Kalendertage**, **5000 Wiederholungen**, **Seed 0**. Fehlende Tage
-bleiben Kalenderlücken. Vorhersagen einer Woche verwenden auch an ihren späteren
-Tagen nur den Stand vom Wochenbeginn. Das ist konservativer als täglich D−2.
+Training, Auswahl und Kalibrierung verwenden keine Zielwerte nach der jeweiligen
+D−2-Grenze. Die Referenz bleibt täglich aktualisiert, die anderen Experten nutzen
+die bisherigen Wochenanker. Tatsächliches short/long dient beim Router
+ausschliesslich der späteren Auswertung. Fehlende Tage werden für alle Varianten
+gemeinsam ausgeschlossen. UTC-Schlüssel erhalten die doppelte Oktoberstunde.
 
-## Datenlecks, Kalibrierung und Nachvollziehbarkeit
+Die Kalibrierung nutzt Ausgaben der damaligen Router-Fits, keine mit heutigen
+Entscheidungen rückwirkend berechneten Prognosen. Quantilkreuzungen der
+Gewichtsvariante werden sortiert und mit Originalwerten protokolliert.
+Revisionen historischer Swissgrid-Dateien bleiben eine Einschränkung: Die
+D−2-Grenzen rekonstruieren keine fehlenden damaligen Datenstände.
 
-Die lange Prognosetabelle enthält je Experte UTC-Zeitstempel, Prognose,
-`fit_day` und `train_last_day`. Die Prüfung verweigert fehlende/duplizierte
-Viertelstunden, widersprüchliche Zielwerte und eine verletzte D−2-Grenze.
-UTC erhält die wiederholte Oktoberstunde. Fehlende Prognosen/Preise schliessen
-den ganzen Tag für alle Experten und Kandidaten aus. Juni 24 bleibt so wie bei
-den bisherigen Modellen wegen fehlenden Wetters ausgeschlossen.
+## Ausführung und Struktur
 
-Der Router sieht beobachtete Fehler ausschliesslich bis D−2. Seine Ausgabe
-enthält `chosen_expert`, quantilspezifische `weights`, `block`, `fit_day` und
-`error_last_day`. Nach quantilspezifischer Gewichtung werden Kreuzungen sortiert;
-`preorder_q10/q50/q90` und `quantiles_reordered` machen diesen Schritt sichtbar.
+    make time-router STEP=tune JOBS=2
+    # Stundenraster und Regel prüfen, Design und Code committen.
+    make time-router STEP=test JOBS=2 TRACK=1
+    make time-router-figures STEP=test
 
-Kalibrierung folgt **einmal nach der Auswahl**: 56 Tage, 6-Stunden-Gruppen,
-separate 10-%-Schwanzkorrekturen und unverändertes P50 wie im GBM-Experiment #19.
-Sie verwendet gespeicherte Ausgaben der damaligen Router-Fits, keine rückwirkend
-mit heutigen Gewichten berechneten Prognosen. `calibration_last_day` weist die
-Grenze aus. Rohe und kalibrierte Kandidaten werden auf identischen Viertelstunden
-mit dem rohen beziehungsweise kalibrierten Standardmodell verglichen.
+Alternativ funktionieren make backtest MODEL=time_router STEP=tune|test und
+.venv/Scripts/python.exe -m energy_price.evaluation.time_router test --jobs 2 --track.
+Pool und tune erzeugen ausschliesslich Warmhistorie und April/Mai.
 
-April/Mai legen auch das Standardmodell und die Expertenparameter fest. Die
-Warmhistorie ist deshalb OOS hinsichtlich der einzelnen Modellfits, aber keine
-vollständig vorab festgelegte Hyperparameter-Evaluation von Januar bis Mai.
-Sie dient der Entwicklung und Kalibrierung; erst ab Juni gilt das eingefrorene
-Design. Die historischen Swissgrid-Dateien enthalten überarbeitete Werte und
-keine vollständigen damaligen Datenstände. D−2 verhindert zeitliche Lecks im
-Backtest, beseitigt aber diese Einschränkung historischer Revisionen nicht.
+Gemeinsame Bausteine: models/shared/forecast_pool.py, routing.py und calibration.py.
+Ausführung: evaluation/time_router.py. Pool, Auflösung, Wechselregel und primäre
+Strategie: time_router/model.py. Festgelegtes Design: design.json.
+Nominierung: nomination.json. Der Cache bindet Expertencode, Einstellungen,
+Fit-/Prognoseeingaben und Paketversionen; unveränderte Expertenfits werden
+wiederverwendet. Neue geeignete Experten benötigen einen Konfigurationseintrag
+mit April/Mai-basierten Einstellungen; danach Entwicklung und Design wiederholen.
 
-## Juni–August und Entscheid
+## Entwicklungsresultate hourly_v2
 
-Festlegung vor dem Test: Commits `d1264d4` und `c61d016`, dokumentiert in
-[Issue #25](https://github.com/ibidreli/energy_price_prediction/issues/25#issuecomment-6708782368)
-und [Ergänzung vor den Scores](https://github.com/ibidreli/energy_price_prediction/issues/25#issuecomment-6708853111).
-Alle Vergleiche verwenden **8736 Viertelstunden an 91 Tagen**, ohne 24.06.
-Ein vorzeitig beendeter Befehl hatte nur Experten-Fits erzeugt; deren
-inhaltsbasierter Cache wurde im vollständigen Lauf wiederverwendet.
+Noch nicht ausgewertet beim Commit der Stundenfestlegung. Hier folgen
+Vergleich, Stundentabelle und neue W&B-Links. V1-Resultate stehen im historischen
+Ordner und werden nicht als Stundenergebnisse ausgegeben. W&B-Namen:
+time_router/hourly_v2/<variante>, Gruppe issue-25.
 
-| Variante | Pinball | MAE P50 | Coverage | Bandbreite |
-|---|---:|---:|---:|---:|
-| Boosting, roh | 3.163293 | 9.792303 | 74.08 % | 24.844705 |
-| Gleichgewichte, roh | 3.169655 | 9.774233 | 75.98 % | 25.646652 |
-| Auswahl, roh | 3.163293 | 9.792303 | 74.08 % | 24.844705 |
-| Gelernte Gewichte, roh | 3.147265 | 9.766201 | 75.30 % | 25.146728 |
-| Boosting, kalibriert | 3.125098 | 9.792303 | 77.53 % | 26.622195 |
-| Gleichgewichte, kalibriert | 3.135896 | 9.774233 | 77.27 % | 26.177901 |
-| Auswahl, kalibriert | 3.125098 | 9.792303 | 77.53 % | 26.622195 |
-| **Gelernte Gewichte, kalibriert** | **3.116821** | **9.766201** | **77.67 %** | **26.419347** |
+## Holdout bleibt gesperrt
 
-Loss, MAE und Breite in ct/kWh. Gegenüber dem jeweiligen Standardmodell:
+Kein Holdout wurde für diese Korrektur ausgeführt. Der vereinbarte Pool-Freeze
+bleibt frühestens am 27.11.2026; finale Preise müssen offiziell bestätigt und
+alle Eingaben vollständig sein. Die 26 fehlenden Oktober-Wetterläufe wurden
+zuvor archiviert. Preise und aktualisierte Richtungslabels sind vor dem
+gemeinsamen Lauf bereitzustellen.
 
-| Kandidat | Tägliche Pinball-Differenz | 95-%-Intervall | Coverage-Differenz |
-|---|---:|---:|---:|
-| Gleichgewichte, roh | +0.006362 | [−0.008382, +0.025176] | +1.900 Prozentpunkte |
-| Auswahl, roh | 0 | [0, 0] | 0 |
-| Gewichte, roh | −0.016028 | [−0.024489, −0.008647] | +1.213 Prozentpunkte |
-| Gleichgewichte, kalibriert | +0.010797 | [−0.002576, +0.029457] | −0.263 Prozentpunkte |
-| Auswahl, kalibriert | 0 | [0, 0] | 0 |
-| **Gewichte, kalibriert** | **−0.008277** | **[−0.015809, −0.000333]** | **+0.137 Prozentpunkte** |
+[Issue #32](https://github.com/ibidreli/energy_price_prediction/issues/32) hält den
+einmaligen Abschluss fest. Readiness prüft nur Vollständigkeit:
 
-**Für den Holdout nominiert: globale gelernte Gewichte mit anschliessender
-Kalibrierung**, gespeichert in `nomination.json`. Der kalibrierte Pinball sinkt
-im Entwicklungsvergleich um 0.265 %, die Coverage steigt leicht. Das Intervall
-liegt knapp unter null; dieser bereits zur Kandidatenwahl verwendete Test ist
-kein unabhängiger Signifikanznachweis. Die Coverage bleibt unter nominalen 80 %.
-Es gibt noch keine Übernahmeentscheidung.
+    make holdout-data-check
+    make time-router STEP=freeze FINAL_DATA_EVIDENCE=final_data.json
+    # pool_freeze.json committen
+    make time-router STEP=holdout JOBS=2 TRACK=1 FINAL_DATA_EVIDENCE=final_data.json
 
-Die Auswahlregel wechselt in keiner der 14 Testwochen vom Standardmodell weg.
-Sie ist auf dem Test exakt identisch zu Boosting. Auch die Boosting-Quantile
-selbst stimmen auf allen gemeinsamen Testviertelstunden mit dem bisherigen
-GBM-Experiment überein. Es wurden keine Expertenparameter angepasst.
-
-Der kalibrierte Standard hat hier 3.125098 statt der 3.1254 aus #19. Die
-Korrekturregel ist unverändert; ihre OOS-Fehler stammen jetzt aus der gemeinsamen
-Prognosetabelle mit den etablierten April-/Juni-Fitankern. #19 erzeugt seine
-inneren historischen Prognosen auf einem durchlaufenden Wochenraster ab 30.01.
-Deshalb werden beide Seiten des neuen Vergleichs konsistent mit dem neuen
-gemeinsamen OOS-Protokoll kalibriert; Werte unterschiedlicher Protokolle werden
-nicht als gepaarter Vergleich ausgegeben.
-
-**Domänenbezug:** Die hohe Fehlerkorrelation und die ausbleibenden belegten
-Expertenwechsel sprechen gegen eine belastbare Tageszeit-Zuordnung mit dieser
-Historie. Eine kleine globale Kombination kann trotzdem helfen. Die mittleren
-Boosting-Gewichte liegen bei rund 79 % (P10), 68 % (P50) und 80 % (P90);
-Referenz ergänzt vor allem die Ränder, B2 und Regime-Mischung stärker den Median.
-Das sind beschreibende Gewichte, keine kausalen Beiträge.
-
-Der kalibrierte Gewinn liegt im Juni (3.0019 statt 3.0162) und Juli (3.1231 statt
-3.1351); im August ist die Kombination leicht schlechter (3.2181 statt 3.2170).
-Auf tatsächlichen long-Viertelstunden verbessert sich der Loss von 3.2897 auf
-3.2512, bei short verschlechtert er sich von 2.9803 auf 2.9986. Der Vorteil ist
-also weder über Monate noch Richtungen gleichmässig. Daraus wird keine neue
-monatliche oder richtungsabhängige Auswahlregel abgeleitet.
-
-**Robustheit 4×6h, keine zusätzliche Wahlmöglichkeit:** Kalibrierte Gewichte
-erreichen diagnostisch 3.111040 mit Intervall der Differenz
-[−0.022240, −0.005348], Coverage 77.518 % gegenüber 77.530 % beim Standard
-(eine Viertelstunde weniger abgedeckt). Dieses Raster war aufgrund der
-April/Mai-Power-Abschätzung nicht für die Hauptvariante zugelassen und wird
-nach Testeinsicht nicht übernommen. Auch hier schaltet die Auswahl nie um.
-
-![Kalibrierter Entwicklungsvergleich](../../../../docs/figures/time_router/test_comparison.png)
-
-Grafik reproduzieren: `make time-router-figures STEP=test`.
-Kuratierte CSV-Ergebnisse und W&B-Links liegen in
-[`docs/exploration/time_router/results/`](../../../../docs/exploration/time_router/results/).
-Vollständige Prognosen, Gewichte und Entscheidungen stehen zusätzlich als
-W&B-Artefakte bereit: [kalibrierte Gewichte](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/nekqk66k),
-[kalibriertes Standardmodell](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ivxmx3iw),
-[Quellcode-/Ergebnispaket mit Grafik](https://forge.coreweave.com/wandb/fhnw-cds1/energy-price-prediction/runs/ydbc8i90),
-Gruppe `issue-25`. Der bestehende Chartname `daily_pinball_vs_reference` meint
-hier den jeweiligen Standardmodell-Vergleichspartner aus der Vergleichstabelle.
-
-## Holdout: erst nach finalen Daten und Pool-Freeze
-
-Der Nutzer hat am 07.11. bestätigt, den Zeitplan beizubehalten. Deshalb gibt es
-hier noch **keinen Holdout-Lauf und keinen endgültigen Architekturentscheid**.
-Der terminierte Abschluss ist als [Issue #32](https://github.com/ibidreli/energy_price_prediction/issues/32) nachgeführt.
-26 fehlende ECMWF-Läufe wurden archiviert; die Wetterfeatures sind für alle
-5860 erwarteten Viertelstunden September/Oktober vollständig. Preise fehlen
-lokal noch für alle 5860 Viertelstunden, Richtungslabels für 2692.
-
-```bash
-make holdout-data-check
-# Später: finale Swissgrid-XML September/Oktober einlesen, CAB-Snapshot holen.
-make fetch-cab
-make data
-```
-
-Finalität muss anhand der Swissgrid-Veröffentlichung bestätigt werden. Ein
-Datum allein gilt nicht als Nachweis. Erwartet werden finale Oktoberpreise
-etwa ab 20.11.; der geplante Pool-Freeze bleibt 27.11. Erweiterungen des Pools
-vorher verlangen erneute Entwicklungsschritte. Die abschliessende Erklärung
-`final_data.json` liegt lokal und enthält:
-
-```json
-{
-  "final_prices_confirmed": true,
-  "months": ["2026-09", "2026-10"],
-  "source_url": "URL zur geprüften offiziellen Veröffentlichung",
-  "verified_by": "Name des prüfenden Teammitglieds",
-  "verified_on": "2026-11-27",
-  "explanation": "Nachweis, dass beide XML-Dateien finale Preise enthalten",
-  "data_fingerprint": "Wert aus holdout_readiness.json nach make data"
-}
-```
-
-Erst dann:
-
-```bash
-make time-router STEP=freeze FINAL_DATA_EVIDENCE=final_data.json
-git add src/energy_price/models/time_router/pool_freeze.json
-git commit -m "exp: freeze final model pool and holdout inputs (#25)"
-make time-router STEP=holdout JOBS=2 TRACK=1 FINAL_DATA_EVIDENCE=final_data.json
-```
-
-Der Freeze bindet Pool, Design, Nominierung und Daten-Hash. Ein atomar angelegtes
-`holdout_protocol.json` verbraucht die Freigabe vor dem Rechnen. Auch nach einem
-Abbruch erlaubt kein CLI-Schalter eine zweite Auswertung. Ein technischer
-Fehler muss mit sichtbarem Protokoll untersucht werden. Die endgültigen
-Einzelexperten und der nominierte Kandidat werden auf denselben Viertelstunden
-bewertet; Monats-/Block-/Richtungstabellen entstehen erst nach der Prognose.
+final_data.json enthält final_prices_confirmed, beide Monate, source_url,
+verified_by, verified_on, explanation und data_fingerprint aus dem Readiness-
+Bericht. Ein atomisches holdout_protocol.json verbraucht die Freigabe beim Start;
+ein Abbruch berechtigt nicht zum stillen Wiederholen. Übernahme erfordert
+niedrigeren Pinball, ein ganz negatives Intervall der täglichen Differenz und
+mindestens gleiche Coverage.
 
 ## Prüfung und Review
 
-`tests/test_time_router.py` prüft manipulierte Zukunftspreise, tatsächliche
-Richtung, wöchentliche Grenzen, historische Router-Ausgaben in der Kalibrierung,
-einmalige Kalibrierung, neue Experten ohne Codeänderung, Quantilkreuzungen,
-Blockpartition, UTC/DST, vollständige gemeinsame Quartale, Bootstrap,
-eingeschränkte LP-Gewichte und die atomare Holdout-Sperre.
+Tests prüfen unterschiedliche Experten je Uhrzeit innerhalb desselben Tages,
+vier zusammengehörige Viertelstunden, wöchentliche Konstanz der Stundenkarte,
+Lernen nur aus derselben Uhrzeit, Zukunftspreis-Poisoning, Unsicherheitsausweis,
+Quantilordnung, damalige Router-Ausgaben in der Kalibrierung, DST und Einmal-Sperre.
 
-Die Branches aus #19 und #21 wurden in diesen Arbeitsbranch integriert. Das ist
-keine Freigabe durch ein Teammitglied und kein Merge nach `main`. Teamreview
-und der spätere gemeinsame Holdout bleiben offene Abschlussbedingungen.
-Die Kalibrierung ist separat in [PR #31](https://github.com/ibidreli/energy_price_prediction/pull/31)
-prüfbar; die explorative Vorarbeit bleibt in [PR #22](https://github.com/ibidreli/energy_price_prediction/pull/22).
-Die vollständige Architektur ist in [PR #33](https://github.com/ibidreli/energy_price_prediction/pull/33)
-zur Prüfung bereit. Beide Implementierungs-PRs bleiben bis zum Teamreview offen.
-Prüfstand: 297 Tests bestanden; zusätzlich die vollständigen Testprognosen auf
-D−2-Grenzen, unveränderte GBM-Prognosen und Quantilordnung geprüft.
+Die Korrektur liegt auf exp/25-hourly-model-selection. Der frühere PR #33 ist
+geschlossen und wird nicht wieder geöffnet. Teamreview und der spätere blinde
+Architekturentscheid bleiben Abschlussbedingungen.
