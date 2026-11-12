@@ -1,6 +1,6 @@
 # Quantil-LASSO mit Daten bis D−2
 
-**Status:** Tuning abgeschlossen, `CHOSEN` festgelegt; Test Juni bis August offen (Issue #27). Der Test startet erst nach dem Review von #30 (Merkmale `B3` und `B4`), damit er nur einmal läuft. Der Holdout ist nicht Teil dieses Issues, er läuft gemeinsam in #25.
+**Status:** Test abgeschlossen, nicht in den Pool übernommen (Issue #27). Der Holdout ist nicht Teil dieses Issues und wurde nicht geöffnet.
 
 ## Hypothese
 
@@ -117,19 +117,62 @@ Der spätere Beginn macht `B2` scheinbar stark schlechter. Die Ursache ist fast 
 - Im letzten Fit (27.05.) ist der Koeffizient auch mit Trainingsbeginn 30.01. wieder negativ.
 - Mit dem besten `alpha` für `B2` ab dem 30.01. (0.01, Pinball 3.4613) ist der Unterschied von `B4` klein: −0.035, Intervall −0.180 bis +0.072.
 
-Der ungleiche Beginn erklärt den Rückstand von `B3` und `B4` also nur zu einem kleinen Teil. Im Test sollte der Effekt nicht mehr auftreten, weil das Training dann Ostern enthält (Schlussfolgerung). Der Feiertagseffekt wird nicht nachträglich korrigiert: Eine Änderung nach Sichtung der Tuning-Ergebnisse wäre eine Anpassung an genau diese Ergebnisse.
+Der ungleiche Beginn erklärt den Rückstand von `B3` und `B4` also nur zu einem kleinen Teil. Im Test ist der Effekt fast verschwunden, weil das Training dann Ostern enthält: `B2` ab dem 30.01. liegt dort nur 0.006 hinter `B2` ab dem 01.01. (3.2229 zu 3.2165). Der Feiertagseffekt wird nicht nachträglich korrigiert: Eine Änderung nach Sichtung der Tuning-Ergebnisse wäre eine Anpassung an genau diese Ergebnisse.
 
 ## Ergebnis (Test Juni bis August)
 
-*Offen.* Läuft nach dem Review von #30 mit dem unveränderten `CHOSEN`. Vergleich gegen Referenz (3.2018), Baseline B2 (3.2254) und `gbm_quantile` (3.1633) auf denselben Viertelstunden.
+Lauf vom 12.11.2026 mit dem unveränderten `CHOSEN`, 14 wöchentliche Fits, Commit `a3fc48e` mit sauberem Git-Stand, Daten `60431b5b921f`. 91 Tage, 8'736 Viertelstunden, für alle Modelle dieselben (der 24.06. fehlt wegen unvollständiger Wetterdaten). Referenz, Baseline B2 und `gbm_quantile` ergeben dieselben Werte wie in ihren eigenen Läufen.
 
-| Frage | Massstab im Test |
-|---|---|
-| Schlägt das Modell die Referenz? | tieferer Pinball Loss; ja heisst Aufnahme in den Pool von #25 |
-| Helfen Daten bis D−2? | 95-%-Intervall der Differenz `quantile_lasso_d2` minus `quantile_lasso` ganz unter 0 |
-| Schlägt es `gbm_quantile`? | nur berichtet, keine Bedingung |
+| Modell | MAE P50 | Pinball Loss | Coverage | Intervallbreite |
+|---|---|---|---|---|
+| `gbm_quantile` | 9.7923 | **3.1633** | 74.08 % | 24.84 |
+| Referenz | 9.9171 | 3.2018 | 75.21 % | 26.32 |
+| `quantile_lasso` (`B2`, `alpha` 0.001) | 9.8001 | 3.2165 | 74.53 % | 25.38 |
+| Baseline B2 | 9.8063 | 3.2254 | 73.60 % | 25.51 |
+| `quantile_lasso_d2` (`B4`, `alpha` 0.03) | 9.9533 | 3.2668 | 75.17 % | 24.54 |
 
-**Entscheid:** offen bis zum Test.
+Preise, Fehler und Breiten in ct/kWh. `quantile_lasso` ist an 59.3 % der Tage besser als die Referenz, `quantile_lasso_d2` an 40.7 %.
+
+| Modell | gegen | Differenz | 95-%-Intervall |
+|---|---|---|---|
+| `quantile_lasso` | Referenz | +0.015 | −0.055 bis +0.092 |
+| `quantile_lasso` | Baseline B2 | −0.009 | −0.017 bis −0.003 |
+| `quantile_lasso` | `gbm_quantile` | +0.053 | +0.026 bis +0.093 |
+| `quantile_lasso_d2` | Referenz | +0.065 | +0.023 bis +0.114 |
+| `quantile_lasso_d2` | `quantile_lasso` | +0.050 | +0.005 bis +0.091 |
+| `quantile_lasso_d2` | `quantile_lasso`, ab 30.01. trainiert | +0.044 | −0.004 bis +0.086 |
+| `quantile_lasso_d2` | `gbm_quantile` | +0.103 | +0.069 bis +0.146 |
+
+![Pinball Loss pro Stunde](../../../../docs/figures/quantile_lasso/test_pinball_by_hour.png)
+
+![Coverage pro Monat](../../../../docs/figures/quantile_lasso/test_coverage_by_month.png)
+
+Aufgeteilt (`reports/quantile_lasso/test_breakdowns.csv`), Pinball Loss:
+
+| | Referenz | Baseline B2 | `quantile_lasso` | `quantile_lasso_d2` |
+|---|---|---|---|---|
+| long | 3.270 | 3.136 | 3.170 | 3.308 |
+| short | 3.142 | 3.304 | 3.257 | 3.231 |
+| Juni | 3.086 | 3.062 | 3.060 | 3.157 |
+| Juli | 3.198 | 3.159 | 3.150 | 3.225 |
+| August | 3.314 | 3.445 | 3.429 | 3.412 |
+| 9 bis 15 Uhr (Mittel der Stunden) | 4.771 | 4.609 | 4.611 | 4.742 |
+| übrige Stunden | 2.556 | 2.656 | 2.642 | 2.660 |
+
+**Genutzte Merkmale im Test** (Anteil der 14 Fits, `test_surviving_features.csv`): `quantile_lasso_d2` nutzt wieder keine Stunden-, Verlaufs-, Systembilanz- oder Bewölkungsmerkmale. P50 stützt sich in allen Fits auf den Median derselben Viertelstunde über 56 Tage, P10 auf deren P10. **P90 hat in den ersten 7 Fits kein einziges Merkmal** und ist damit für alle Viertelstunden gleich; ab Mitte Juli nutzt es nur das P90 über 56 Tage. `quantile_lasso` behält 46 bis 50 der 51 Merkmale.
+
+## Einordnung
+
+- **Schlägt das Modell die Referenz? Nein.** `quantile_lasso` liegt 0.015 über der Referenz, das Intervall schliesst 0 ein; `quantile_lasso_d2` ist klar schlechter (Intervall ganz über 0). Wie bei der Baseline und dem Regime-Modell war das Tuning zu optimistisch: Dort lag `B2` 0.126 unter der Referenz.
+- **Helfen Daten bis D−2? Nein, nicht in diesem Modell.** `quantile_lasso_d2` ist um 0.050 schlechter als `quantile_lasso`, das Intervall liegt ganz über 0. Mit gleichem Trainingsbeginn ist der Rückstand ähnlich gross (+0.044), das Intervall schliesst 0 knapp ein. Ein Vorteil der neuen Merkmale zeigt sich in keinem der beiden Vergleiche.
+- **Wo `B4` hilft, hilft es wenig.** Bei short (3.231 zu 3.257), im August und an Feiertagen ist `quantile_lasso_d2` besser als `quantile_lasso`, bei long und im Juni deutlich schlechter. Das passt dazu, dass es die Referenz nachbildet: Die Referenz ist bei short und im August ebenfalls besser.
+- **Die Strafe ist für `B4` zu grob.** `alpha` 0.03 ist auf dem Rand des Rasters gewählt und gilt für alle drei Quantile gleich. Bei P90 bleibt zeitweise nur der Achsenabschnitt übrig. Ein `alpha` pro Quantil oder ein feineres Raster wäre ein anderes Experiment; ob es die Merkmale bis D−2 retten würde, ist offen.
+- **Kleine Strafe statt keiner bringt etwas, aber wenig.** `quantile_lasso` ist 0.009 besser als die Baseline B2, das Intervall liegt ganz unter 0. Das sind 0.3 %, und der Abstand zur Referenz bleibt.
+- **Coverage weiter unter 80 %:** 74.5 % und 75.2 %, im August 67 % und 70 %.
+
+**Grenze der Aussage:** Getestet ist ein lineares Modell mit einer gemeinsamen Strafe. Ein nichtlineares Modell könnte die Daten bis D−2 anders nutzen, etwa im Zusammenspiel mit der Uhrzeit. Vergangene Preise sind in unseren Daten final, um 11:00 wären sie provisorisch gewesen; das hätte die Merkmale vermutlich eher noch schlechter gemacht (Schlussfolgerung, Korrekturen nicht gemessen). Der Test ist nicht blind, Juni bis August wurden schon für andere Modelle ausgewertet.
+
+**Entscheid:** nicht in den Pool von #25 aufgenommen, weil kein Setting die Referenz schlägt. Die Merkmale bis D−2 werden nicht als Kandidat für andere Modelle empfohlen. Das ist ein schwacher Hinweis gegen ein Sequenzmodell wie ein LSTM: Die Information der letzten Tage, die ein solches Modell nutzen würde, bringt hier im linearen Fall nichts. `CHOSEN` wird anhand dieses Tests nicht geändert.
 
 ## Starten
 
@@ -140,4 +183,4 @@ make backtest MODEL=quantile_lasso STEP=test TRACK=1    # CHOSEN auf Juni bis Au
 python -m energy_price.models.quantile_lasso.diagnostics --period test
 ```
 
-Das Tuning dauerte auf einem Laptop knapp 5 Minuten (Commit `95c7787`, Daten `60431b5b921f`). `diagnostics.py` setzt die Prognosen des Backtests voraus, auch die der Baseline B2, und bricht sonst ab. Auf `tune` passt es die beste Variante pro Feature-Set neu an und prüft, dass die Prognosen mit dem Backtest übereinstimmen. Ergebnisse stehen in `reports/quantile_lasso/` (nicht versioniert), W&B enthält in der Gruppe `issue-27` die 12 Tuning-Varianten und die Baseline B2. Tests: `tests/test_quantile_lasso.py`, darunter ein Test, dass eine Änderung von Preisen und Systembilanz ab D−1 00:00 die Prognose für D nicht verändert.
+Tuning und Test dauerten auf einem Laptop je knapp 5 Minuten. Der Test vergleicht nur dann mit der Baseline B2, wenn `reports/baseline_model/test_forecasts.parquet` existiert. Für diesen Lauf wurde die Datei mit `evaluate_period("baseline_model", ...)` erzeugt, ohne Grafiken und ohne W&B, damit die Grafiken der Baseline unverändert bleiben. `diagnostics.py` setzt die Prognosen des Backtests voraus, auch die der Baseline B2, und bricht sonst ab. Auf `tune` passt es die beste Variante pro Feature-Set neu an und prüft, dass die Prognosen mit dem Backtest übereinstimmen. Ergebnisse stehen in `reports/quantile_lasso/` (nicht versioniert). W&B enthält in der Gruppe `issue-27` die 12 Tuning-Varianten und die Baseline B2 sowie vier Testläufe (Referenz, `quantile_lasso`, `quantile_lasso_d2`, Baseline B2). Tests: `tests/test_quantile_lasso.py`, darunter ein Test, dass eine Änderung von Preisen und Systembilanz ab D−1 00:00 die Prognose für D nicht verändert.
