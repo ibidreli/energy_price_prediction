@@ -84,7 +84,7 @@ def coverage_by_month(rows: pd.DataFrame, models: list[str], period: str, path: 
     colours = series_colours(models)
     fig, ax = plt.subplots(figsize=(8, 3.4))
     by_month = rows.groupby(["model", rows["delivery_day"].dt.month])["inside"].mean().unstack(0) * 100
-    width = 0.26
+    width = min(0.26, 0.86 / len(models) - 0.02)  # 0.26 up to three models; more stay within their month
     for i, m in enumerate(models):
         x = np.arange(len(by_month)) + (i - (len(models) - 1) / 2) * (width + 0.02)
         bars = ax.bar(x, by_month[m], width=width, color=colours[m], label=m)
