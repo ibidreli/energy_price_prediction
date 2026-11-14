@@ -7,7 +7,8 @@ own environment and imports nothing from the rest of the package. Checked on 202
 reads the parquet files written by pandas 3.0.6 with identical shape, values, missing counts, time zones
 and categories; only the ``str`` columns come back as ``object``.
 
-The report shows where to look, not what follows from it. It does not replace notebooks/01_eda.ipynb.
+The report shows where to look, not what follows from it. It does not replace
+notebooks/01_exploratory_data_analysis.ipynb.
 """
 
 from __future__ import annotations

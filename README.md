@@ -7,7 +7,7 @@ CDS1 Balance Energy Price Prediction Challenge
 |---|---|
 | [`docs/overview.md`](docs/overview.md) | Domain wiki: actors, how balance energy prices are formed, open questions |
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
-| [`docs/eda.md`](docs/eda.md) | Exploratory analysis in two rounds (H1 to H12), feature candidates, questions for the owner; notebooks [`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb) and [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb) |
+| [`docs/eda.md`](docs/eda.md) | Exploratory analysis in two rounds (H1 to H12), feature candidates, questions for the owner; notebook [`notebooks/01_exploratory_data_analysis.ipynb`](notebooks/01_exploratory_data_analysis.ipynb) |
 | [`docs/evaluation.md`](docs/evaluation.md) | Forecast output (P10, P50, P90) and metrics (mean pinball loss, MAE, coverage, width), with reasons; code in `src/energy_price/metrics.py` |
 | [`docs/metric.md`](docs/metric.md) | Evaluation metric (MAE, pinball loss, coverage) and baseline |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
@@ -27,7 +27,7 @@ make venv        # create .venv with the exact versions from requirements.lock
 make data        # build all tables in data/processed/ from the raw files
 make fetch       # download new Swissgrid, weather and reservoir data (network)
 make test        # run the unit tests
-make notebook    # run the EDA notebooks and store their outputs (one: NB=notebooks/02_eda.ipynb)
+make notebook    # run the EDA notebook and store its outputs (other: NB=notebooks/03_bandit_architektur.ipynb)
 make profile     # automated HTML profile per table in reports/ (own .venv-profile)
 make tracking-check  # check the W&B login, after the setup in docs/experiment_tracking.md
 make baseline    # backtest of the baseline on June to August (TRACK=1 logs to W&B)
