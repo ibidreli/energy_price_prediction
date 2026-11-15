@@ -1,29 +1,54 @@
 # <Modellname>
 
+**Status:** in Arbeit / abgeschlossen, übernommen / abgeschlossen, nicht übernommen · **Verantwortlich:** <Name> · **Issue:** #<Nr> · **Stand der Zahlen:** <TT.MM.JJJJ>
+
 <!-- Steckbrief des Modells. Nach dem Kopieren alle <...> ersetzen.
-     Anleitung: docs/models/README.md -->
+     Aufbau und Regeln: docs/models/README.md
+     Zahlen nur aus den Ergebnisdateien übernehmen (reports/<name>/test_scores.csv), nie von Hand ändern. -->
 
-**Status:** in Arbeit / abgeschlossen / verworfen
+## 1. Hypothese
 
-## Hypothese
+<Was erwarten wir, und warum? Ein bis drei Sätze, geschrieben vor dem Tuning.>
 
-<Was wird getestet, und welche Verbesserung gegenüber Referenz und Baseline B2 wird erwartet? Warum?>
+## 2. Herleitung
 
-## Modell und Features
+<Warum genau dieses Modell?>
 
-<Verfahren in einem Satz, Feature-Set (B1 bis B4 oder neue Blöcke) und Datenquellen.>
+- **Ausgangspunkt:** <EDA-Erkenntnis (H1 bis H12 in docs/eda.md) oder Überlegung aus der Domäne>
+- **Erwarteter Vorteil:** <was das Modell besser kann als Referenz und Baseline B2>
+- **Verworfene Alternativen:** <was nicht gewählt wurde und warum>
 
-## Ergebnis (Test Juni bis August)
+## 3. Vorgehen
 
-| Modell | MAE P50 | Pinball Loss | Coverage |
-|---|---|---|---|
-| Referenz | 9.92 | 3.20 | 75 % |
-| Baseline B2 | 9.81 | 3.23 | 74 % |
-| <Modell> | | | |
+- **Modell:** <Verfahren in einem Satz>
+- **Features:** <Feature-Set B1 bis B4 oder neue Blöcke, mit Datenquelle>
+- **Tuning:** <Grid, Trainingsfenster, Zeitraum>
+- **Gewählt:** <Setting `CHOSEN`, vor dem Test festgelegt und danach nicht mehr geändert>
 
-**Entscheid:** <übernommen / verworfen / weiterverfolgen mit ...>
+## 4. Erkenntnisse
 
-## Ausführen
+<Was haben wir gelernt, mit Bezug zur Domäne? Fette Untertitel, die die Aussage nennen, darunter kurze Bullets.>
+
+## 5. Outcome
+
+Test <Zeitraum>, <Anzahl> Tage. Preise, Fehler und Breiten in ct/kWh.
+
+| Modell | Pinball-Loss | MAE P50 | Coverage | Intervallbreite |
+|---|---|---|---|---|
+| Referenz | | | | |
+| Baseline B2 | | | | |
+| <Modell> | | | | |
+
+## 6. Entscheid
+
+**<Übernommen / nicht übernommen / weiterverfolgen>**, weil <Begründung>.
+
+## 7. Belege
+
+- **Issue und PR:** #<Nr>, PR #<Nr>
+- **Code:** `src/energy_price/models/<name>/model.py`
+- **Tests:** `tests/test_<name>.py`
+- **Ergebnisse:** `reports/<name>/` (nicht versioniert), Grafiken in `docs/figures/<name>/`
 
 ```bash
 make backtest MODEL=<name> STEP=tune
