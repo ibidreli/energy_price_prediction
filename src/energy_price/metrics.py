@@ -4,7 +4,7 @@ Forecasts: P10, P50 and P90 of the price per quarter hour.
 Main metric: mean pinball loss; additionally report median MAE,
 P10–P90 coverage (target 80 %) and mean interval width.
 
-See docs/evaluation.md and docs/metric.md.
+See docs/evaluation.md.
 Usage: python -m energy_price.metrics
 """
 

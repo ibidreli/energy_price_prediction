@@ -8,8 +8,8 @@ CDS1 Balance Energy Price Prediction Challenge
 | [`docs/overview.md`](docs/overview.md) | Domain wiki: actors, how balance energy prices are formed, open questions |
 | [`docs/data.md`](docs/data.md) | Data sources, leakage rules, choice of the six weather sites, figures |
 | [`docs/eda.md`](docs/eda.md) | Exploratory analysis in two rounds (H1 to H12), feature candidates, questions for the owner; notebook [`notebooks/01_exploratory_data_analysis.ipynb`](notebooks/01_exploratory_data_analysis.ipynb) |
-| [`docs/evaluation.md`](docs/evaluation.md) | Forecast output (P10, P50, P90) and metrics (mean pinball loss, MAE, coverage, width), with reasons; code in `src/energy_price/metrics.py` |
-| [`docs/metric.md`](docs/metric.md) | Evaluation metric (MAE, pinball loss, coverage) and baseline |
+| [`docs/evaluation.md`](docs/evaluation.md) | Forecast output (P10, P50, P90), metrics (mean pinball loss, MAE, coverage, width), reference and backtest, with reasons derived from the data (notebook chapter 1.4); code in `src/energy_price/metrics.py` |
+| [`docs/metric.md`](docs/metric.md) | Replaced by `docs/evaluation.md`, kept as a pointer |
 | [`docs/project_management.md`](docs/project_management.md) | Kanban workflow, WIP limits, Definition of Ready/Done, labels, rituals |
 | [`docs/models/README.md`](docs/models/README.md) | Model structure: one folder per model, shared backtest, how to start a new model from the template |
 | [`docs/models/baseline_model.md`](docs/models/baseline_model.md) | Baseline: linear quantile regression against a historical reference, backtest and results |
