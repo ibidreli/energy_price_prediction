@@ -159,11 +159,11 @@ profile: data $(PROFILE_VENV)/.installed ## Automated HTML profile per table in 
 
 # The default kernel starts a bare `python`; .venv/bin comes first on PATH so that it is the one from .venv.
 # JUPYTER_CONFIG_DIR skips the personal ~/.jupyter, so the run is the same on every machine.
-# NB selects the notebooks, e.g. `make notebook NB=notebooks/02_eda.ipynb`. Outputs depend on the newest
+# NB selects the notebooks, e.g. `make notebook NB=notebooks/03_bandit_architektur.ipynb`. Outputs depend on the newest
 # control area balance snapshot, so re-running an older notebook can change its stored numbers.
-NB ?= notebooks/01_eda.ipynb notebooks/02_eda.ipynb
+NB ?= notebooks/01_exploratory_data_analysis.ipynb
 
-notebook: data ## Run the EDA notebooks (or NB=...) top to bottom and store the outputs in place
+notebook: data ## Run the EDA notebook (or NB=...) top to bottom and store the outputs in place
 	PATH="$(abspath $(VENV))/bin:$$PATH" JUPYTER_CONFIG_DIR="$(abspath $(VENV))/etc/jupyter" $(PY) -m jupyter nbconvert --to notebook --execute --inplace $(NB)
 
 test: $(ENV_READY) ## Run unit tests

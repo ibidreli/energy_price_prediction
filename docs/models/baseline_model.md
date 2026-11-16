@@ -177,7 +177,7 @@ Der Pinball Loss misst, wie gut die drei Grenzen liegen. Er bestraft Bänder, di
 | Punkt | Woher es kommt | Was zu tun ist |
 |---|---|---|
 | **Schlusstest September** | Swissgrid veröffentlicht finale Preise bis zum 15. Arbeitstag des Folgemonats, für September also bis etwa 21.10. ([`data.md`](../data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)) | einmal mit unveränderten Einstellungen laufen lassen |
-| **Hauptkennzahl** | Festgelegt ist der Pinball Loss (Wahl von `CHOSEN`, Vergleich der Modelle), MAE und Coverage ergänzend. `docs/metric.md` (PR #9) nennt noch den MAE | PR #9 an den Pinball Loss angleichen |
+| **Hauptkennzahl** | Festgelegt ist der Pinball Loss (Wahl von `CHOSEN`, Vergleich der Modelle), MAE und Coverage ergänzend. `docs/metric.md` (PR #9) nannte noch den MAE | erledigt mit #41: `docs/evaluation.md` ist das gültige Dokument, `docs/metric.md` verweist darauf |
 
 **Grenze D−2:** Am 22.10.2026 hat der Nutzer die tägliche Verfügbarkeit bis D−2 am
 Prognosezeitpunkt im Projekt bestätigt. Die bisher verwendete Grenze bleibt bestehen;

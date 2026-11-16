@@ -1,206 +1,93 @@
-"""Scores for probabilistic forecasts and a historical reference baseline.
-
-Forecasts: P10, P50 and P90 of the price per quarter hour.
-Main metric: mean pinball loss; additionally report median MAE,
-P10–P90 coverage (target 80 %) and mean interval width.
-
-See docs/evaluation.md and docs/metric.md.
-Usage: python -m energy_price.metrics
-"""
-
-from __future__ import annotations
-
-import argparse
-
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
+import pytest
 
-QUANTILES = (0.1, 0.5, 0.9)
-TARGET_COVERAGE = QUANTILES[-1] - QUANTILES[0]
-
-# D-2 is the last full day known at D-1 11:00 (see availability.py).
-BASELINE_LAGS_DAYS = range(2, 9)
-
-ArrayLike = npt.ArrayLike
-
-
-def _arrays(*values: ArrayLike) -> list[np.ndarray]:
-    arrays = [np.asarray(v, dtype=float) for v in values]
-    if len({a.shape for a in arrays}) != 1:
-        raise ValueError(f"inputs differ in shape: {[a.shape for a in arrays]}")
-    if any(np.isnan(a).any() for a in arrays):
-        raise ValueError(
-            "inputs contain NaN; drop or explain missing quarter hours before scoring"
-        )
-    return arrays
+from energy_price.metrics import (
+    BASELINE_LAGS_DAYS,
+    QUANTILES,
+    baseline_quantiles,
+    coverage,
+    mae,
+    mean_pinball_loss,
+    mean_width,
+    pinball_loss,
+    score,
+)
 
 
-def pinball_loss(
-    actual: ArrayLike, predicted: ArrayLike, quantile: float
-) -> float:
-    """Mean pinball loss in ct/kWh. At quantile 0.5 it is half the MAE."""
-    if not 0 < quantile < 1:
-        raise ValueError(f"quantile must lie between 0 and 1, got {quantile}")
-    y, q = _arrays(actual, predicted)
-    diff = y - q
-    return float(np.mean(np.maximum(quantile * diff, (quantile - 1) * diff)))
+def test_pinball_loss_at_the_median_is_half_the_mae():
+    actual = np.array([1.0, 4.0, -2.0, 10.0])
+    predicted = np.array([2.0, 2.0, 0.0, 5.0])
+
+    assert pinball_loss(actual, predicted, 0.5) == pytest.approx(mae(actual, predicted) / 2)
 
 
-def mean_pinball_loss(
-    actual: ArrayLike, forecasts: dict[float, ArrayLike]
-) -> float:
-    """Pinball loss averaged over the quantiles in forecasts."""
-    return float(
-        np.mean(
-            [
-                pinball_loss(actual, predicted, q)
-                for q, predicted in forecasts.items()
-            ]
-        )
-    )
+def test_pinball_loss_weights_a_too_low_forecast_with_tau_and_a_too_high_one_with_one_minus_tau():
+    assert pinball_loss([10.0], [0.0], 0.9) == pytest.approx(9.0)
+    assert pinball_loss([10.0], [20.0], 0.9) == pytest.approx(1.0)
+    assert pinball_loss([10.0], [0.0], 0.1) == pytest.approx(1.0)
+    assert pinball_loss([10.0], [20.0], 0.1) == pytest.approx(9.0)
 
 
-def pinball(y: ArrayLike, q: ArrayLike, tau: float) -> float:
-    """Compatibility wrapper for callers using the original main API."""
-    return pinball_loss(y, q, tau)
+def test_pinball_loss_is_smallest_at_the_empirical_quantile():
+    actual = np.arange(1.0, 101.0)
+    grid = np.arange(0.0, 101.0)
+    for tau in QUANTILES:
+        losses = [pinball_loss(actual, np.full(actual.shape, q), tau) for q in grid]
+        best = grid[int(np.argmin(losses))]
+
+        assert abs(best - np.quantile(actual, tau)) <= 1.0
 
 
-def mean_pinball(y: ArrayLike, quantiles: dict[float, ArrayLike]) -> float:
-    """Compatibility wrapper for callers using the original main API."""
-    return mean_pinball_loss(y, quantiles)
+def test_pinball_loss_rejects_a_quantile_outside_zero_and_one():
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        pinball_loss([1.0], [1.0], 1.0)
 
 
-def coverage(
-    actual: ArrayLike, lower: ArrayLike, upper: ArrayLike
-) -> float:
-    """Share of actual values inside [lower, upper], both bounds included."""
-    y, lo, hi = _arrays(actual, lower, upper)
-    if (lo > hi).any():
-        raise ValueError(
-            f"lower bound above upper bound in {int((lo > hi).sum())} rows "
-            "(crossing quantiles)"
-        )
-    return float(np.mean((y >= lo) & (y <= hi)))
+def test_mean_pinball_loss_averages_over_the_quantiles():
+    actual = np.array([5.0, 7.0])
+    forecasts = {0.1: np.array([1.0, 2.0]), 0.5: np.array([5.0, 6.0]), 0.9: np.array([9.0, 9.0])}
+    expected = np.mean([pinball_loss(actual, q, tau) for tau, q in forecasts.items()])
+
+    assert mean_pinball_loss(actual, forecasts) == pytest.approx(expected)
 
 
-def mean_width(lower: ArrayLike, upper: ArrayLike) -> float:
-    """Mean width of the interval [lower, upper] in ct/kWh."""
-    lo, hi = _arrays(lower, upper)
-    if (lo > hi).any():
-        raise ValueError(
-            f"lower bound above upper bound in {int((lo > hi).sum())} rows "
-            "(crossing quantiles)"
-        )
-    return float(np.mean(hi - lo))
+def test_coverage_counts_values_on_the_bounds_as_inside():
+    assert coverage([0.0, 5.0, 10.0, 11.0], [0.0] * 4, [10.0] * 4) == pytest.approx(0.75)
 
 
-def mae(actual: ArrayLike, predicted: ArrayLike) -> float:
-    """Mean absolute error in ct/kWh."""
-    y, p = _arrays(actual, predicted)
-    return float(np.mean(np.abs(y - p)))
+def test_coverage_and_width_reject_crossing_quantiles():
+    with pytest.raises(ValueError, match="crossing quantiles"):
+        coverage([1.0], [5.0], [2.0])
+    with pytest.raises(ValueError, match="crossing quantiles"):
+        mean_width([5.0], [2.0])
 
 
-def score(
-    actual: ArrayLike,
-    p10: ArrayLike,
-    p50: ArrayLike,
-    p90: ArrayLike,
-) -> dict[str, float]:
-    """Main metric followed by the accompanying scores."""
-    return {
-        "mean_pinball": mean_pinball_loss(
-            actual, {0.1: p10, 0.5: p50, 0.9: p90}
-        ),
-        "mae_p50": mae(actual, p50),
-        "coverage_p10_p90": coverage(actual, p10, p90),
-        "width_p10_p90": mean_width(p10, p90),
-    }
+def test_inputs_with_missing_values_or_different_shapes_are_rejected():
+    with pytest.raises(ValueError, match="NaN"):
+        mae([1.0, np.nan], [1.0, 1.0])
+    with pytest.raises(ValueError, match="differ in shape"):
+        mae([1.0, 2.0], [1.0])
 
 
-def baseline_quantiles(
-    prices: pd.DataFrame, value: str = "aep_ct_kwh"
-) -> pd.DataFrame:
-    """Quantiles of the same local quarter hour on D-2 .. D-8.
+def test_score_returns_the_main_metric_followed_by_the_accompanying_scores():
+    actual = np.array([1.0, 3.0, 8.0])
+    result = score(actual, p10=[0.0, 0.0, 0.0], p50=[2.0, 2.0, 2.0], p90=[4.0, 4.0, 4.0])
 
-    prices needs timestamp_local and value. Rows whose window is not
-    fully covered are NaN.
-    """
-    local = prices["timestamp_local"]
-    keys = pd.DataFrame(
-        {"date": local.dt.date, "tod": local.dt.strftime("%H:%M")},
-        index=prices.index,
-    )
-    # The repeated 02:xx hour at the end of summer time maps to its
-    # first occurrence.
-    lookup = (
-        prices[value]
-        .set_axis(pd.MultiIndex.from_frame(keys))
-        .groupby(level=[0, 1])
-        .first()
-    )
-    lagged = pd.concat(
-        [
-            pd.Series(
-                lookup.reindex(
-                    list(
-                        zip(
-                            keys["date"] - pd.Timedelta(days=d),
-                            keys["tod"],
-                        )
-                    )
-                ).to_numpy(),
-                index=prices.index,
-            )
-            for d in BASELINE_LAGS_DAYS
-        ],
-        axis=1,
-    )
-    complete = lagged.notna().all(axis=1)
-    return pd.DataFrame(
-        {
-            tau: lagged.quantile(tau, axis=1).where(complete)
-            for tau in QUANTILES
-        }
-    )
+    assert list(result) == ["mean_pinball", "mae_p50", "coverage_p10_p90", "width_p10_p90"]
+    assert result["mae_p50"] == pytest.approx(mae(actual, [2.0, 2.0, 2.0]))
+    assert result["coverage_p10_p90"] == pytest.approx(2 / 3)
+    assert result["width_p10_p90"] == pytest.approx(4.0)
 
 
-def main() -> None:
-    from energy_price.swissgrid import load_prices
+def test_baseline_quantiles_use_the_same_quarter_hour_on_d2_to_d8_and_leave_incomplete_windows_empty():
+    stamps = pd.date_range("2026-01-01 12:00", periods=12, freq="D", tz="Europe/Zurich")
+    prices = pd.DataFrame({"timestamp_local": stamps, "aep_ct_kwh": np.arange(12, dtype=float)})
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--raw", default="data/ausgleichpreis")
-    args = parser.parse_args()
-
-    prices = load_prices(args.raw)
-    prices = prices[prices["regime"] == "single_price"].reset_index(drop=True)
     base = baseline_quantiles(prices)
-    rows = base.notna().all(axis=1)
-    y = prices.loc[rows, "aep_ct_kwh"]
-    base = base.loc[rows]
-    stamps = prices.loc[rows, "timestamp_local"]
-    negative = y < 0
+    first_complete = max(BASELINE_LAGS_DAYS)
 
-    print(
-        f"quarter hours        {rows.sum()} "
-        f"({stamps.min():%Y-%m-%d} to {stamps.max():%Y-%m-%d})"
-    )
-    print(f"MAE                  {mae(y, base[0.5]):.2f} ct/kWh")
-    print(
-        f"MAE negative / rest  {mae(y[negative], base.loc[negative, 0.5]):.2f}"
-        f" / {mae(y[~negative], base.loc[~negative, 0.5]):.2f} ct/kWh"
-    )
-    print(
-        f"RMSE                 "
-        f"{np.sqrt(((y - base[0.5]) ** 2).mean()):.2f} ct/kWh"
-    )
-    print(
-        f"mean pinball         "
-        f"{mean_pinball(y, {tau: base[tau] for tau in QUANTILES}):.2f} ct/kWh"
-    )
-    print(f"coverage 80 %        {coverage(y, base[0.1], base[0.9]):.1%}")
-    print(f"interval width       {mean_width(base[0.1], base[0.9]):.2f} ct/kWh")
-
-
-if __name__ == "__main__":
-    main()
+    assert base.iloc[:first_complete].isna().all().all()
+    # day 10 (value 10) uses the values of days 2 to 8 before it, i.e. 2 to 8, median 5
+    assert base.loc[10, 0.5] == pytest.approx(5.0)
+    assert base.loc[10, 0.1] <= base.loc[10, 0.5] <= base.loc[10, 0.9]
