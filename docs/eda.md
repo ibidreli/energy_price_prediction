@@ -1,6 +1,6 @@
 # Explorative Analyse
 
-> Stand: 2026-10-07. Erste Runde (H1 bis H8): [Issue #3](https://github.com/ibidreli/energy_price_prediction/issues/3), [`notebooks/01_eda.ipynb`](../notebooks/01_eda.ipynb). Zweite Runde (H9 bis H12): [`notebooks/02_eda.ipynb`](../notebooks/02_eda.ipynb). Alle Zahlen lassen sich mit `make data` und `make notebook` reproduzieren. Der automatische Überblick pro Tabelle entsteht mit `make profile` (HTML in `reports/`, nicht versioniert). Deutungen sind ausdrücklich als Vermutung markiert.
+> Stand: 2026-10-07. Notebook [`notebooks/01_exploratory_data_analysis.ipynb`](../notebooks/01_exploratory_data_analysis.ipynb), erste Runde (H1 bis H8, [Issue #3](https://github.com/ibidreli/energy_price_prediction/issues/3)) in Kapitel 1.2, zweite Runde (H9 bis H12) in Kapitel 1.3. Alle Zahlen lassen sich mit `make data` und `make notebook` reproduzieren. Der automatische Überblick pro Tabelle entsteht mit `make profile` (HTML in `reports/`, nicht versioniert). Deutungen sind ausdrücklich als Vermutung markiert.
 
 ## Kurzfassung
 
@@ -14,28 +14,28 @@
 
 ## Hypothesen
 
-| # | Hypothese | Warum sie zählt | Ergebnis |
-|---|---|---|---|
-| H1 | Die Systembilanz (TSI) hat ein wiederkehrendes Muster nach Viertelstunde des Tages, Wochentag und Monat. | Die TSI erklärt den Preis am stärksten (Rangkorrelation −0.77). Ihre Muster sind erlaubte Merkmale, die TSI selbst nicht. | **teilweise:** mittags und nach Position in der Stunde ja, Wochentag und Monat schwach |
-| H2 | Die Richtung ist über mehrere Tage stabil: Zur gleichen Uhrzeit ist das System 2, 3 und 7 Tage später häufiger als zufällig in derselben Richtung. | Zeigt, ob die Vergangenheit bis D−2 etwas über den Liefertag sagt. | **kaum:** 54 % gegenüber 50.5 % Zufall |
-| H3 | Die prognostizierte Strahlung hängt mit der TSI zusammen, nicht nur mit dem Preis (Weg „Sonne → Abweichung → Preis“). | Das ist das fachliche Argument für Wetter im Modell. | **widerlegt** für die TSI; mit dem Preis deutlich |
-| H4 | Extrempreise (unter −100 und über +50 ct/kWh) häufen sich nach Uhrzeit, Wochentag, Monat, an Feiertagen und bei grosser \|TSI\|. | Extreme dominieren die Fehler und die Unsicherheit. | **bestätigt** |
-| H5 | Der parallel publizierte Preis `aep_ct_kwh` von Juli bis Dezember 2025 ist ähnlich verteilt wie 2026. Dann wären 6 Monate mehr Trainingsdaten nutzbar. | Prüft die Owner-Entscheidung „nur Daten ab 2026“. | **widerlegt:** deutlich andere Verteilung |
-| H6 | Preis und TSI unterscheiden sich an Feiertagen und Brückentagen von normalen Werktagen und Wochenenden. | Feiertage sind kantonal; nur 4 von 24 gelten überall. | **Preis: Hinweis ja**, nicht abgesichert (5 Tage); **TSI: nein**; Brückentage: keine Aussage |
-| H7 | Der Preis hat ein typisches Tagesprofil über die 96 Viertelstunden, und seine Streuung hängt von der Viertelstunde ab. | Grundlage für Baseline und Unsicherheitsbänder. | **bestätigt**, zusätzlich stark abhängig von der Saison |
-| H8 | Die TSI kippt innerhalb jeder Stunde, weil Fahrpläne zur vollen Stunde in Stufen wechseln, Verbrauch und PV aber gleitend. Die Richtung folgt der Steigung der Residuallast (Verbrauch minus PV). *Neu aus dem Review: Warum ist die erste Viertelstunde öfter short?* | Erklärt das Muster aus H1 und liefert Merkmale, die um 11:00 bekannt sind. | **bestätigt** (mit den Daten vereinbar; Fahrpläne und Verbrauch selbst sind nicht in den Daten) |
-| H9 | Wechselhaftes Wetter macht die Systembilanz unruhiger, und der Preis streut breiter. Gemessen über Bewölkung, Streuung der Strahlungsprognose zwischen den Standorten und Sprünge von Stunde zu Stunde. *Zweite Runde.* | Ein Merkmal für die **Breite** des Unsicherheitsbands. | **teilweise:** \|TSI\| ja, Preisband nein |
-| H10 | Temperatur, Wind, Niederschlag, Feuchte und Bewölkung nach Höhe tragen zusätzlich zur Strahlung bei, auch bei gleicher Uhrzeit und Strahlung. *Zweite Runde.* | Entscheidet, welche Wettervariablen ins Modell kommen. | **widerlegt** |
-| H11 | Das Preisniveau bis D−2 sagt etwas über den Liefertag (gleiche Viertelstunde 2 bis 28 Tage zuvor, Quantile der letzten Wochen). *Zweite Runde.* | Grundlage und Fenster der naiven Baseline. | **schwach**; Quantile der Vergangenheit sind zu schmal |
-| H12 | Die Zusammenhänge sind über die Monate stabil. *Zweite Runde.* | Bestimmt die Länge des Trainingsfensters. | **Bruch im Frühling**, ab April stabil |
+| # | Frage | Erwartung | Warum sie zählt | Ergebnis |
+|---|---|---|---|---|
+| H1 | Ist das System zu bestimmten Uhrzeiten, Wochentagen oder Monaten häufiger short oder long? | Ja, weil Verbrauch und Solarproduktion einem Tages-, Wochen- und Jahresrhythmus folgen. | Die TSI erklärt den Preis am stärksten (Rangkorrelation −0.77). Ihre Muster sind erlaubte Merkmale, die TSI selbst nicht. | **teilweise:** mittags und nach Position in der Stunde ja, Wochentag und Monat schwach |
+| H2 | Ist das System zur gleichen Uhrzeit 2, 3 oder 7 Tage später wieder in derselben Richtung? | Ja, etwas häufiger als per Zufall, weil sich Wetter und Verbrauch über einige Tage ähneln. | Zeigt, ob die Vergangenheit bis D−2 etwas über den Liefertag sagt. | **kaum:** 54 % gegenüber 50.5 % Zufall |
+| H3 | Hängt die Strahlungsprognose mit der Systembilanz zusammen oder nur mit dem Preis? | Viel Sonne führt zu grösseren Abweichungen und darüber zu anderen Preisen (Weg „Sonne → Abweichung → Preis“). | Das ist das fachliche Argument für Wetter im Modell. | **widerlegt** für die TSI; mit dem Preis deutlich |
+| H4 | Wann treten Extrempreise unter −100 und über +50 ct/kWh auf? | Sie häufen sich zu bestimmten Uhrzeiten, Wochentagen und Monaten, an Feiertagen und bei grosser \|TSI\|. | Extreme dominieren die Fehler und die Unsicherheit. | **bestätigt** |
+| H5 | Lassen sich die parallel publizierten Preise `aep_ct_kwh` von Juli bis Dezember 2025 zusätzlich nutzen? | Sie sind ähnlich verteilt wie 2026. Dann wären 6 Monate mehr Trainingsdaten nutzbar. | Prüft die Owner-Entscheidung „nur Daten ab 2026“. | **widerlegt:** deutlich andere Verteilung |
+| H6 | Verhalten sich Preis und TSI an Feiertagen und Brückentagen anders als an Werktagen und Wochenenden? | Ja, Feiertage ähneln Sonntagen, weil weniger Strom verbraucht wird. | Feiertage sind kantonal; nur 4 von 24 gelten überall. | **Preis: Hinweis ja**, nicht abgesichert (5 Tage); **TSI: nein**; Brückentage: keine Aussage |
+| H7 | Wie verläuft der Preis über die 96 Viertelstunden des Tages? | Er hat ein typisches Tagesprofil, und seine Streuung hängt von der Uhrzeit ab. | Grundlage für Baseline und Unsicherheitsbänder. | **bestätigt**, zusätzlich stark abhängig von der Saison |
+| H8 | Warum ist die erste Viertelstunde einer Stunde öfter short? *Beobachtung aus H1, neu aus dem Review.* | Erklärungsversuch nach Recherche: Fahrpläne wechseln zur vollen Stunde in Stufen, Verbrauch und Solarproduktion gleitend. Darum kippt die TSI innerhalb der Stunde, die Richtung folgt der Residuallast (Verbrauch minus PV). | Erklärt das Muster aus H1 und liefert Merkmale, die um 11:00 bekannt sind. | **bestätigt** (mit den Daten vereinbar; Fahrpläne und Verbrauch selbst sind nicht in den Daten) |
+| H9 | Wird die Systembilanz bei unsicherem Wetter unruhiger, und streut der Preis dann breiter? *Zweite Runde.* | Ja, weil die Solarproduktion bei wechselhaftem Wetter schwerer vorherzusagen ist. Gemessen über Bewölkung, Streuung der Strahlungsprognose zwischen den Standorten und Sprünge von Stunde zu Stunde. | Ein Merkmal für die **Breite** des Unsicherheitsbands. | **teilweise:** \|TSI\| ja, Preisband nein |
+| H10 | Helfen weitere Wettervariablen wie Temperatur, Wind, Niederschlag, Feuchte oder Bewölkung nach Höhe zusätzlich zur Strahlung? *Zweite Runde.* | Ja, auch bei gleicher Uhrzeit und gleicher Strahlung. | Entscheidet, welche Wettervariablen ins Modell kommen. | **widerlegt** |
+| H11 | Sagen die Preise bis D−2 etwas über den Preis am Liefertag? *Zweite Runde.* | Ja, der Preis derselben Viertelstunde 2 bis 28 Tage zuvor und Quantile der letzten Wochen geben einen Anhaltspunkt. | Grundlage und Fenster der naiven Baseline. | **schwach**; Quantile der Vergangenheit sind zu schmal |
+| H12 | Bleiben die gefundenen Zusammenhänge über die Monate gleich? *Zweite Runde.* | Ja, sie ändern sich von Monat zu Monat nicht grundlegend. | Bestimmt die Länge des Trainingsfensters. | **Bruch im Frühling**, ab April stabil |
 
 ## Vorgehen
 
 1. **Automatischer Bericht** mit `fg-data-profiling` 4.20.0, je Tabelle ein HTML. Das Paket hiess bis 2026 `ydata-profiling`. Es verlangt `pandas < 3`, darum läuft es in der eigenen Umgebung `.venv-profile` (gepinnt in `requirements-profile.lock`). Vorab geprüft: pandas 2.3.3 liest die mit pandas 3.0.6 geschriebenen Parquet-Dateien identisch; nur Textspalten kommen als `object` statt `str`.
-2. **Manuelle Analyse** nach dem Skill `exploratory-data-analysis`: Typen, Fehlwerte, Duplikate, Verteilungen, Ausreisser, Zusammenhänge, Zeitmuster. Danach die Hypothesen H1 bis H7.
+2. **Manuelle Analyse:** Typen, Fehlwerte, Duplikate, Verteilungen, Ausreisser, Zusammenhänge, Zeitmuster. Danach die Hypothesen H1 bis H7.
 3. **Wiederverwendete Berechnungen** liegen getestet in `src/energy_price/eda.py` (`tests/test_eda.py`): Viertelstunde der Lokalzeit, Feiertagsanteil nach PV-Leistung, Tagtypen, Vergleich der Richtung über Tage, Extremereignisse, Wetter von Stunden auf Viertelstunden.
 
-**Zeiträume:** Preise gibt es bis 31.08.2026, die TSI in der ersten Runde bis 03.10.2026 (Snapshot vom 04.10.). Alles, was TSI und Preis zusammen zeigt (H1, H3, H4, H6, H7, H8), nutzt Januar bis August. H2 betrachtet nur die TSI und nutzt den ganzen Zeitraum. Die zweite Runde (H9 bis H12) nutzt nur Januar bis August und hängt deshalb nicht davon ab, welcher Snapshot der neueste ist. Ein erneuter Lauf von `01_eda.ipynb` mit einem neueren Snapshot verschiebt die Zahlen zu H2 leicht.
+**Zeiträume:** Preise gibt es bis 31.08.2026, die TSI in der ersten Runde bis 03.10.2026 (Snapshot vom 04.10.). Alles, was TSI und Preis zusammen zeigt (H1, H3, H4, H6, H7, H8), nutzt Januar bis August. H2 betrachtet nur die TSI und nutzt den ganzen Zeitraum. Die zweite Runde (H9 bis H12) nutzt nur Januar bis August und hängt deshalb nicht davon ab, welcher Snapshot der neueste ist. Ein erneuter Lauf des Notebooks mit einem neueren Snapshot verschiebt die Zahlen zu H2 leicht.
 
 ## Datenqualität
 
@@ -57,7 +57,8 @@ Zuordnung von Wetter zu Viertelstunden: Die Viertelstunden h−1:00 bis h−1:45
 
 ### H1: Muster der Systembilanz
 
-**Hypothese:** Die TSI hat ein wiederkehrendes Muster nach Viertelstunde des Tages, Wochentag und Monat.
+**Frage:** Ist das System zu bestimmten Uhrzeiten, Wochentagen oder Monaten häufiger short oder long?
+**Erwartung:** Ja, weil Verbrauch und Solarproduktion einem Tages-, Wochen- und Jahresrhythmus folgen.
 **Ergebnis: teilweise bestätigt.**
 
 ![Heatmap TSI und Preis, Januar bis August](figures/eda_heatmap_tsi_price.png)
@@ -81,7 +82,8 @@ Zuordnung von Wetter zu Viertelstunden: Die Viertelstunden h−1:00 bis h−1:45
 
 ### H2: Stabilität der Richtung über Tage
 
-**Hypothese:** Zur gleichen Uhrzeit ist das System 2, 3 und 7 Tage später häufiger als zufällig in derselben Richtung.
+**Frage:** Ist das System zur gleichen Uhrzeit 2, 3 oder 7 Tage später wieder in derselben Richtung?
+**Erwartung:** Ja, etwas häufiger als per Zufall.
 **Ergebnis: kaum.** Ganzer TSI-Zeitraum bis 03.10.2026.
 
 ![Übereinstimmung der Richtung](figures/eda_direction_persistence.png)
@@ -98,7 +100,8 @@ Die Autokorrelation der Tagesmittel der TSI liegt bei 0.15 nach 2 Tagen und 0.01
 
 ### H3: Strahlung und Systembilanz
 
-**Hypothese:** Die prognostizierte Strahlung hängt mit der TSI zusammen, nicht nur mit dem Preis.
+**Frage:** Hängt die Strahlungsprognose mit der Systembilanz zusammen oder nur mit dem Preis?
+**Erwartung:** Viel Sonne führt zu grösseren Abweichungen und darüber zu anderen Preisen.
 **Ergebnis: für die TSI widerlegt, für den Preis deutlich.**
 
 ![Strahlung, TSI und Preis](figures/eda_radiation_tsi.png)
@@ -109,7 +112,8 @@ Die Autokorrelation der Tagesmittel der TSI liegt bei 0.15 nach 2 Tagen und 0.01
 
 ### H4: Extrempreise
 
-**Hypothese:** Extrempreise häufen sich nach Uhrzeit, Wochentag, Monat, an Feiertagen und bei grosser |TSI|.
+**Frage:** Wann treten Extrempreise auf?
+**Erwartung:** Sie häufen sich zu bestimmten Uhrzeiten, Wochentagen und Monaten, an Feiertagen und bei grosser |TSI|.
 **Ergebnis: bestätigt.**
 
 ![Extremereignisse](figures/eda_extremes.png)
@@ -126,7 +130,8 @@ Extreme betreffen 0.7 % der Viertelstunden. Sie sind kurz und an die Richtung ge
 
 ### H5: Preise 2025 gegenüber 2026
 
-**Hypothese:** `aep_ct_kwh` von Juli bis Dezember 2025 ist ähnlich verteilt wie 2026.
+**Frage:** Lassen sich die Preise `aep_ct_kwh` von Juli bis Dezember 2025 zusätzlich nutzen?
+**Erwartung:** Sie sind ähnlich verteilt wie 2026.
 **Ergebnis: widerlegt.**
 
 ![2025 und 2026](figures/eda_2025_vs_2026.png)
@@ -144,7 +149,8 @@ Der Kolmogorov-Smirnov-Abstand (grösster Unterschied der beiden Verteilungsfunk
 
 ### H6: Feiertage und Brückentage
 
-**Hypothese:** Preis und TSI unterscheiden sich an Feiertagen und Brückentagen von normalen Werktagen und Wochenenden.
+**Frage:** Verhalten sich Preis und TSI an Feiertagen und Brückentagen anders?
+**Erwartung:** Ja, Feiertage ähneln Sonntagen.
 **Ergebnis: beim Preis ein Hinweis, nicht abgesichert; bei der TSI nein.**
 
 ![Preis nach Tagtyp](figures/eda_day_types.png)
@@ -161,7 +167,8 @@ Feiertag heisst: Montag bis Freitag, an dem Kantone mit mindestens 50 % der PV-L
 
 ### H7: Tagesprofil
 
-**Hypothese:** Der Preis hat ein typisches Tagesprofil, und seine Streuung hängt von der Viertelstunde ab.
+**Frage:** Wie verläuft der Preis über den Tag?
+**Erwartung:** Er hat ein typisches Tagesprofil, und seine Streuung hängt von der Uhrzeit ab.
 **Ergebnis: bestätigt, zusätzlich stark abhängig von der Saison.**
 
 ![Tagesprofil P10, P50, P90](figures/eda_daily_profile.png)
@@ -173,7 +180,8 @@ Feiertag heisst: Montag bis Freitag, an dem Kantone mit mindestens 50 % der PV-L
 
 ### H8: Kippen der Systembilanz innerhalb der Stunde
 
-**Hypothese:** Fahrpläne und viele Kraftwerke wechseln zur vollen Stunde in Stufen, Verbrauch und PV-Erzeugung ändern sich gleitend. Darum kippt die TSI innerhalb jeder Stunde, und die Richtung folgt der Steigung der Residuallast (Verbrauch minus PV): Steigt sie, ist :00 long und :45 short; fällt sie, umgekehrt.
+**Frage:** Warum ist die erste Viertelstunde einer Stunde öfter short (Beobachtung aus H1)?
+**Erklärungsversuch nach Recherche:** Fahrpläne und viele Kraftwerke wechseln zur vollen Stunde in Stufen, Verbrauch und PV-Erzeugung ändern sich gleitend. Darum kippt die TSI innerhalb jeder Stunde, und die Richtung folgt der Steigung der Residuallast (Verbrauch minus PV): Steigt sie, ist :00 long und :45 short; fällt sie, umgekehrt.
 **Ergebnis: bestätigt**, soweit es ohne Fahrplan- und Verbrauchsdaten prüfbar ist.
 
 **Mechanismus aus der Literatur:**
@@ -203,7 +211,8 @@ Zeitraum: Viertelstunden mit finalem Preis, 01.01. bis 31.08.2026. Wetter aus de
 
 ### H9: Wetter als Unsicherheitssignal
 
-**Hypothese:** Wechselhaftes Wetter macht die Systembilanz unruhiger, und der Preis streut breiter.
+**Frage:** Wird die Systembilanz bei unsicherem Wetter unruhiger, und streut der Preis dann breiter?
+**Erwartung:** Ja, weil die Solarproduktion bei wechselhaftem Wetter schwerer vorherzusagen ist.
 **Ergebnis: teilweise.** Die Systembilanz ja, das Preisband nicht.
 
 ![Bewölkung, |TSI| und Preisband](figures/eda2_weather_uncertainty.png)
@@ -215,7 +224,8 @@ Zeitraum: Viertelstunden mit finalem Preis, 01.01. bis 31.08.2026. Wetter aus de
 
 ### H10: weitere Wettervariablen
 
-**Hypothese:** Temperatur, Wind, Niederschlag, Feuchte und Bewölkung nach Höhe tragen zusätzlich zur Strahlung bei.
+**Frage:** Helfen weitere Wettervariablen zusätzlich zur Strahlung?
+**Erwartung:** Ja, Temperatur, Wind, Niederschlag, Feuchte und Bewölkung nach Höhe tragen etwas bei.
 **Ergebnis: widerlegt.**
 
 ![Weitere Wettervariablen](figures/eda2_weather_variables.png)
@@ -227,7 +237,8 @@ Zeitraum: Viertelstunden mit finalem Preis, 01.01. bis 31.08.2026. Wetter aus de
 
 ### H11: vergangene Preise
 
-**Hypothese:** Das Preisniveau bis D−2 sagt etwas über den Liefertag.
+**Frage:** Sagen die Preise bis D−2 etwas über den Preis am Liefertag?
+**Erwartung:** Ja, sie geben einen Anhaltspunkt.
 **Ergebnis: nur schwach.**
 
 ![Quantile der Vergangenheit](figures/eda2_past_windows.png)
@@ -248,7 +259,8 @@ Verglichen auf denselben 186 Liefertagen ab 27.02.2026. Das ist eine Vorschau au
 
 ### H12: Stabilität über die Monate
 
-**Hypothese:** Die Zusammenhänge sind über die Monate stabil.
+**Frage:** Bleiben die gefundenen Zusammenhänge über die Monate gleich?
+**Erwartung:** Ja, sie ändern sich nicht grundlegend.
 **Ergebnis: Bruch im Frühling, ab April weitgehend stabil.**
 
 ![Stabilität über die Monate](figures/eda2_stability.png)

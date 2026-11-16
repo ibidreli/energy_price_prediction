@@ -1,4 +1,4 @@
-"""Reusable calculations of the exploratory analysis (notebooks/01_eda.ipynb).
+"""Reusable calculations of the exploratory analysis (notebooks/01_exploratory_data_analysis.ipynb).
 
 Everything here describes the data. Nothing builds a model feature: where a calculation could become
 one, the docstring says what is known at the issue time (see availability.py and docs/data.md).

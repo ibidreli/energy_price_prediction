@@ -1,25 +1,20 @@
 # Bandit über die Modelle: explorative Architekturprüfung
 
-**Einordnung:** explorative Architekturprüfung, kein Modellkandidat nach Standardablauf ([Issue #21](https://github.com/ibidreli/energy_price_prediction/issues/21)).
+**Status:** abgeschlossen, nicht weiterverfolgt, kein Modellkandidat nach Standardablauf · **Verantwortlich:** Luca Manna · **Issue:** [#21](https://github.com/ibidreli/energy_price_prediction/issues/21) · **Stand der Zahlen:** 05.11.2026
 
-**Ergebnis:** für dieses Problem ungeeignet, nicht weiterverfolgt. Der Holdout wurde nicht verwendet.
+Lesbarer Einstieg: [`notebooks/03_bandit_architektur.ipynb`](../../../notebooks/03_bandit_architektur.ipynb). Der Holdout wurde nicht verwendet.
 
-Lesbarer Einstieg: [`notebooks/03_bandit_architektur.ipynb`](../../../notebooks/03_bandit_architektur.ipynb).
+## 1. Hypothese
 
-## Herkunft und Frage
+Ein Bandit kann pro Viertelstunde laufend das beste bestehende Modell wählen und so `gbm_quantile` im Pinball-Loss schlagen (3.1633, Juni bis August).
 
-Die Idee stammt aus einem Vortrag von CH Media: Dort verteilt ein Bandit mit Thompson Sampling den Traffic live auf mehrere Empfehlungs-Blends, weil sich die Nachfrage mit der Nachrichtenlage ändert.
+**Kriterium:** Pinball-Loss tiefer als `gbm_quantile`, und das 95-%-Intervall der täglichen Differenz liegt ganz unter 0 (Block-Bootstrap über Tage, Blöcke von 7 Tagen, 5000 Wiederholungen).
 
-**Frage:** Kann ein Bandit pro Viertelstunde das beste bestehende Modell laufend wählen und so `gbm_quantile` im Pinball Loss schlagen (3.1633, Juni bis August)?
+## 2. Herleitung
 
-**Kriterium:** Pinball Loss tiefer als `gbm_quantile`, und das 95-%-Intervall der täglichen Differenz liegt ganz unter 0 (Block-Bootstrap über Tage, Blöcke von 7 Tagen, 5000 Wiederholungen).
-
-## Ablauf und Grenzen der Aussage
-
-1. Der [Vorlauf](vorlauf/) mit fünf Modellen, inklusive Regime-Modell, wertete die Testmonate am 05.11.2026 aus.
-2. Erst danach wurden Frage und Kriterium festgehalten, und danach entstand diese versionierte Fassung mit vier Modellen.
-
-Der Test ist deshalb **nicht blind**. Die Einstellungen stammen aber nur aus April und Mai. Der Vergleich mit den regulären Modellen ist nicht gleichwertig, weil diese Prüfung vom [Standardablauf](../../models/README.md) abweicht:
+- **Herkunft der Idee:** ein Vortrag von CH Media. Dort verteilt ein Bandit mit Thompson Sampling den Traffic live auf mehrere Empfehlungs-Blends, weil sich die Nachfrage mit der Nachrichtenlage ändert
+- **Übertragung:** Kein Modell ist zu jeder Tageszeit das beste. Mittags hilft die Sonne, abends ist oft die Referenz besser (`gbm_quantile`, `baseline_model`)
+- **Grenzen der Aussage:** Diese Prüfung weicht vom [Standardablauf](../../models/README.md) ab, der Vergleich mit den regulären Modellen ist deshalb nicht gleichwertig
 
 | | Standardablauf | Diese Prüfung |
 |---|---|---|
@@ -28,9 +23,10 @@ Der Test ist deshalb **nicht blind**. Die Einstellungen stammen aber nur aus Apr
 | Reihenfolge | Hypothese vor dem Test | Hypothese nach dem Vorlauf |
 | Holdout | einmal am Schluss | keiner |
 
-Weitere Grenzen: nur eine Saison und ein Dutzend verglichene Strategien ohne Korrektur für Mehrfachtests. Ein kleiner Nutzen laufender Gewichte in einer anderen Saison oder mit unterschiedlicheren Modellen ist damit nicht ausgeschlossen.
+## 3. Vorgehen
 
-## Vorgehen
+1. Der [Vorlauf](vorlauf/) mit fünf Modellen, inklusive Regime-Modell, wertete die Testmonate am 05.11.2026 aus
+2. Erst danach wurden Frage und Kriterium festgehalten, und danach entstand diese versionierte Fassung mit vier Modellen. Der Test ist deshalb **nicht blind**, die Einstellungen stammen aber nur aus April und Mai
 
 Die Arme sind die Prognosen von Referenz, B1, B2 und Gradient Boosting aus dem gemeinsamen Backtest. Jede Entscheidung für den Liefertag D nutzt nur Fehler bis D−2.
 
@@ -46,11 +42,39 @@ Die Arme sind die Prognosen von Referenz, B1, B2 und Gradient Boosting aus dem g
 
 Einstellungen: [`tune_selection.csv`](results/tune_selection.csv). Thompson wird über 200 Seeds gemittelt.
 
-## Ergebnis (Juni bis August, 91 Tage)
+## 4. Erkenntnisse
 
-Differenz zu `gbm_quantile`, das auch auf April und Mai das beste Einzelmodell war. Alle Werte: [`test_results.csv`](results/test_results.csv).
+**Der Bandit lernt praktisch nichts**
+- Die Anteile bleiben nahe bei je 25 %, er wählt also fast zufällig
+- Sein Intervall liegt ganz über 0, er ist klar schlechter als das Gradient Boosting und schlägt auch die Referenz nicht
 
-| Strategie | Pinball Loss | Differenz | 95-%-Intervall (ct/kWh) | Coverage |
+**Das Problem des Bandits haben wir nicht**
+- Ein Bandit ist nötig, wenn nur die Rückmeldung des gewählten Arms sichtbar ist
+- Hier prognostizieren alle Modelle, und alle Fehler werden bekannt („Prediction with Expert Advice“). Exploration kostet Genauigkeit und bringt keine zusätzliche Information
+
+**Zu wenig Rückmeldung pro Entscheid**
+- CH Media verteilt alle 10 Minuten neu
+- Hier gibt es pro Viertelstunde eine Beobachtung am Tag, erst nach rund zwei Tagen bekannt, bei stark streuenden Verlusten
+
+**Das „perfekte Modell pro Slot“ ist überwiegend Rauschen**
+- Die −14.55 % setzen voraus, dass der Preis schon bekannt ist
+- Gewinner pro Viertelstunde sind kaum stabil, und aus April und Mai übernommen sind sie schlechter als das Einzelmodell
+
+**Die laufende Gewichtung ist kein gesicherter Gewinn**
+- Alle Intervalle schliessen 0 ein
+- Die beste Variante ist instabil. Im Vorlauf lag die Gewichtung pro Stunde vorn (−0.46 %), hier die pro Viertelstunde (−0.45 %)
+- Der Bandit war auch im Vorlauf klar schlechter (+1.5 %)
+
+**Die Coverage bleibt zu tief**
+- Auch die Gewichtungen erreichen nur rund 76 % statt 80 %. Dafür sind die kalibrierten Bänder vorgesehen (#19)
+
+**Grenzen:** nur eine Saison und ein Dutzend verglichene Strategien ohne Korrektur für Mehrfachtests. Ein kleiner Nutzen laufender Gewichte in einer anderen Saison oder mit unterschiedlicheren Modellen ist damit nicht ausgeschlossen.
+
+## 5. Outcome
+
+Test Juni bis August, 91 Tage. Differenz zu `gbm_quantile`, das auch auf April und Mai das beste Einzelmodell war. Alle Werte: [`test_results.csv`](results/test_results.csv).
+
+| Strategie | Pinball-Loss | Differenz | 95-%-Intervall (ct/kWh) | Coverage |
 |---|---|---|---|---|
 | Thompson-Bandit ohne Minimum | 3.207 | +1.37 % | +0.030 bis +0.059 | 74.0 % |
 | **Thompson-Bandit, 5 % Minimum** | **3.207** | **+1.37 %** | **+0.030 bis +0.059** | **74.0 %** |
@@ -79,25 +103,20 @@ Stabilität der Gewinner ([`test_persistence.csv`](results/test_persistence.csv)
 | Gewinner auf den jeweils anderen Testtagen gewählt | nur −0.27 % statt −1.72 % im Nachhinein |
 | Tage für 80 % Power beim Vergleich Boosting gegen Referenz in einer Viertelstunde | Median 651, vorhanden sind 91 |
 
-## Einordnung des Ergebnisses
+## 6. Entscheid
 
-- **Der Bandit lernt praktisch nichts.** Die Anteile bleiben nahe bei je 25 %, er wählt also fast zufällig. Sein Intervall liegt ganz über 0, er ist also klar schlechter als das Gradient Boosting, und auch die Referenz schlägt er nicht.
-- **Das Problem des Bandits haben wir nicht.** Ein Bandit ist nötig, wenn nur die Rückmeldung des gewählten Arms sichtbar ist. Hier prognostizieren alle Modelle und alle Fehler werden bekannt („Prediction with Expert Advice“). Exploration kostet Genauigkeit und bringt keine zusätzliche Information.
-- **Zu wenig Rückmeldung pro Entscheid.** CH Media verteilt alle 10 Minuten neu. Hier gibt es pro Viertelstunde eine Beobachtung am Tag, erst nach rund zwei Tagen bekannt, bei stark streuenden Verlusten.
-- **Das „perfekte Modell pro Slot“ ist überwiegend Rauschen.** Die −14.55 % setzen voraus, dass der Preis schon bekannt ist. Gewinner pro Viertelstunde sind kaum stabil, und aus April/Mai übernommen sind sie schlechter als das Einzelmodell.
-- **Die laufende Gewichtung ist kein gesicherter Gewinn.** Alle Intervalle schliessen 0 ein. Die beste Variante ist instabil: Im Vorlauf lag die Gewichtung pro Stunde vorn (−0.46 %), hier die pro Viertelstunde (−0.45 %). Der Bandit war auch im Vorlauf klar schlechter (+1.5 %).
-- **Die Coverage bleibt zu tief.** Auch die Gewichtungen erreichen nur rund 76 % statt 80 %. Dafür sind die kalibrierten Bänder vorgesehen (Issue #19).
+**Nicht weiterverfolgt**, weil Thompson Sampling als Architektur nicht zu diesem Problem passt und die laufende Gewichtung keinen gesicherten Vorteil bringt, der die zusätzliche Komplexität rechtfertigt.
 
-**Entscheid:** Thompson Sampling passt als Architektur nicht zu diesem Problem, und die laufende Gewichtung bringt keinen gesicherten Vorteil, der die zusätzliche Komplexität rechtfertigt. Beides wird nicht weiterverfolgt.
+## 7. Belege
 
-## Nachrechnen
+- **Issue und PR:** #21, PR #22
+- **Code:** [`src/energy_price/exploration/bandit/`](../../../src/energy_price/exploration/bandit/). Ein Holdout-Schritt existiert nicht
+- **Tests:** `tests/test_bandit_exploration.py`. Sie prüfen unter anderem, dass keine Entscheidung Preise nach D−2 sieht und der Bandit nur vom gewählten Modell lernt
+- **Kontrolle:** Die Arme reproduzieren die dokumentierten Test-Scores der Modelle (Boosting 3.1633, Referenz 3.2018, B2 3.2254)
+- **Vorlauf:** [`vorlauf/`](vorlauf/) enthält die Skripte und die Rohausgabe unverändert. Die Skripte brauchen die Prognosen aller fünf Modelle, das Regime-Modell ist seit #29 in `main`
 
 ```bash
 make bandit-exploration STEP=tune   # Einstellungen auf April und Mai wählen
 make bandit-exploration STEP=test   # CHOSEN auf Juni bis August, schreibt results/
 pytest tests/test_bandit_exploration.py
 ```
-
-- **Code:** [`src/energy_price/exploration/bandit/`](../../../src/energy_price/exploration/bandit/). Die Tests prüfen unter anderem, dass keine Entscheidung Preise nach D−2 sieht und der Bandit nur vom gewählten Modell lernt. Ein Holdout-Schritt existiert nicht.
-- **Kontrolle:** Die Arme reproduzieren die dokumentierten Test-Scores der Modelle (Boosting 3.1633, Referenz 3.2018, B2 3.2254).
-- **Vorlauf:** [`vorlauf/`](vorlauf/) enthält die Skripte und die Rohausgabe unverändert. Die Skripte brauchen die Prognosen aller fünf Modelle, das Regime-Modell ist seit #29 in `main`.

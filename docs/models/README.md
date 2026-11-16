@@ -4,33 +4,29 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 
 ## 1. Übersicht
 
-| Modell | Ordner | Status | MAE P50 Test | Pinball Loss Test |
-|---|---|---|---|---|
-| Referenz (letzte 56 Tage) | `models/shared/reference.py` | Massstab | 9.92 | 3.20 |
-| Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
-| Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | Test abgeschlossen; Teamreview offen | 9.79 | 3.16 |
-| Regime-Modell | [`regime_mixture/`](../../src/energy_price/models/regime_mixture/) | abgeschlossen, nicht übernommen | 9.80 | 3.23 |
-| Quantil-LASSO `B2` | [`quantile_lasso/`](../../src/energy_price/models/quantile_lasso/) | abgeschlossen, nicht übernommen | 9.80 | 3.22 |
-| Quantil-LASSO mit Daten bis D−2 (`B4`) | [`quantile_lasso/`](../../src/energy_price/models/quantile_lasso/) | abgeschlossen, nicht übernommen | 9.95 | 3.27 |
+Stand der Zahlen: Test Juni bis August, 91 Tage. Preise und Fehler in ct/kWh. Jeder Steckbrief folgt derselben Vorlage mit Hypothese, Herleitung, Vorgehen, Erkenntnissen, Outcome, Entscheid und Belegen ([`_template/README.md`](../../src/energy_price/models/_template/README.md)).
 
-Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
+| Modell | Verantwortlich | Warum dieses Modell | Pinball-Loss | MAE P50 | Coverage | Entscheid |
+|---|---|---|---|---|---|---|
+| Referenz (letzte 56 Tage, [`reference.py`](../../src/energy_price/models/shared/reference.py)) | Team | einfachste Prognose ohne Modell, Fenster aus EDA H11 | 3.20 | 9.92 | 75.2 % | Massstab |
+| [Baseline B2](../../src/energy_price/models/baseline_model/README.md) | Rodrigo Urech | Kalender und Sonne (H1, H3, H8), lineare Quantilregression ist erklärbar | 3.23 | 9.81 | 73.6 % | bleibt als erklärbarer Massstab |
+| [Gradient Boosting](../../src/energy_price/models/gbm_quantile/README.md) | Elias Pulver | findet Wechselwirkungen von Sonne, Uhrzeit und Saison selbst (H3, H7, H8) | 3.16 | **9.79** | 74.1 % | Kandidat für den Holdout |
+| [Regime-Modell short/long](../../src/energy_price/models/regime_mixture/README.md) | Rodrigo Urech | zwei Preiswolken je Richtung, Richtung zuerst schätzen | 3.23 | 9.80 | 74.9 % | nicht übernommen, Richtung am Vortag zu schwach vorhersagbar |
+| [Kalibrierte Bänder auf B2](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | Bänder aller Modelle zu schmal (Coverage rund 74 % statt 80 %), Korrektur aus vergangenen Fehlern bis D−2 | 3.17 | 9.81 | 77.7 % | besser als B2, Coverage-Ziel 78 % knapp verfehlt |
+| [Kalibrierte Bänder auf Boosting](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | gleiche Korrektur auf Gradient Boosting | **3.13** | **9.79** | 77.4 % | bester Pinball-Loss, Coverage-Ziel 78 % knapp verfehlt |
+| [Quantil-LASSO `B2`](../../src/energy_price/models/quantile_lasso/README.md) | Luca Manna | L1-Strafe wählt die Merkmale selbst, prüft ob Daten bis D−2 helfen | 3.22 | 9.80 | 74.5 % | nicht übernommen, schlägt die Referenz nicht |
+| [Quantil-LASSO mit Daten bis D−2 (`B4`)](../../src/energy_price/models/quantile_lasso/README.md) | Luca Manna | zusätzlich Preisniveau, Systembilanz und Bewölkung bis D−2 | 3.27 | 9.95 | 75.2 % | nicht übernommen, Daten bis D−2 helfen nicht |
 
-Ein Bandit über die Modelle wurde explorativ geprüft und nicht weiterverfolgt. Er ist kein Modellkandidat und steht deshalb nicht in dieser Tabelle: [`docs/exploration/bandit/`](../exploration/bandit/README.md).
+Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Laufende Modelle stehen am Schluss unter `6. In Arbeit`.
 
-Quantile Boosting erreicht im **Tuning April/Mai** einen Pinball-Loss von 3.3087
-(Referenz 3.4485; Baseline B2 3.3112), bei 76.35 % Coverage. Das sind 4.05 % weniger
-Loss als die Referenz, aber praktisch gleich viel wie bei der linearen Baseline.
-Diese Tuning-Zahlen sind nicht mit den Testzahlen der Tabelle vergleichbar.
-Im **Test Juni bis August** erreicht Boosting 3.1633 gegenüber 3.2018 für die Referenz
-und 3.2254 für B2: 1.20 % bzw. 1.93 % weniger Loss. Die Coverage bleibt mit 74.08 %
-unter dem Ziel von 80 %. Der Holdout wurde nicht geöffnet; das Setting bleibt unverändert.
+**Explorativ geprüft, kein Modellkandidat:** Ein [Bandit über die Modelle](../exploration/bandit/README.md) (Luca Manna, #21) wählt pro Viertelstunde laufend ein Modell. Er lernt praktisch nichts und wurde nicht weiterverfolgt.
 
 ## 2. Aufbau eines Modellordners
 
 ```text
 src/energy_price/models/<name>/
 ├── __init__.py   leer, damit Python den Ordner findet
-├── README.md     Steckbrief: Hypothese, Modell und Features, Ergebnis, Entscheid
+├── README.md     Steckbrief nach der Vorlage, sieben Abschnitte von Hypothese bis Belege
 └── model.py      das Modell und seine Einstellungen
 ```
 
@@ -150,37 +146,10 @@ Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile 
 - **Reproduzierbar:** Modelle mit Zufall setzen einen festen Seed (`random_state=0`).
 - **Tests sind optional:** `tests/test_model_template.py` zeigt, wie ein Modell getestet wird.
 
-## 6. To-do: geplante Modelle
+## 6. In Arbeit
 
-Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder sind noch geplant. Quantile Boosting, das Regime-Modell und das Quantil-LASSO sind implementiert; den aktuellen Stand und die Ergebnisse beschreiben ihre Modell-READMEs.
+Diese Modelle sind noch nicht in `main`. Ihre Steckbriefe übernehmen die Vorlage im jeweiligen Pull Request.
 
-**Kalibrierte Bänder** · [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/)
-
-Korrigiert die Bänder der Baseline anhand der Fehler der letzten Wochen, damit sie so oft treffen wie vorgesehen (Conformal Prediction).
-
-- Die Bänder der Baseline sind zu schmal, der echte Preis liegt häufiger ausserhalb als vorgesehen.
-- Ein verlässliches Band ist für den Use Case zentral, weil eine Bilanzgruppe damit ihr Risiko abschätzt.
-- Einfach umzusetzen, und der Korrekturschritt lässt sich später auf jedes Modell anwenden.
-
-**Gradient Boosting (implementiert)** · [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/)
-
-Viele kleine Entscheidungsbäume, die nacheinander die Fehler der vorherigen korrigieren und direkt P10, P50 und P90 vorhersagen.
-
-- Der Preis hängt von Kombinationen ab, zum Beispiel wirkt die Sonne je nach Uhrzeit und Jahreszeit anders. Ein lineares Modell bildet solche Wechselwirkungen nur ab, wenn man sie von Hand vorgibt; ein Baummodell findet sie selbst.
-- Die gruppierte Permutation Importance zeigt, wie stark das Modell auf Kalender, Feiertage und Strahlung angewiesen ist. Sie beschreibt die Nutzung der Merkmale durch das Modell, keinen kausalen Beitrag. Das wurde im Review ausdrücklich verlangt.
-
-**Regime-Modell short/long (implementiert)** · [`regime_mixture/`](../../src/energy_price/models/regime_mixture/)
-
-Schätzt zuerst, ob im Netz Strom fehlt (short) oder zu viel da ist (long), und sagt den Preis dann für beide Situationen getrennt voraus.
-
-- Fehlt Strom, ist der Preis meist hoch; gibt es zu viel Strom, ist er tief und teils negativ. Ein einzelnes Modell mittelt die beiden Situationen und landet dazwischen, wo kaum echte Preise liegen.
-- Im Review wurde dieser Sprung bei unterdeckter Regelzone als zentraler Punkt genannt.
-- Die geschätzte Richtung zeigt zusätzlich, ob eine Bilanzgruppe bei einer Abweichung zahlt oder vergütet wird.
-- **Ergebnis (#16):** gleich gut wie die Baseline, nicht besser als die Referenz. Mit bekannter Richtung läge der Pinball Loss 39 % unter der Referenz; die Richtung ist am Vortag aber nur schwach vorhersagbar (AUC 0.62, kaum besser als der Anteil short pro Viertelstunde). Details im [Steckbrief](../../src/energy_price/models/regime_mixture/README.md).
-
-**Quantil-LASSO mit Daten bis D−2 (implementiert)** · [`quantile_lasso/`](../../src/energy_price/models/quantile_lasso/)
-
-Lineare Quantilregression wie die Baseline, aber mit L1-Strafe und zusätzlich mit Preisniveau (`B3`) sowie Systembilanz und Bewölkung bis D−2 (`B4`). Das Modell wählt selbst, welche Merkmale es behält.
-
-- Beantwortet die offene Frage, ob vergangene Preise und die Systembilanz bis D−2 der Prognose am Vortag helfen. Ein negatives Ergebnis spricht auch gegen ein Sequenzmodell wie ein LSTM.
-- **Ergebnis (#27):** Kein Setting schlägt die Referenz, deshalb keine Aufnahme in den Pool. Im Test Juni bis August erreicht `B2` mit `alpha` 0.001 einen Pinball Loss von 3.217 (Referenz 3.202, Intervall der Differenz schliesst 0 ein), `B4` mit `alpha` 0.03 3.267. Die Daten bis D−2 helfen nicht: `B4` ist um 0.050 schlechter als `B2`, das 95-%-Intervall liegt ganz über 0. Systembilanz und Bewölkung nutzt das Modell im Test nie; mit Preismerkmalen bildet es im Wesentlichen die Referenz nach. Das ist ein schwacher Hinweis gegen ein LSTM, mit der Grenze eines linearen Modells. Details im [Steckbrief](../../src/energy_price/models/quantile_lasso/README.md).
+| Modell | Verantwortlich | Issue und PR | Idee |
+|---|---|---|---|
+| Zeitabhängige Modellwahl (`time_router`) | Elias Pulver | #25 | pro Zeitfenster des Liefertags das Modell nutzen, das dort verlässlich am besten ist. Boosting ist vormittags bis mittags besser, abends oft die Referenz |
