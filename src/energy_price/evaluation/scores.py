@@ -13,7 +13,22 @@ import pandas as pd
 from energy_price.features.dataset import TARGET
 from energy_price.models.shared.base import COLUMNS, QUANTILES
 
-__all__ = ["COLUMNS", "QUANTILES", "TARGET", "daily_pinball", "pinball", "pinball_per_row", "score", "skill_score"]
+__all__ = ["COLUMNS", "QUANTILES", "TARGET", "block_bootstrap", "daily_pinball", "pinball", "pinball_per_row", "score",
+           "skill_score"]
+
+BOOTSTRAP_REPS = 5000
+BOOTSTRAP_BLOCK_DAYS = 7
+
+
+def block_bootstrap(diff: np.ndarray, reps: int = BOOTSTRAP_REPS, block: int = BOOTSTRAP_BLOCK_DAYS,
+                    seed: int = 0) -> tuple[float, float]:
+    """95 % interval of a mean daily difference; blocks of days keep the dependence between days."""
+    rng = np.random.default_rng(seed)
+    n = len(diff)
+    starts = rng.integers(0, n - block + 1, (reps, n // block + 1))
+    index = (starts[..., None] + np.arange(block)).reshape(reps, -1)[:, :n]
+    low, high = np.percentile(diff[index].mean(axis=1), [2.5, 97.5])
+    return float(low), float(high)
 
 
 def pinball(actual: np.ndarray | pd.Series, predicted: np.ndarray | pd.Series, tau: float) -> np.ndarray:

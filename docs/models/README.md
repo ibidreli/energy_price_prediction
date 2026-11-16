@@ -14,6 +14,8 @@ Stand der Zahlen: Test Juni bis August, 91 Tage. Preise und Fehler in ct/kWh. Je
 | [Regime-Modell short/long](../../src/energy_price/models/regime_mixture/README.md) | Rodrigo Urech | zwei Preiswolken je Richtung, Richtung zuerst schätzen | 3.23 | 9.80 | 74.9 % | nicht übernommen, Richtung am Vortag zu schwach vorhersagbar |
 | [Kalibrierte Bänder auf B2](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | Bänder aller Modelle zu schmal (Coverage rund 74 % statt 80 %), Korrektur aus vergangenen Fehlern bis D−2 | 3.17 | 9.81 | 77.7 % | besser als B2, Coverage-Ziel 78 % knapp verfehlt |
 | [Kalibrierte Bänder auf Boosting](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | gleiche Korrektur auf Gradient Boosting | **3.13** | **9.79** | 77.4 % | bester Pinball-Loss, Coverage-Ziel 78 % knapp verfehlt |
+| [Quantil-LASSO `B2`](../../src/energy_price/models/quantile_lasso/README.md) | Luca Manna | L1-Strafe wählt die Merkmale selbst, prüft ob Daten bis D−2 helfen | 3.22 | 9.80 | 74.5 % | nicht übernommen, schlägt die Referenz nicht |
+| [Quantil-LASSO mit Daten bis D−2 (`B4`)](../../src/energy_price/models/quantile_lasso/README.md) | Luca Manna | zusätzlich Preisniveau, Systembilanz und Bewölkung bis D−2 | 3.27 | 9.95 | 75.2 % | nicht übernommen, Daten bis D−2 helfen nicht |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Laufende Modelle stehen am Schluss unter `6. In Arbeit`.
 
@@ -150,5 +152,4 @@ Diese Modelle sind noch nicht in `main`. Ihre Steckbriefe übernehmen die Vorlag
 
 | Modell | Verantwortlich | Issue und PR | Idee |
 |---|---|---|---|
-| Quantil-LASSO (`quantile_lasso`) | Luca Manna | #27, PR #35 | Quantilregression mit allen um D−1 11:00 bekannten Daten, auch Preisniveau und Systembilanz bis D−2. Das LASSO behält nur die Merkmale, die tragen. Beantwortet, ob vergangene Preise und Systembilanz überhaupt helfen |
 | Zeitabhängige Modellwahl (`time_router`) | Elias Pulver | #25 | pro Zeitfenster des Liefertags das Modell nutzen, das dort verlässlich am besten ist. Boosting ist vormittags bis mittags besser, abends oft die Referenz |

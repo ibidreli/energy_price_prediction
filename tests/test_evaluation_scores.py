@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from energy_price.evaluation.scores import daily_pinball, pinball, score, skill_score
+from energy_price.evaluation.scores import block_bootstrap, daily_pinball, pinball, score, skill_score
 
 
 def frame(y, q10, q50, q90, day="2026-07-01"):
@@ -55,3 +55,35 @@ def test_daily_pinball_averages_per_delivery_day():
 
     assert daily.loc[pd.Timestamp("2026-07-01")] == pytest.approx(0.0)
     assert daily.loc[pd.Timestamp("2026-07-02")] == pytest.approx(0.1 * 10 / 3)
+
+
+def test_block_bootstrap_of_a_constant_difference_is_that_constant():
+    low, high = block_bootstrap(np.full(30, -0.5), reps=100)
+
+    assert (low, high) == (pytest.approx(-0.5), pytest.approx(-0.5))
+
+
+def test_block_bootstrap_is_reproducible_and_depends_on_the_seed():
+    diff = np.random.default_rng(1).normal(0, 1, 90)
+
+    assert block_bootstrap(diff, reps=200) == block_bootstrap(diff, reps=200)
+    assert block_bootstrap(diff, reps=200) != block_bootstrap(diff, reps=200, seed=1)
+
+
+def test_block_bootstrap_interval_holds_the_mean():
+    diff = np.random.default_rng(2).normal(-0.1, 1, 90)
+
+    low, high = block_bootstrap(diff, reps=1000)
+
+    assert low < diff.mean() < high
+
+
+def test_blocks_widen_the_interval_of_dependent_days():
+    # Runs of 14 equal days: resampling single days would understate the uncertainty of the mean.
+    values = np.random.default_rng(3).normal(0, 1, 14)
+    diff = np.repeat(values, 14)
+
+    low_blocks, high_blocks = block_bootstrap(diff, reps=2000, block=14)
+    low_days, high_days = block_bootstrap(diff, reps=2000, block=1)
+
+    assert high_blocks - low_blocks > high_days - low_days
