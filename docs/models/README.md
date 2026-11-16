@@ -10,8 +10,10 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 | Baseline B2 | [`baseline_model/`](../../src/energy_price/models/baseline_model/) | abgeschlossen | 9.81 | 3.23 |
 | Quantile Boosting | [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/) | Test abgeschlossen; Teamreview offen | 9.79 | 3.16 |
 | Regime-Modell | [`regime_mixture/`](../../src/energy_price/models/regime_mixture/) | abgeschlossen, nicht übernommen | 9.80 | 3.23 |
+| Kalibrierte B2 | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | Test abgeschlossen; Coverage-Ziel verfehlt | 9.81 | 3.17 |
+| Kalibriertes GBM | [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/) | Test abgeschlossen; Coverage-Ziel verfehlt | 9.79 | 3.13 |
 
-Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Geplante Modelle stehen am Schluss unter To-do.
+Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Weitere Experimente und geplante Modelle stehen in Abschnitt 6.
 
 Ein Bandit über die Modelle wurde explorativ geprüft und nicht weiterverfolgt. Er ist kein Modellkandidat und steht deshalb nicht in dieser Tabelle: [`docs/exploration/bandit/`](../exploration/bandit/README.md).
 
@@ -148,17 +150,19 @@ Ergebnis und Entscheid im `README.md` des Modellordners eintragen und die Zeile 
 - **Reproduzierbar:** Modelle mit Zufall setzen einen festen Seed (`random_state=0`).
 - **Tests sind optional:** `tests/test_model_template.py` zeigt, wie ein Modell getestet wird.
 
-## 6. To-do: geplante Modelle
+## 6. Weitere Experimente und geplante Modelle
 
-Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder sind noch geplant. Quantile Boosting und das Regime-Modell sind implementiert; den aktuellen Stand und die Ergebnisse beschreiben ihre Modell-READMEs.
+Die Baseline erreicht die Referenz, schlägt sie aber nicht. Kalibrierte Bänder, Quantile Boosting und das Regime-Modell sind implementiert; den aktuellen Stand und die Ergebnisse beschreiben ihre Modell-READMEs.
 
 **Kalibrierte Bänder** · [`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/)
 
-Korrigiert die Bänder der Baseline anhand der Fehler der letzten Wochen, damit sie so oft treffen wie vorgesehen (Conformal Prediction).
+Korrigiert P10 und P90 der Baseline B2 und von `gbm_quantile` getrennt anhand echter vergangener Prognosefehler (Conformal-Kalibrierung). P50 bleibt unverändert. Historische Prognosen und Korrekturen beachten jeweils D−2.
+
+Auf April/Mai festgelegt: 56 Tage Fehlerhistorie, bei B2 gepoolt, bei GBM nach 6-Stunden-Blöcken. Die Auswahl je Basismodell steht unter `chosen` in `tune_selection.json`. B2 verfehlt die gemeinsamen Tuning-Kriterien, GBM erfüllt sie. Im Test Juni bis August verbessert die Kalibrierung den Pinball-Loss gegenüber der jeweiligen Basis um 1.58 % (B2) bzw. 1.20 % (GBM). Die Coverage steigt auf 77.72 % bzw. 77.44 %, bleibt aber bei beiden unter den geforderten 78 %. Damit ist das Erfolgskriterium aus Issue #19 verfehlt. P50 bleibt exakt unverändert; der Holdout ist gesperrt. Details und Ergebnisse im [Modell-README](../../src/energy_price/models/calibrated_bands/README.md).
 
 - Die Bänder der Baseline sind zu schmal, der echte Preis liegt häufiger ausserhalb als vorgesehen.
 - Ein verlässliches Band ist für den Use Case zentral, weil eine Bilanzgruppe damit ihr Risiko abschätzt.
-- Einfach umzusetzen, und der Korrekturschritt lässt sich später auf jedes Modell anwenden.
+- Die gemeinsame Hülle ist für beide bestehenden Basismodelle mit expandierendem Training implementiert.
 
 **Gradient Boosting (implementiert)** · [`gbm_quantile/`](../../src/energy_price/models/gbm_quantile/)
 
