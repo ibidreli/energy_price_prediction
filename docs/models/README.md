@@ -10,8 +10,10 @@ Stand der Zahlen: Test Juni bis August, 91 Tage. Preise und Fehler in ct/kWh. Je
 |---|---|---|---|---|---|---|
 | Referenz (letzte 56 Tage, [`reference.py`](../../src/energy_price/models/shared/reference.py)) | Team | einfachste Prognose ohne Modell, Fenster aus EDA H11 | 3.20 | 9.92 | 75.2 % | Massstab |
 | [Baseline B2](../../src/energy_price/models/baseline_model/README.md) | Rodrigo Urech | Kalender und Sonne (H1, H3, H8), lineare Quantilregression ist erklärbar | 3.23 | 9.81 | 73.6 % | bleibt als erklärbarer Massstab |
-| [Gradient Boosting](../../src/energy_price/models/gbm_quantile/README.md) | Elias Pulver | findet Wechselwirkungen von Sonne, Uhrzeit und Saison selbst (H3, H7, H8) | **3.16** | **9.79** | 74.1 % | Kandidat für den Holdout |
+| [Gradient Boosting](../../src/energy_price/models/gbm_quantile/README.md) | Elias Pulver | findet Wechselwirkungen von Sonne, Uhrzeit und Saison selbst (H3, H7, H8) | 3.16 | **9.79** | 74.1 % | Kandidat für den Holdout |
 | [Regime-Modell short/long](../../src/energy_price/models/regime_mixture/README.md) | Rodrigo Urech | zwei Preiswolken je Richtung, Richtung zuerst schätzen | 3.23 | 9.80 | 74.9 % | nicht übernommen, Richtung am Vortag zu schwach vorhersagbar |
+| [Kalibrierte Bänder auf B2](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | Bänder aller Modelle zu schmal (Coverage rund 74 % statt 80 %), Korrektur aus vergangenen Fehlern bis D−2 | 3.17 | 9.81 | 77.7 % | besser als B2, Coverage-Ziel 78 % knapp verfehlt |
+| [Kalibrierte Bänder auf Boosting](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | gleiche Korrektur auf Gradient Boosting | **3.13** | **9.79** | 77.4 % | bester Pinball-Loss, Coverage-Ziel 78 % knapp verfehlt |
 
 Ein neues Modell muss die Referenz schlagen. Jedes Modell wird hier nachgeführt, sobald es Ergebnisse hat. Laufende Modelle stehen am Schluss unter `6. In Arbeit`.
 
@@ -148,6 +150,5 @@ Diese Modelle sind noch nicht in `main`. Ihre Steckbriefe übernehmen die Vorlag
 
 | Modell | Verantwortlich | Issue und PR | Idee |
 |---|---|---|---|
-| Kalibrierte Bänder ([`calibrated_bands/`](../../src/energy_price/models/calibrated_bands/)) | Luca Manna | #19, PR #24 | Die Bänder aller Modelle sind zu schmal (Coverage rund 74 % statt 80 %). Eine Korrektur aus den Fehlern der letzten Wochen bis D−2 (Conformal Prediction) soll die Abdeckung auf 80 % heben, ohne den Pinball-Loss deutlich zu verschlechtern |
 | Quantil-LASSO (`quantile_lasso`) | Luca Manna | #27, PR #35 | Quantilregression mit allen um D−1 11:00 bekannten Daten, auch Preisniveau und Systembilanz bis D−2. Das LASSO behält nur die Merkmale, die tragen. Beantwortet, ob vergangene Preise und Systembilanz überhaupt helfen |
 | Zeitabhängige Modellwahl (`time_router`) | Elias Pulver | #25 | pro Zeitfenster des Liefertags das Modell nutzen, das dort verlässlich am besten ist. Boosting ist vormittags bis mittags besser, abends oft die Referenz |
