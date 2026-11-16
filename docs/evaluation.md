@@ -110,7 +110,10 @@ Der mittlere Pinball-Loss ist das Mittel über alle Viertelstunden und die drei 
 - **Geplant in #36:** tägliches Walk-forward, Auswahl über mehrere Blöcke und eine einzige Testperiode am Schluss
 - **Alle Metriken zusätzlich aufgeschlüsselt** nach Uhrzeit, Monat und Richtung (short/long), weil sich der Preis dort stark unterscheidet (H1, H7, H8 in `docs/eda.md`)
 - **Kreuzende Quantile** (P10 über P90) lehnt `metrics.py` ab. Das Modell muss sie vorher sortieren oder korrigieren
-- **Offener Punkt zum Leakage:** `backtest.py` hält fest, dass der Holdout nicht Teil der EDA war. H2 nutzt die Systembilanz aber bis 03.10.2026 und berührt damit September und Anfang Oktober. Betroffen ist nur die Systembilanz, nicht der Preis, und H2 ist rein beschreibend
+- **Offener Punkt zum Leakage:** `backtest.py` hält fest, dass der Holdout nicht Teil der EDA war. Zwei Hypothesen berühren aber September und Anfang Oktober:
+    - **H2** nutzt die Systembilanz bis 03.10.2026 (Notebook, Kapitel 1.2.2)
+    - **H3** berechnet die Rangkorrelation von Strahlungsprognose und Systembilanz ebenfalls bis 03.10.2026, auch je Monat mit September und Oktober (Notebook, Kapitel 1.2.3). Die Werte mit dem Preis betrifft das nicht
+    - Betroffen sind nur Systembilanz und Strahlung, nicht der Preis, und beide Hypothesen sind rein beschreibend. Gelöst wird der Punkt mit #36, zusammen mit der Entscheidung über den Holdout
 
 ```python
 from energy_price.metrics import score
