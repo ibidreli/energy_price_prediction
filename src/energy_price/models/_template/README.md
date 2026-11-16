@@ -11,7 +11,7 @@
 
 ## Modell und Features
 
-<Verfahren in einem Satz, Feature-Set (B1, B2 oder neue Blöcke) und Datenquellen.>
+<Verfahren in einem Satz, Feature-Set (B1 bis B4 oder neue Blöcke) und Datenquellen.>
 
 ## Ergebnis (Test Juni bis August)
 

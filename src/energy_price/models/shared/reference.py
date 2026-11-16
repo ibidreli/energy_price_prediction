@@ -13,15 +13,10 @@ import datetime as dt
 import pandas as pd
 
 from energy_price.availability import known_at_issue
-from energy_price.features.dataset import TARGET
+from energy_price.features.dataset import TARGET, slot
 from energy_price.models.shared.base import COLUMNS, QUANTILES
 
 WINDOW_DAYS = 56
-
-
-def slot(stamps_local: pd.Series) -> pd.Series:
-    """Local clock time as minutes after midnight. Both passes of the repeated hour share a slot."""
-    return stamps_local.dt.hour * 60 + stamps_local.dt.minute
 
 
 def reference_forecast(prices: pd.DataFrame, target_rows: pd.DataFrame, day: dt.date,

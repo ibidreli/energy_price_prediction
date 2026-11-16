@@ -1,0 +1,116 @@
+valid days tune/test: 61 91 dropped: ['2026-06-24']
+
+== Single models ==
+           tune_pinball  pinball     mae  coverage    width
+reference        3.4485   3.2018  9.9171    0.7521  26.3184
+B1               3.4894   3.2510  9.9404    0.7274  24.3871
+B2               3.3112   3.2254  9.8063    0.7360  25.5145
+gbm              3.3087   3.1633  9.7923    0.7408  24.8447
+regime           3.3226   3.2269  9.7975    0.7485  25.9091
+best on tune: gbm
+
+== Pairwise correlation of errors of the median and of the daily loss on test ==
+           reference     B1     B2    gbm  regime
+reference      1.000  0.981  0.985  0.982   0.984
+B1             0.981  1.000  0.988  0.982   0.985
+B2             0.985  0.988  1.000  0.991   0.997
+gbm            0.982  0.982  0.991  1.000   0.990
+regime         0.984  0.985  0.997  0.990   1.000
+           reference     B1     B2    gbm  regime
+reference      1.000  0.982  0.983  0.990   0.982
+B1             0.982  1.000  0.991  0.989   0.991
+B2             0.983  0.991  1.000  0.992   1.000
+gbm            0.990  0.989  0.992  1.000   0.991
+regime         0.982  0.991  1.000  0.991   1.000
+
+== Pinball per hour, test (tune in second table) ==
+test
+    reference    B1    B2   gbm  regime     winner
+0        2.20  2.34  2.33  2.27    2.33  reference
+1        2.07  2.14  2.14  2.08    2.16  reference
+2        1.89  1.99  1.98  1.92    2.00  reference
+3        1.76  1.84  1.83  1.80    1.83  reference
+4        1.88  1.92  1.91  1.87    1.92        gbm
+5        2.03  2.14  2.13  2.07    2.14  reference
+6        2.37  2.47  2.46  2.40    2.42  reference
+7        2.55  2.53  2.56  2.53    2.56        gbm
+8        3.03  2.95  3.01  2.94    3.04        gbm
+9        3.60  3.46  3.47  3.43    3.47        gbm
+10       4.49  4.39  4.28  4.10    4.30        gbm
+11       4.77  4.67  4.50  4.29    4.53        gbm
+12       5.18  5.05  5.00  4.91    5.00        gbm
+13       4.74  4.55  4.58  4.48    4.56        gbm
+14       5.56  5.52  5.55  5.55    5.54         B1
+15       5.06  5.14  4.89  4.91    4.86     regime
+16       3.90  3.87  3.87  3.87    3.85     regime
+17       3.98  4.01  3.98  3.95    4.03        gbm
+18       3.14  3.28  3.29  3.17    3.29  reference
+19       2.92  3.16  3.11  3.02    3.10  reference
+20       2.40  2.59  2.56  2.45    2.55  reference
+21       2.55  2.87  2.86  2.80    2.84  reference
+22       2.49  2.67  2.67  2.67    2.67  reference
+23       2.30  2.46  2.46  2.44    2.47  reference
+tune
+    reference    B1    B2   gbm  regime     winner
+0        2.43  2.35  2.34  2.36    2.36         B2
+1        2.02  2.05  2.05  2.04    2.06  reference
+2        2.11  2.14  2.13  2.10    2.15        gbm
+3        1.95  1.97  1.97  1.97    1.99  reference
+4        1.82  1.87  1.86  1.84    1.87  reference
+5        1.92  1.98  1.95  1.94    1.94  reference
+6        2.33  2.37  2.34  2.32    2.34        gbm
+7        3.09  3.09  2.93  2.90    2.92        gbm
+8        3.66  3.68  3.53  3.56    3.53         B2
+9        3.79  3.88  3.65  3.65    3.66        gbm
+10       4.19  4.34  4.01  4.04    4.05         B2
+11       4.04  4.18  3.86  3.87    3.94         B2
+12       6.70  6.69  6.55  6.65    6.44     regime
+13       7.45  7.33  6.85  6.67    6.99        gbm
+14       5.88  5.85  5.30  5.14    5.36        gbm
+15       4.71  4.86  4.46  4.43    4.44        gbm
+16       5.21  5.37  4.98  5.11    4.96     regime
+17       5.11  5.29  4.85  4.88    4.79     regime
+18       3.33  3.48  3.17  3.11    3.17        gbm
+19       2.38  2.51  2.30  2.28    2.32        gbm
+20       2.12  2.09  2.04  2.07    2.07         B2
+21       1.98  1.95  1.95  1.96    1.94     regime
+22       2.26  2.21  2.21  2.26    2.20     regime
+23       2.29  2.22  2.22  2.25    2.26         B2
+
+== Persistence of slot differences ==
+gbm - reference: spearman slots tune/test 0.37, slots odd/even test 0.47, hours tune/test 0.57; same sign tune/test 57%; slots |t|>2: 21%; median |diff| 0.089, median sd 0.82; days for 80 % power median 651
+B2 - reference: spearman slots tune/test 0.47, slots odd/even test 0.52, hours tune/test 0.59; same sign tune/test 60%; slots |t|>2: 28%; median |diff| 0.107, median sd 0.82; days for 80 % power median 326
+gbm - B2: spearman slots tune/test -0.01, slots odd/even test 0.34, hours tune/test 0.01; same sign tune/test 48%; slots |t|>2: 23%; median |diff| 0.074, median sd 0.58; days for 80 % power median 543
+same winner tune/test 30%, odd/even test 38%, chance if uniform 20%
+slot winners on test (share): {'reference': 0.44, 'B1': 0.06, 'B2': 0.04, 'gbm': 0.35, 'regime': 0.1}
+
+== Strategies ==
+cross-fit slot winner within test (odd picks even, even picks odd): {'pinball': np.float64(3.1523), 'mae': np.float64(9.7854), 'coverage': np.float64(0.7497), 'width': np.float64(25.1717)}
+hedge_global: eta=0.3 half_life=7 tune=3.3017 mean weights={'reference': np.float64(0.19), 'B1': np.float64(0.16), 'B2': np.float64(0.21), 'gbm': np.float64(0.23), 'regime': np.float64(0.21)}
+hedge_hour: eta=0.3 half_life=14 tune=3.2999 mean weights={'reference': np.float64(0.19), 'B1': np.float64(0.16), 'B2': np.float64(0.2), 'gbm': np.float64(0.25), 'regime': np.float64(0.2)}
+hedge_slot: eta=0.1 half_life=14 tune=3.3001 mean weights={'reference': np.float64(0.19), 'B1': np.float64(0.18), 'B2': np.float64(0.2), 'gbm': np.float64(0.22), 'regime': np.float64(0.2)}
+follow_leader_slot: half_life=14 tune=3.3343
+thompson_bandit_floor5: half_life=inf tune=3.3717 test shares={'reference': np.float64(0.2), 'B1': np.float64(0.19), 'B2': np.float64(0.2), 'gbm': np.float64(0.21), 'regime': np.float64(0.2)}
+thompson_bandit_nofloor: half_life=inf tune=3.3730 test shares={'reference': np.float64(0.2), 'B1': np.float64(0.19), 'B2': np.float64(0.21), 'gbm': np.float64(0.21), 'regime': np.float64(0.2)}
+thompson_fullinfo_floor5: half_life=inf tune=3.3638 test shares={'reference': np.float64(0.19), 'B1': np.float64(0.17), 'B2': np.float64(0.21), 'gbm': np.float64(0.22), 'regime': np.float64(0.2)}
+                           pinball   mae coverage  width vs_gbm_%         vs_gbm_ci vs_reference_%   vs_reference_ci       seed_p5_p95
+ORACLE_each_forecast         2.685 8.119    0.809 24.648  -15.132  [-0.522, -0.442]        -16.152  [-0.562, -0.485]               NaN
+ORACLE_slot_winner_of_test   3.106 9.692    0.752 24.836   -1.827  [-0.106, -0.022]         -3.007  [-0.138, -0.065]               NaN
+hedge_hour                   3.149 9.751    0.764 25.630   -0.463  [-0.040, +0.006]         -1.659  [-0.103, -0.006]               NaN
+follow_leader_slot           3.150 9.772    0.752 25.327   -0.432  [-0.047, +0.014]         -1.629  [-0.098, -0.009]               NaN
+hedge_slot                   3.159 9.761    0.761 25.534   -0.137  [-0.019, +0.011]         -1.337  [-0.094, +0.006]               NaN
+gbm                          3.163 9.792    0.741 24.845    0.000  [+0.000, +0.000]         -1.202  [-0.095, +0.011]               NaN
+hedge_global                 3.165 9.773    0.762 25.590    0.065  [-0.013, +0.019]         -1.137  [-0.090, +0.015]               NaN
+mean_all                     3.173 9.778    0.757 25.395    0.308  [-0.006, +0.030]         -0.898  [-0.085, +0.027]               NaN
+slot_winner_from_tune        3.187 9.786    0.739 24.839    0.743  [+0.008, +0.045]         -0.468  [-0.077, +0.044]               NaN
+hour_winner_from_tune        3.195 9.807    0.733 24.871    0.987  [+0.018, +0.053]         -0.227  [-0.068, +0.052]               NaN
+reference                    3.202 9.917    0.752 26.318    1.216  [-0.011, +0.095]          0.000  [+0.000, +0.000]               NaN
+thompson_fullinfo_floor5     3.206 9.830    0.742 25.405    1.344  [+0.029, +0.060]          0.126  [-0.050, +0.056]  3.1970 to 3.2152
+thompson_bandit_nofloor      3.211 9.840    0.741 25.382    1.493  [+0.033, +0.066]          0.274  [-0.045, +0.062]  3.2022 to 3.2204
+thompson_bandit_floor5       3.211 9.844    0.741 25.388    1.522  [+0.033, +0.067]          0.302  [-0.045, +0.063]  3.2017 to 3.2207
+B2                           3.225 9.806    0.736 25.514    1.965  [+0.033, +0.105]          0.739  [-0.050, +0.105]               NaN
+regime                       3.227 9.798    0.749 25.909    2.009  [+0.033, +0.106]          0.783  [-0.048, +0.105]               NaN
+B1                           3.251 9.940    0.727 24.387    2.774  [+0.048, +0.123]          1.539  [-0.028, +0.120]               NaN
+
+CI: 95 % moving block bootstrap (7 days) of the mean daily difference in ct/kWh, negative = better.
+Cross-fit vs gbm %: -0.35

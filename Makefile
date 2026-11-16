@@ -39,7 +39,7 @@ RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest clean-data FORCE
+.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -188,6 +188,9 @@ STEP  ?= test
 JOBS  ?= -1
 backtest: data ## Backtest MODEL (default baseline_model) on STEP tune, test or holdout (docs/models/README.md)
 	$(PY) -m energy_price.evaluation.experiment $(MODEL) $(STEP) --jobs $(JOBS) $(if $(TRACK),--track) $(if $(UNLOCK),--unlock-holdout)
+
+bandit-exploration: data ## Explorative check of a bandit over the models, STEP tune or test (docs/exploration/bandit/README.md)
+	$(PY) -m energy_price.exploration.bandit.run $(STEP) --jobs $(JOBS)
 
 clean-data: ## Delete the processed data (raw data stays untouched)
 	rm -rf $(OUT_DIR)

@@ -51,7 +51,7 @@
 | **Swissgrid überschreibt ältere Werte:** Die EDA-Notiz berichtet für Snapshots vom 04.10. und 07.10. eine gefüllte Lücke am 02.10. 14:00 und eine TSI-Korrektur um 0.1 MW. Im aktuellen Checkout ist nur der Snapshot vom 04.10. vorhanden, deshalb ist dieser Vergleich hier nicht reproduzierbar. | Frühere Momentaufnahme, nicht als aktuelle Logserie verwenden; Korrekturen müssen mit archivierten Versionen neu gemessen werden |
 | Knappheitsschwellen −1200 / +1000 MW wurden nie erreicht (TSI −1072 bis +792 MW) | geklärt: ohne Wirkung auf unsere Daten, siehe [`overview.md`](overview.md#preisformel-seit-2026-einpreissystem) |
 
-Zuordnung von Wetter zu Viertelstunden: Die Viertelstunden h−1:00 bis h−1:45 erhalten den Wert mit Zeitstempel h:00. Das passt genau zu Strahlung und Niederschlag (Wert der vorangehenden Stunde); Momentwerte wie Bewölkung liegen dann höchstens 45 Minuten neben ihrem Zeitstempel. Mittel über die sechs Standorte gewichtet nach PV-Anteil.
+Zuordnung von Wetter zu Viertelstunden: Die Viertelstunden h−1:00 bis h−1:45 erhalten den Wert mit Zeitstempel h:00. Das passt genau zu Strahlung und Niederschlag (Wert der vorangehenden Stunde); Momentwerte wie Bewölkung liegen dann höchstens 60 Minuten neben ihrem Zeitstempel. Mittel über die sechs Standorte gewichtet nach PV-Anteil.
 
 ## Ergebnisse je Hypothese
 

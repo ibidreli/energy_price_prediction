@@ -79,6 +79,58 @@ def test_feature_sets_differ_only_by_the_weather_columns():
     assert "hour_00" not in b1.columns  # reference category, absorbed by the intercept
 
 
+def with_history_columns(table: pd.DataFrame) -> pd.DataFrame:
+    return table.assign(price_mean_d2=1.0, price_mean_7d=2.0, price_q10_56d=3.0, price_q50_56d=4.0, price_q90_56d=5.0,
+                        tsi_mean_d2=-250.0, short_share_d2=0.5, direction_d2=-1.0, direction_d7=1.0, cloud_cover=40.0)
+
+
+def test_b3_adds_exactly_the_price_level_to_b2():
+    table = with_history_columns(synthetic_table(days=2))
+
+    b2, b3 = design_matrix(table, "B2"), design_matrix(table, "B3")
+
+    assert list(b3.columns[:len(b2.columns)]) == list(b2.columns)
+    assert list(b3.columns[len(b2.columns):]) == ["price_mean_d2", "price_mean_7d", "price_q10_56d", "price_q50_56d",
+                                                  "price_q90_56d"]
+    assert b3.shape[1] == 56
+
+
+def test_b4_adds_exactly_system_balance_and_cloud_cover_to_b3():
+    table = with_history_columns(synthetic_table(days=2))
+
+    b3, b4 = design_matrix(table, "B3"), design_matrix(table, "B4")
+
+    assert list(b4.columns[:len(b3.columns)]) == list(b3.columns)
+    assert list(b4.columns[len(b3.columns):]) == ["tsi_mean_d2_100", "short_share_d2", "direction_d2", "direction_d7",
+                                                  "cloud_cover_100"]
+    assert (b4["tsi_mean_d2_100"] == -2.5).all()
+    assert (b4["cloud_cover_100"] == 0.4).all()
+
+
+def test_b1_and_b2_do_not_use_the_history_columns():
+    table = synthetic_table(days=2)
+
+    plain = {fs: design_matrix(table, fs) for fs in ("B1", "B2")}
+    with_history = with_history_columns(table)
+
+    for fs, expected in plain.items():
+        pd.testing.assert_frame_equal(design_matrix(with_history, fs), expected)
+
+
+def test_rows_without_minimum_history_are_left_out_of_training_for_b3_only():
+    table = with_history_columns(synthetic_table(days=14))
+    early = table["delivery_day"] < pd.Timestamp("2026-06-08")
+    table.loc[early, "price_q50_56d"] = np.nan
+
+    b2 = LinearQuantileModel("B2", alpha=0.01).fit(table)
+    b3 = LinearQuantileModel("B3", alpha=0.01).fit(table)
+
+    assert b2.n_train_ == len(table)
+    assert b3.n_train_ == (~early).sum()
+    assert b3.predict(table).loc[early].isna().all().all()
+    assert b3.predict(table).loc[~early].notna().all().all()
+
+
 def test_linear_model_recovers_the_radiation_effect_and_keeps_quantiles_ordered():
     table = synthetic_table()
 

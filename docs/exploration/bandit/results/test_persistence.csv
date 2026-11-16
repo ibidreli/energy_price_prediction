@@ -1,0 +1,4 @@
+pair,spearman_slots_tune_test,spearman_slots_odd_even,spearman_hours_tune_test,same_sign_slots_tune_test,median_abs_slot_diff,median_slot_sd,median_days_for_80pct_power,same_winner_slots_tune_test,same_winner_slots_odd_even
+gbm_quantile - reference,0.3692,0.4673,0.5678,0.5729,0.0887,0.8215,651.3158,0.3229,0.3958
+B2 - reference,0.4735,0.5171,0.5904,0.6042,0.1069,0.8187,326.3493,0.3229,0.3958
+gbm_quantile - B2,-0.0148,0.3395,0.0096,0.4792,0.0736,0.5781,542.9504,0.3229,0.3958
