@@ -213,15 +213,15 @@ Details mit Code und Grafiken im Notebook, Kapitel 1.5.
 - **Stabilität:** gleiches Muster an Werktagen, Samstagen und Sonntagen (Korrelation mit dem Gesamtprofil 0.87 bis 0.98) und von Februar bis September (0.91 bis 0.96). Das systematische Kippen, der mittlere Betrag des Profils über die 24 Stunden, beträgt im Januar und Februar 88 bis 89 MW, im August 48 MW.
 - **Morgenrampe nur an Werktagen:** Von 4 bis 7 Uhr kippt die TSI an Werktagen nach short (bis −120 MW um 6 Uhr), an Samstagen, Sonntagen und Feiertagen kaum.
 - **Sommerzeit:** Nach dem 29.03.2026 passt das Profil besser zum um eine Stunde verschobenen Profil davor (Korrelation 0.90) als zur gleichen Uhrzeit (0.80).
-- **Ohne Sonne gleich stark:** In Stunden mit konstanter Strahlungsprognose, vor allem 20 bis 5 Uhr, beträgt das systematische Kippen 72.0 MW, in Stunden mit sich ändernder Sonne 65.2 MW. Dort hängt es mit der Steigung der Strahlung zusammen (Rangkorrelation 0.47).
-- **Umstellung auf Viertelstunden:** systematisches Kippen 38.6 MW vorher (26.10. bis 03.11.2026) und 18.8 MW nachher (04.11. bis 14.11.2026). Das Profil nachher hängt mit dem Profil vorher nicht mehr zusammen (Korrelation −0.25).
+- **Ohne Sonne deutliches Kippen:** In Stunden mit konstanter Strahlungsprognose, vor allem 20 bis 5 Uhr, beträgt das mittlere |Kippen| 64.7 MW, in Stunden mit sich ändernder Sonne 107.8 MW. Dort hängt es mit der Steigung der Strahlung zusammen (Rangkorrelation 0.47).
+- **Umstellung auf Viertelstunden:** systematisches Kippen 38.6 MW vorher (26.10. bis 03.11.2026, Rauschgrenze 32.2 MW) und 18.8 MW nachher (04.11. bis 14.11.2026, Rauschgrenze 23.0 MW). Nachher ist kein systematisches Kippen mehr nachweisbar, das mittlere |Kippen| sinkt aber nur von 61.9 auf 56.4 MW. Das Profil nachher hängt mit dem Profil vorher nicht mehr zusammen (Korrelation −0.25). Rauschgrenze: 95-%-Quantil des systematischen Kippens, wenn jeder Tag ein zufälliges Vorzeichen bekommt (`flip_noise_floor`).
 - **Wert für die Prognose:** Die Referenz mit Quantilen je Viertelstunde statt je Stunde senkt den Pinball-Loss im April und Mai um 2.9 %, fast nur bei :00 und :45.
 
 **Deutung:**
 - Bis zum 03.11.2026 wurde die Schweizer Day-Ahead-Auktion in Stunden gehandelt, die Ausgleichsenergie aber je Viertelstunde abgerechnet. Daraus folgt das Kippen. Die Marktregeln und die Literatur stützen das.
 - Die Stundengrenzen kommen vom Handel, die Richtung von Sonne und Verbrauch. Die Sommerzeit gibt dafür einen Hinweis, keinen Beweis.
 - Nachts muss der Verbrauch das Kippen erklären. Ungeprüft, weil die Lastprognose von ENTSO-E (#37) noch fehlt.
-- Die Halbierung nach dem 04.11.2026 passt zum Mechanismus, ist mit 11 Tagen und provisorischen Werten aber vorläufig. Die finalen Preise für November erscheinen erst um Mitte Dezember.
+- Dass das systematische Kippen nach dem 04.11.2026 verschwindet, passt zum Mechanismus, die Abweichungen der einzelnen Stunden bleiben aber. Mit 11 Tagen und provisorischen Werten ist der Befund vorläufig. Die finalen Preise für November erscheinen erst um Mitte Dezember.
 
 **Quellen:** EPEX SPOT, „15-minute products in Market Coupling“, Abschnitt Switzerland. JAO, „Update of ST auctions on Swiss borders in 15 min MTU“ (30.06.2026). EURELECTRIC und ENTSO-E (2011), *Deterministic frequency deviations*. Böttcher et al. (2026), [arXiv:2602.09645](https://arxiv.org/abs/2602.09645). Swissgrid, Allgemeine Bilanzgruppenvorschriften v3.2, Ziffer 7.2.
 
