@@ -111,7 +111,7 @@ Der mittlere Pinball-Loss ist das Mittel über alle Viertelstunden und die drei 
 - **Alle Metriken zusätzlich aufgeschlüsselt** nach Uhrzeit, Monat und Richtung (short/long), weil sich der Preis dort stark unterscheidet (H1, H7, H8 in `docs/eda.md`)
 - **Kreuzende Quantile** (P10 über P90) lehnt `metrics.py` ab. Das Modell muss sie vorher sortieren oder korrigieren
 - **Leakage aus der EDA, gelöst mit #50:** Das Notebook schneidet Preis, Systembilanz und Wetter direkt nach dem Laden vor dem 01.09.2026 ab. H2 und H3 nutzen seither nur Januar bis August, die Zahlen in `docs/eda.md` sind nachgeführt
-    - **Vorbehalt:** keine Preisbewertung auf Sep/Okt, aber TSI und Wetter daraus wurden in einer früheren Fassung der EDA betrachtet; die Periode heisst deshalb Testperiode mit Vorbehalt
+    - **Vorbehalt:** keine Preisbewertung auf Sep/Okt, aber TSI und Wetter daraus wurden in einer früheren Fassung der EDA betrachtet (H2, H3); Kapitel 1.5.4 liest die TSI vom 26.10. bis 31.10. aus dem Test (Umstellung auf Viertelstunden, ohne Preise). Die Periode heisst deshalb „Testperiode mit Vorbehalt“
     - Ausnahme im Notebook: Kapitel 1.5.4 (Umstellung auf Viertelstunden) liest die Systembilanz ab September, ohne Preise
 
 ```python

@@ -37,7 +37,7 @@
 
 **Zeiträume:** Alle Hypothesen (H1 bis H12) nutzen Januar bis August 2026. Das Notebook schneidet Preis, Regelzonenbilanz (Snapshot vom 04.10., Daten bis 03.10.) und Wetter direkt nach dem Laden vor dem 01.09.2026 ab, weil September und Oktober die Testperiode sind (#36, #50). Einzige Ausnahme ist die Umstellung auf Viertelstunden (H8 vertieft, Notebook Kapitel 1.5.4): Sie liest die Regelzonenbilanz ab September aus dem Snapshot vom 15.11., ohne Preise.
 
-**Vorbehalt zur Testperiode:** Keine Preisbewertung auf September und Oktober, aber TSI und Wetter daraus wurden in einer früheren Fassung der EDA betrachtet (H2 und H3 bis Anfang Oktober). Die Periode heisst deshalb „Testperiode mit Vorbehalt“.
+**Vorbehalt zur Testperiode:** Keine Preisbewertung auf September und Oktober, aber TSI und Wetter daraus wurden in einer früheren Fassung der EDA betrachtet (H2 und H3 bis Anfang Oktober). Kapitel 1.5.4 (Umstellung auf Viertelstunden) liest zudem die TSI vom 26.10. bis 14.11.2026, davon 26.10. bis 31.10. aus der Testperiode, ohne Preise. Diese Analyse betrifft den Betrieb nach dem 04.11., nicht die Modellwahl, und bleibt deshalb (Entscheid Luca, 17.11.2026). Die Periode heisst „Testperiode mit Vorbehalt“.
 
 ## Datenqualität
 
