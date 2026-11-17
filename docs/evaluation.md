@@ -30,7 +30,7 @@ Der Preis besteht aus zwei getrennten Verteilungen, je eine pro Richtung der Sys
 ![Preis je Richtung](figures/eval_price_by_direction.png)
 
 - **Mittelwert dazwischen:** Der Mittelwert aller Preise liegt bei 11.6 ct/kWh, also zwischen den beiden Wolken, wo kaum Preise vorkommen
-- **Richtung kaum vorhersagbar:** Welche Wolke gilt, ist um 11:00 an D−1 kaum bekannt. Die Richtung von D−2 stimmt nur in 54 % mit dem Liefertag überein, Zufall wäre 50.5 % (H2 in `docs/eda.md`)
+- **Richtung kaum vorhersagbar:** Welche Wolke gilt, ist um 11:00 an D−1 kaum bekannt. Die Richtung von D−2 stimmt nur in 54 % mit dem Liefertag überein, Zufall wäre 50.4 % (H2 in `docs/eda.md`)
 - **Streuung hängt von Uhrzeit und Saison ab:** P10 bis P90 ist um 17:00 rund dreimal so breit wie um 03:15 (H7)
 
 Eine Normalverteilung würde ein symmetrisches Band um den Mittelwert legen. Quantile brauchen keine Verteilungsannahme und dürfen pro Viertelstunde unterschiedlich weit und asymmetrisch sein.
@@ -110,10 +110,9 @@ Der mittlere Pinball-Loss ist das Mittel über alle Viertelstunden und die drei 
 - **Geplant in #36:** tägliches Walk-forward, Auswahl über mehrere Blöcke und eine einzige Testperiode am Schluss
 - **Alle Metriken zusätzlich aufgeschlüsselt** nach Uhrzeit, Monat und Richtung (short/long), weil sich der Preis dort stark unterscheidet (H1, H7, H8 in `docs/eda.md`)
 - **Kreuzende Quantile** (P10 über P90) lehnt `metrics.py` ab. Das Modell muss sie vorher sortieren oder korrigieren
-- **Offener Punkt zum Leakage:** `backtest.py` hält fest, dass der Holdout nicht Teil der EDA war. Zwei Hypothesen berühren aber September und Anfang Oktober:
-    - **H2** nutzt die Systembilanz bis 03.10.2026 (Notebook, Kapitel 1.2.2)
-    - **H3** berechnet die Rangkorrelation von Strahlungsprognose und Systembilanz ebenfalls bis 03.10.2026, auch je Monat mit September und Oktober (Notebook, Kapitel 1.2.3). Die Werte mit dem Preis betrifft das nicht
-    - Betroffen sind nur Systembilanz und Strahlung, nicht der Preis, und beide Hypothesen sind rein beschreibend. Gelöst wird der Punkt mit #36, zusammen mit der Entscheidung über den Holdout
+- **Leakage aus der EDA, gelöst mit #50:** Das Notebook schneidet Preis, Systembilanz und Wetter direkt nach dem Laden vor dem 01.09.2026 ab. H2 und H3 nutzen seither nur Januar bis August, die Zahlen in `docs/eda.md` sind nachgeführt
+    - **Vorbehalt:** keine Preisbewertung auf Sep/Okt, aber TSI und Wetter daraus wurden in einer früheren Fassung der EDA betrachtet; die Periode heisst deshalb Testperiode mit Vorbehalt
+    - Ausnahme im Notebook: Kapitel 1.5.4 (Umstellung auf Viertelstunden) liest die Systembilanz ab September, ohne Preise
 
 ```python
 from energy_price.metrics import score
