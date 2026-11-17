@@ -9,13 +9,14 @@ from energy_price.models.shared.linear import LinearQuantileModel
 
 MODEL = LinearQuantileModel
 
-# Tuning on April and May: feature set x training window x L1 penalty alpha.
+# Compared by `select`: feature set x L1 penalty alpha, each with every window of WINDOWS.
 GRID = [
-    {"feature_set": fs, "window": w, "alpha": a}
+    {"feature_set": fs, "alpha": a}
     for fs in ("B1", "B2")
-    for w in ("expanding", "rolling_56d")
     for a in (0.0, 0.01, 0.1)
 ]
+# Sparse linear model: the only one that also tries 28 days (docs/training_pipeline.md).
+WINDOWS = ("expanding", "rolling_28d", "rolling_56d", "rolling_90d")
 
 # Chosen on the tuning period (`make baseline-tune`): for both feature sets the expanding window
 # without penalty had the lowest mean pinball loss, see docs/models/baseline_model.md.
