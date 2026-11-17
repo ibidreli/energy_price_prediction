@@ -122,7 +122,7 @@ def backtest_figures(out_dir: Path, period: str, fig_dir: Path, order: list[str]
 
 
 def coefficients_figure(out_dir: Path, period: str, fig_dir: Path, variant: str, shown: dict[str, str]) -> Path:
-    """Coefficients of ``variant`` per quantile of the last weekly fit, in ct/kWh per unit of the feature.
+    """Coefficients of ``variant`` per quantile of the last fit, in ct/kWh per unit of the feature.
 
     ``shown`` maps feature names of the coefficients to the labels in the figure (in this order).
     """

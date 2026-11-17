@@ -53,7 +53,7 @@ def test_importance_never_refits_on_validation_targets():
             return self
 
     result = backtest_importance(table, days, RecordingModel, {"radiation": ["radiation"]},
-                                n_repeats=1, jobs=1)
+                                n_repeats=1, jobs=1, refit_every=7)
     assert trained_until == [pd.Timestamp("2026-04-08"), pd.Timestamp("2026-04-15")]
     assert list(result["fit_day"]) == [pd.Timestamp("2026-04-10"), pd.Timestamp("2026-04-17")]
 
