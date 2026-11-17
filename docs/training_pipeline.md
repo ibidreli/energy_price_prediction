@@ -24,7 +24,7 @@ gantt
     Testperiode mit Vorbehalt, gesperrt :crit, 2026-09-01, 2026-11-01
 ```
 
-„Mit Vorbehalt“, weil die EDA TSI und Wetter aus September und Oktober betrachtet hat (H2, H3), nie aber Preise oder Prognosen (siehe [Einschränkungen](#8-einschränkungen)).
+„Mit Vorbehalt“, weil die EDA TSI und Wetter aus September und Oktober betrachtet hat (H2, H3; TSI 26.10. bis 31.10. in Kapitel 1.5.4), nie aber Preise oder Prognosen (siehe [Einschränkungen](#8-einschränkungen)).
 
 ## 2. Wie ein Ursprung funktioniert
 
@@ -147,7 +147,7 @@ Optionen: `JOBS=<n>` (parallel), `TRACK=1` (W&B, siehe [`experiment_tracking.md`
 
 - **Test zwei statt mindestens zwölf Monate:** Lago et al. empfehlen mindestens ein Jahr (Abschn. 5.1). Das Einpreissystem gilt erst seit 01.01.2026, der Test zeigt also nur den Herbst.
 - **Finale statt provisorische Preise:** Um 11 Uhr wären nur provisorische Preise bekannt gewesen. Der Rückblick ist dadurch leicht zu optimistisch, die Grösse ist nicht gemessen ([Restrisiko](data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)).
-- **EDA hat in den Test geschaut:** TSI und Wetter von September und Oktober (H2, H3), keine Preise. Darum „Testperiode mit Vorbehalt“.
+- **EDA hat in den Test geschaut:** TSI und Wetter von September und Oktober (H2, H3; TSI 26.10. bis 31.10. für die Umstellung auf Viertelstunden), keine Preise. Darum „Testperiode mit Vorbehalt“.
 - **Validierungszahl ist optimistisch:** Das gewählte Setting ist das beste von vielen auf denselben Tagen. Eine unverzerrte Zahl liefert erst der Test.
 
 ## 9. Herleitung
