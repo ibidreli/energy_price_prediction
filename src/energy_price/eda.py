@@ -167,6 +167,29 @@ def within_hour_trend(frame: pd.DataFrame, value: str = "tsi_mw", time_column: s
     return wide.reset_index()
 
 
+def systematic_flip(flips: pd.DataFrame) -> float:
+    """Mean absolute hourly profile of ``within_hour_trend`` output, in the unit of ``trend``.
+
+    Only the part of the change from :00 to :45 that repeats at the same clock hour on every day counts.
+    Random day-to-day swings cancel out in the hourly mean, but not completely: with few days the value
+    stays above zero even without any pattern, see ``flip_noise_floor``.
+    """
+    return float(flips.groupby("hour")["trend"].mean().abs().mean())
+
+
+def flip_noise_floor(flips: pd.DataFrame, draws: int = 2000, seed: int = 42) -> tuple[float, float]:
+    """Median and 95 % quantile of ``systematic_flip`` when the flips carry no daily pattern.
+
+    Each draw multiplies every day with a random sign. This keeps the size and the hourly shape of each
+    day but removes any profile shared by all days, so the result is the value that noise alone reaches
+    with the same days. A ``systematic_flip`` below the 95 % quantile is not distinguishable from noise.
+    """
+    wide = flips.pivot_table(index="date", columns="hour", values="trend").to_numpy()
+    signs = np.random.default_rng(seed).choice([-1.0, 1.0], size=(draws, wide.shape[0], 1))
+    values = np.nanmean(np.abs(np.nanmean(signs * wide, axis=1)), axis=1)
+    return float(np.median(values)), float(np.quantile(values, 0.95))
+
+
 def weather_to_quarter_hours(weather: pd.DataFrame, weights: pd.Series, columns: list[str]) -> pd.DataFrame:
     """PV-weighted mean over the sites, spread from hours to quarter hours (index ``timestamp_utc``).
 

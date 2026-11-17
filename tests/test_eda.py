@@ -15,11 +15,13 @@ from energy_price.eda import (
     direction_matches,
     daily_mean_abs_change,
     extreme_events,
+    flip_noise_floor,
     holiday_pv_share,
     ks_distance,
     past_slot_quantiles,
     same_slot_pairs,
     site_spread,
+    systematic_flip,
     weather_to_quarter_hours,
     within_hour_trend,
 )
@@ -250,6 +252,49 @@ def test_within_hour_trend_drops_incomplete_and_repeated_hours():
     out = within_hour_trend(frame)
 
     assert out["hour"].tolist() == [1, 3]
+
+
+def test_within_hour_trend_drops_the_lost_hour_on_the_switch_to_summer_time():
+    stamps = quarter_hours("2026-03-29 00:00", "2026-03-29 04:00")  # 02:00 to 02:45 does not exist
+    frame = pd.DataFrame({"timestamp_local": stamps, "tsi_mw": 1.0})
+
+    out = within_hour_trend(frame)
+
+    assert len(stamps) == 12
+    assert out["hour"].tolist() == [0, 1, 3]
+
+
+def flip_frame(trend: np.ndarray) -> pd.DataFrame:
+    """``within_hour_trend``-like output from a day x hour array of trends."""
+    days, hours = trend.shape
+    dates = [dt.date(2026, 7, 1) + dt.timedelta(days=d) for d in range(days)]
+    return pd.DataFrame({"date": np.repeat(dates, hours), "hour": np.tile(range(hours), days), "trend": trend.ravel()})
+
+
+def test_systematic_flip_is_the_mean_absolute_hourly_profile():
+    flips = flip_frame(np.array([[10.0, -30.0], [30.0, -10.0]]))  # hourly means 20 and -20
+
+    assert systematic_flip(flips) == 20.0
+
+
+def test_flip_noise_floor_separates_a_daily_pattern_from_noise():
+    rng = np.random.default_rng(0)
+    noise = rng.normal(0.0, 70.0, size=(11, 24))
+    pattern = np.where(np.arange(24) < 12, 60.0, -60.0)
+
+    _, upper_noise = flip_noise_floor(flip_frame(noise))
+    _, upper_pattern = flip_noise_floor(flip_frame(noise + pattern))
+
+    assert systematic_flip(flip_frame(noise)) < upper_noise
+    assert systematic_flip(flip_frame(noise + pattern)) > upper_pattern
+
+
+def test_flip_noise_floor_is_reproducible_and_shrinks_with_more_days():
+    rng = np.random.default_rng(1)
+    few, many = flip_frame(rng.normal(0.0, 70.0, size=(10, 24))), flip_frame(rng.normal(0.0, 70.0, size=(90, 24)))
+
+    assert flip_noise_floor(few, seed=3) == flip_noise_floor(few, seed=3)
+    assert flip_noise_floor(many)[0] < flip_noise_floor(few)[0]
 
 
 def test_site_spread_is_the_standard_deviation_over_the_sites():
