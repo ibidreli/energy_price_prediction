@@ -39,10 +39,11 @@ RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
 # ENTSO-E (issue #37): live snapshots of the scheduled job in snapshots/, the one-time history in backfill/
 ENTSOE_DIR   := data/entsoe
 ENTSOE_FROM  ?= 2026-01-01
+ENTSOE_DATA  := $(OUT_DIR)/entsoe.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs fetch-entsoe fetch-entsoe-history sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
+.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs fetch-entsoe fetch-entsoe-history entsoe-availability sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -71,7 +72,7 @@ lock: ## Write the package versions installed in .venv to requirements.lock
 	$(PY) -m pip freeze --exclude-editable >> $(LOCK).tmp
 	@mv $(LOCK).tmp $(LOCK)
 
-data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) $(RESERVOIR_DATA) ## Build all processed tables (only if inputs changed)
+data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) $(RESERVOIR_DATA) $(ENTSOE_DATA) ## Build all processed tables (only if inputs changed)
 
 fetch: fetch-cab fetch-weather fetch-reservoirs ## Download new Swissgrid, weather and reservoir data (network)
 
@@ -92,6 +93,9 @@ fetch-entsoe: $(ENV_READY) ## Fetch ENTSO-E load, generation and day-ahead price
 fetch-entsoe-history: $(ENV_READY) ## Download the ENTSO-E history from ENTSOE_FROM (default 2026-01-01)
 	$(PY) -m energy_price.data.fetch_entsoe --out $(ENTSOE_DIR)/backfill --history-from $(ENTSOE_FROM)
 
+entsoe-availability: $(ENV_READY) ## Evaluate the ENTSO-E fetch log against the availability criterion (docs/data.md, section 7)
+	$(PY) -m energy_price.data.entsoe --log $(ENTSOE_DIR)/snapshots/fetch_log.csv --out $(ENTSOE_DIR)/availability.csv
+
 $(REGISTER):
 	mkdir -p $(dir $@)
 	curl -sSfL -o $@.tmp $(REGISTER_URL) && mv $@.tmp $@
@@ -108,6 +112,15 @@ holidays: $(ENV_READY) ## Write the legal holidays of all cantons
 CAB_STAMP     := $(OUT_DIR)/.cab_checksums
 WEATHER_STAMP := $(OUT_DIR)/.weather_checksums
 RESERVOIR_STAMP := $(OUT_DIR)/.reservoir_checksums
+ENTSOE_STAMP  := $(OUT_DIR)/.entsoe_checksums
+
+$(ENTSOE_STAMP): FORCE | $(ENV_READY)
+	@mkdir -p $(OUT_DIR)
+	@$(PY) -m energy_price.data.checksums $(ENTSOE_DIR) --pattern '*.xml' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(ENTSOE_DATA); fi
+
+$(ENTSOE_DATA): $(ENTSOE_STAMP) $(SOURCES) | $(ENV_READY)
+	$(PY) -m energy_price.data.build_sources entsoe --src $(ENTSOE_DIR) --out $@
 
 $(RESERVOIR_STAMP): FORCE | $(ENV_READY)
 	@mkdir -p $(OUT_DIR)

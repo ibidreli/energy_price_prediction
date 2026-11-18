@@ -63,6 +63,7 @@ gantt
 | Wetter | Lauf **D−2, 18 UTC** | Laut Open-Meteo sind Läufe globaler Modelle 4 bis 6 Stunden nach dem Start abrufbar. Mit 6 Stunden gerechnet bleiben bis 11:00 **9 Stunden Reserve im Sommer und 10 im Winter**, an jedem Tag 2026, auch an den Umstellungstagen. Das prüft der Test `test_every_run_of_2026_is_available_at_least_9_hours_before_issue`. |
 | Feiertage | keine | durch kantonales Recht Jahre im Voraus festgelegt |
 | Stauseen | letzter tatsächlich vor D−1, 11:00 abgerufener Wochenbericht | `latest_reservoir_report` prüft Abrufzeit und Berichtswoche; historische Publikationszeiten sind nicht belegt. Details in [Abschnitt 6](#6-stauseen-bfe). |
+| ENTSO-E | Prognosen für **D**, tatsächliche Last bis **D−2**, Day-Ahead-Preise bis **D−1**, nie der Preis von D | Im Live-Zeitraum nur, was unser Job bis D−1, 11:00 abgerufen hatte. In der Historie nur Reihen, deren Verfügbarkeit die Live-Prüfung belegt hat. `known_at_issue_entsoe`, Details in [Abschnitt 7](#7-entso-e-last-erzeugung-und-day-ahead-preise). |
 
 **Korrektur gegenüber früher:** Im ersten Entwurf stand „Daten bis D−1, 10:30“. Das ist nicht belegbar und gilt nicht mehr.
 
@@ -465,7 +466,34 @@ Das Kriterium steht hier, bevor die erste Messung vorliegt, damit es nicht nacht
 
 > Eine Reihe gilt als um D−1 11:00 verfügbar, wenn sie an **mindestens 7 Liefertagen** geprüft wurde und an **jedem** geprüften Tag ein Lauf mit protokollierter Abrufzeit **vor 11:00** den benötigten Tag **vollständig** enthielt: D für Prognosen, D−2 für die tatsächliche Last, D−1 für Preise. Geprüft ist ein Tag, an dem mindestens eine Anfrage vor 11:00 eine Antwort von ENTSO-E erhielt (`ok` oder `no_data`). Schon ein geprüfter Tag ohne vollständige Daten verfehlt das Kriterium, denn „meistens verfügbar“ reicht für eine Prognose, die jeden Tag um 11:00 abgegeben wird, nicht.
 
-Tage ohne Antwort vor 11:00 (Lauf verspätet oder ausgefallen, Netzwerkfehler) sagen nichts über ENTSO-E. Sie werden eigens ausgewiesen (`checked = False`) und zählen nicht zu den 7 Tagen. Im Live-Zeitraum haben solche Liefertage keine ENTSO-E-Werte.
+Tage ohne Antwort vor 11:00 (Lauf verspätet oder ausgefallen, Netzwerkfehler) sagen nichts über ENTSO-E. Sie werden eigens ausgewiesen (`checked = False`) und zählen nicht zu den 7 Tagen. Im Live-Zeitraum haben solche Liefertage keine ENTSO-E-Werte. `make entsoe-availability` wertet das Log aus. Es schreibt pro Reihe, Zone und Liefertag eine Zeile nach `data/entsoe/availability.csv` und gibt pro Reihe aus, ob das Kriterium erfüllt ist (`meets_criterion`).
+
+### Auswahl zur Prognosezeit
+
+`make data` baut aus allen Snapshots `data/processed/entsoe.parquet`. Es enthält jede gespeicherte Version, eine Zeile pro Viertelstunde. Stündliche Preise und die täglichen Minimum- und Maximumwerte der Wochenprognose gelten für jede ihrer Viertelstunden. Liefert eine Antwort dieselbe Reihe in zwei Auflösungen, gilt die feinere. Was für den Liefertag D bekannt war, wählt `known_at_issue_entsoe(tabelle, liefertag)` in `src/energy_price/data/entsoe.py`:
+
+| Zeitraum | Regel |
+|---|---|
+| immer | nie ein späterer Tag als erlaubt: Prognosen bis D, tatsächliche Last bis D−2, Preise bis D−1 (`LATEST_DAY`). Der Preis von D ist damit ausgeschlossen, auch wenn ein Snapshot ihn enthielte. |
+| Live-Zeitraum (ab dem ersten Live-Snapshot vor D−1, 11:00) | nur Live-Snapshots mit Abrufzeit bis D−1, 11:00, je Wert der neueste. Revisionen nach 11:00 bleiben unberücksichtigt. Fehlt ein solcher Snapshot, bleibt der Wert leer. Die Historie füllt die Lücke **nicht**, weil sie später geladen wurde. |
+| Historie | nur Reihen, die `HISTORY_RULES` erlaubt, je Wert der früheste Download. Bis zum Entscheid sind das nur die Day-Ahead-Preise: Die Auktion für D−1 schliesst an D−2, also vor jeder Prognose für D. Last- und Erzeugungsprognosen bleiben in der Historie leer. |
+
+**Bekanntes Restrisiko, wie bei Swissgrid:** Die Historie zeigt den heutigen Stand. Hat ENTSO-E Werte nachträglich korrigiert, kannte man um 11:00 eine andere Version. Wie gross das ist, lässt sich erst messen, wenn die Live-Tage später neu geladen und mit den Snapshots verglichen werden.
+
+### Merkmale
+
+`features.dataset.entsoe_features` bildet pro Liefertag aus der Auswahl die Spalten `ENTSOE_COLUMNS` (MW, EUR/MWh). `features.design` fasst sie in Blöcke:
+
+| Block | Spalten | Set |
+|---|---|---|
+| `load_forecast` | Day-Ahead-Lastprognose für D in GW; ihre Änderung über die Stunde × Position, als Gegenstück zur Strahlung für den Verbrauchsanteil von H8; Mittel der tatsächlichen Last von D−2 | B5 = B4 + `load_forecast` |
+| `day_ahead_prices` | CH-Preis von D−1 zur gleichen Uhrzeit; CH-Tagesmittel von D−1; Abstand des CH-Tagesmittels zu DE-LU, FR, IT-Nord und AT; alle pro 100 EUR/MWh | B6 = B5 + `day_ahead_prices` |
+| `residual_load` | Last − Solar − Wind und ihre Änderung über die Stunde × Position | noch in keinem Set, bis der Abruf zeigt, ob ENTSO-E für CH Solar- und Windprognosen hat |
+
+- **Tagesmittel** gibt es nur für vollständige Tage, nie ein Mittel über einen Teil des Tages.
+- **Zeitumstellung:** Eine Uhrzeit, die D−1 nicht hat (02:xx nach dem kurzen Tag), erhält das Tagesmittel von D−1. Bei der doppelten Stunde des langen Tags gilt das Mittel beider Durchgänge, wie bei `direction_at_clock`.
+- **Bis zum Entscheid** fehlen in der Historie die Lastspalten. B5 und B6 haben deshalb vor dem Live-Zeitraum keine vollständigen Tage. Die Modelle bleiben vorerst bei B1 bis B4. Ein Vergleich von B5 und B6 mit B4 gehört in ein eigenes Experiment-Issue, das den Holdout September/Oktober nicht berührt.
+- **Tests:** `tests/test_entsoe.py` und `tests/test_features_entsoe.py` halten die Grenze fest. Dazu gehören die Abrufzeit 11:00:00 gegenüber 11:00:01, ein Störtest mit den Preisen von D, die Lücke im Live-Zeitraum und beide Umstellungstage.
 
 - **Erfüllt die Day-Ahead-Lastprognose das Kriterium**, wird sie verwendet: im Live-Zeitraum ab Abrufzeit, in der Historie als übertragene, dokumentierte Annahme.
 - **Erfüllt sie es nicht**, gilt der Rückfall: die tatsächliche Last bis D−2 oder die Wochenprognose für D, sofern diese das Kriterium erfüllt.
@@ -487,6 +515,7 @@ flowchart LR
     OM[Open-Meteo ECMWF] -->|make fetch-weather| WX[(ecmwf_ifs/*.json)]
     BFECSV[BFE Original-CSV] -->|make fetch-reservoirs| RES[(reservoirs/snapshots/*.json)]
     ENTSOE[ENTSO-E API] -->|GitHub Actions, täglich| ENT[(entsoe/snapshots/*.xml)]
+    ENT --> DATA
     BFE[BFE-Register] -->|make sites| SITES[(weather_sites.csv)]
     SITES --> OM
     PY[python-holidays] -->|make holidays| HOL[(holidays_ch.csv)]
@@ -516,6 +545,7 @@ flowchart LR
 | `make fetch-reservoirs` | holt die Schweizer Stauseedaten des aktuellen Kalenderjahres (Europe/Zurich); andere Jahre mit `RESERVOIR_YEARS="2025 2026"` |
 | `make fetch-entsoe` | ein ENTSO-E-Abruf von Hand, braucht `ENTSOE_API_TOKEN`; nur zum Testen, die Live-Reihe schreibt der geplante Job |
 | `make fetch-entsoe-history` | lädt die ENTSO-E-Historie ab `ENTSOE_FROM` (Standard 01.01.2026) |
+| `make entsoe-availability` | wertet das ENTSO-E-Log gegen das Kriterium aus Abschnitt 7 aus |
 | `make sites` | berechnet die Standorte neu aus dem BFE-Register |
 | `make holidays` | schreibt die Feiertage neu |
 | `make data` | baut alle Tabellen in `data/processed/` |

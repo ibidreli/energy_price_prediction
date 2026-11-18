@@ -11,6 +11,16 @@ list of blocks; a new block is a function ``table -> dict of columns`` registere
   the same clock time over 56 days. Rows before 2026-01-30 have no value (minimum history, 28 days).
 - ``B4`` B3 plus system balance until D-2 (mean TSI per 100 MW, share of short quarter hours,
   direction at the same clock time on D-2 and D-7) and cloud cover of the run D-2 18 UTC (per 100 %).
+- ``B5`` B4 plus the ENTSO-E load (issue #37): day-ahead forecast for D in GW, its change over the
+  hour x position (the consumption part of H8) and the mean actual load of D-2.
+- ``B6`` B5 plus the day-ahead prices of D-1 per 100 EUR/MWh: CH at the same clock time, the CH daily
+  mean and the spreads of the daily means to DE-LU, FR, IT-North and AT. Never the price of D.
+
+B5 and B6 only have values where ``known_at_issue_entsoe`` allows them: in the history only once the
+live check confirmed a series (``entsoe.HISTORY_RULES``, docs/data.md, section 7). Until then the
+load columns are missing before the live period, and ``complete_days`` drops those days. The block
+``residual_load`` is registered but in no set yet, because whether ENTSO-E has a solar and wind
+forecast for Switzerland is only known from the live fetch.
 
 Every column comes from ``features.dataset.build_table`` and is known at D-1, 11:00.
 """
@@ -68,6 +78,30 @@ def cloud_cover(table: pd.DataFrame) -> dict[str, pd.Series]:
     return {"cloud_cover_100": table["cloud_cover"] / 100}
 
 
+def load_forecast(table: pd.DataFrame) -> dict[str, pd.Series]:
+    """ENTSO-E load in GW: day-ahead forecast for D, its change over the hour x position, mean actual load of D-2."""
+    return {
+        "load_forecast_gw": table["load_forecast_mw"] / 1000,
+        "load_forecast_change_gw_x_position": table["load_forecast_change_mw"] / 1000 * table["position"],
+        "load_actual_mean_d2_gw": table["load_actual_mean_d2_mw"] / 1000,
+    }
+
+
+def residual_load(table: pd.DataFrame) -> dict[str, pd.Series]:
+    """ENTSO-E residual load forecast (load - solar - wind) in GW and its change over the hour x position."""
+    return {
+        "residual_load_gw": table["residual_load_mw"] / 1000,
+        "residual_load_change_gw_x_position": table["residual_load_change_mw"] / 1000 * table["position"],
+    }
+
+
+def day_ahead_prices(table: pd.DataFrame) -> dict[str, pd.Series]:
+    """Day-ahead prices of D-1 per 100 EUR/MWh: CH at the same clock time, CH daily mean, spreads to neighbours."""
+    columns = ["da_price_ch_d1", "da_price_ch_mean_d1", "da_spread_de_lu_d1", "da_spread_fr_d1",
+               "da_spread_it_north_d1", "da_spread_at_d1"]
+    return {f"{column}_100": table[column] / 100 for column in columns}
+
+
 BLOCKS: dict[str, Callable[[pd.DataFrame], dict[str, pd.Series]]] = {
     "hour": hour_dummies,
     "trend": trend_within_hour,
@@ -76,6 +110,9 @@ BLOCKS: dict[str, Callable[[pd.DataFrame], dict[str, pd.Series]]] = {
     "price_level": price_level,
     "system_balance": system_balance,
     "cloud_cover": cloud_cover,
+    "load_forecast": load_forecast,
+    "residual_load": residual_load,
+    "day_ahead_prices": day_ahead_prices,
 }
 
 FEATURE_SETS: dict[str, list[str]] = {
@@ -83,6 +120,10 @@ FEATURE_SETS: dict[str, list[str]] = {
     "B2": ["hour", "trend", "day_type", "radiation"],
     "B3": ["hour", "trend", "day_type", "radiation", "price_level"],
     "B4": ["hour", "trend", "day_type", "radiation", "price_level", "system_balance", "cloud_cover"],
+    "B5": ["hour", "trend", "day_type", "radiation", "price_level", "system_balance", "cloud_cover",
+           "load_forecast"],
+    "B6": ["hour", "trend", "day_type", "radiation", "price_level", "system_balance", "cloud_cover",
+           "load_forecast", "day_ahead_prices"],
 }
 
 

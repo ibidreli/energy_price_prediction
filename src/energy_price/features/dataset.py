@@ -12,6 +12,13 @@ Every feature is known when the forecast for delivery day D is issued (D-1, 11:0
   end of D-2. Every value is computed per delivery day through ``known_at_issue``, never with a
   fixed lag. Past prices are final here but were provisional at the issue time, so a backtest with
   them is slightly optimistic (docs/data.md, section 1).
+- ENTSO-E (``entsoe_features``, issue #37): the day-ahead load forecast for D and its change over
+  the hour, the week-ahead load forecast for D, the mean actual load of D-2, the solar and wind
+  forecast for D and the residual load, the Swiss day-ahead price of D-1 at the same clock time
+  and its daily mean, and the spreads of the daily means to DE-LU, FR, IT-North and AT. Every value
+  comes from ``known_at_issue_entsoe``: in the live period only what our job had fetched by D-1
+  11:00, before that only the series whose availability the live check confirmed. The price of D
+  itself is never used (docs/data.md, section 7).
 
 The target ``aep_ct_kwh`` is the price of the quarter hour itself and never a feature of that
 quarter hour. The same holds for the direction label ``short`` (1 if the control area was short,
@@ -30,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from energy_price.availability import known_at_issue
+from energy_price.data.entsoe import known_at_issue_entsoe, live_start
 from energy_price.paths import ROOT
 
 TZ = "Europe/Zurich"
@@ -52,6 +60,15 @@ PRICE_COLUMNS = ["price_mean_d2", "price_mean_7d", *PRICE_QUANTILES.values()]
 BALANCE_COLUMNS = ["tsi_mean_d2", "short_share_d2", "direction_d2", "direction_d7"]
 HISTORY_COLUMNS = [*PRICE_COLUMNS, *BALANCE_COLUMNS]
 
+SPREAD_ZONES = {"DE_LU": "da_spread_de_lu_d1", "FR": "da_spread_fr_d1", "IT_NORTH": "da_spread_it_north_d1",
+                "AT": "da_spread_at_d1"}
+SOLAR, WIND = {"B16"}, {"B18", "B19"}  # ENTSO-E production types: solar, wind offshore and onshore
+ENTSOE_COLUMNS = [
+    "load_forecast_mw", "load_forecast_change_mw", "load_week_ahead_mw", "load_actual_mean_d2_mw",
+    "solar_forecast_mw", "wind_forecast_mw", "residual_load_mw", "residual_load_change_mw",
+    "da_price_ch_d1", "da_price_ch_mean_d1", *SPREAD_ZONES.values(),
+]
+
 
 @dataclass(frozen=True)
 class Inputs:
@@ -61,11 +78,13 @@ class Inputs:
     holidays: pd.DataFrame
     pv_capacity: pd.DataFrame
     balance: pd.DataFrame
+    entsoe: pd.DataFrame | None = None
 
 
 def load_inputs(root: Path = ROOT) -> Inputs:
     """Read the processed tables (``make data``) and the meta files of the repository."""
     processed, meta = root / "data" / "processed", root / "data" / "meta"
+    entsoe = processed / "entsoe.parquet"
     return Inputs(
         prices=pd.read_parquet(processed / "balance_prices.parquet"),
         weather=pd.read_parquet(processed / "weather_forecasts.parquet"),
@@ -73,6 +92,7 @@ def load_inputs(root: Path = ROOT) -> Inputs:
         holidays=pd.read_csv(meta / "holidays_ch.csv"),
         pv_capacity=pd.read_csv(meta / "pv_capacity_by_canton.csv"),
         balance=pd.read_parquet(processed / "control_area_balance.parquet"),
+        entsoe=pd.read_parquet(entsoe) if entsoe.exists() else None,
     )
 
 
@@ -263,13 +283,112 @@ def history_features(table: pd.DataFrame, prices: pd.DataFrame, balance: pd.Data
     return pd.concat(frames).reindex(table.index)
 
 
+def day_grid(day: pd.Timestamp) -> pd.DatetimeIndex:
+    """The 92, 96 or 100 quarter hours of the local day ``day`` in UTC."""
+    start = day.tz_localize(TZ).tz_convert("UTC")
+    end = (day + pd.Timedelta(days=1)).tz_localize(TZ).tz_convert("UTC")
+    return pd.date_range(start, end, freq="15min", inclusive="left")
+
+
+def series_values(known: pd.DataFrame, series: str, zone: str = "CH", psr_types: set[str] | None = None) -> pd.Series:
+    """Values of one ENTSO-E series per quarter hour (UTC).
+
+    With ``psr_types`` (generation by production type) the matching groups are summed, otherwise the
+    groups are averaged: one group for the load, minimum and maximum for the week-ahead forecast.
+    """
+    rows = known[(known["series"] == series) & (known["zone"] == zone)]
+    if psr_types is not None:
+        rows = rows[rows["group"].map(lambda group: group.partition("/")[2]).isin(psr_types)]
+        return rows.groupby("timestamp_utc")["value"].sum(min_count=1)
+    return rows.groupby("timestamp_utc")["value"].mean()
+
+
+def whole_day_values(values: pd.Series, day: pd.Timestamp) -> pd.Series | None:
+    """The values of the local day ``day`` if every quarter hour has one, else None (no partial means)."""
+    out = values.reindex(day_grid(day))
+    return None if out.isna().any() else out
+
+
+def change_over_hour(values: pd.Series) -> pd.Series:
+    """Per quarter hour: (mean of the next hour - mean of the previous hour) / 2 in MW per hour.
+
+    One-sided at the first and last hour of the day, as ``radiation_change``. ``values`` holds the
+    quarter hours of one day; hours are taken in UTC, so the switch days need no special case.
+    """
+    hours = values.groupby(values.index.floor("h")).mean()
+    after, before = hours.shift(-1), hours.shift(1)
+    change = ((after - before) / 2).fillna(after - hours).fillna(hours - before)
+    return pd.Series(change.reindex(values.index.floor("h")).to_numpy(), index=values.index)
+
+
+def entsoe_day(known: pd.DataFrame, day: pd.Timestamp, rows: pd.DataFrame) -> pd.DataFrame:
+    """``ENTSOE_COLUMNS`` for the quarter hours ``rows`` of delivery day ``day`` from the selected rows ``known``."""
+    out = pd.DataFrame(np.nan, index=rows.index, columns=ENTSOE_COLUMNS)
+    grid, stamps = day_grid(day), rows["timestamp_utc"].to_numpy()
+
+    def on_rows(values: pd.Series) -> np.ndarray:
+        return values.reindex(stamps).to_numpy()
+
+    load = series_values(known, "load_day_ahead").reindex(grid)
+    solar = series_values(known, "wind_solar_day_ahead", psr_types=SOLAR).reindex(grid)
+    wind = series_values(known, "wind_solar_day_ahead", psr_types=WIND).reindex(grid)
+    residual = load - solar - wind
+    out["load_forecast_mw"] = on_rows(load)
+    out["load_forecast_change_mw"] = on_rows(change_over_hour(load))
+    out["load_week_ahead_mw"] = on_rows(series_values(known, "load_week_ahead").reindex(grid))
+    out["solar_forecast_mw"], out["wind_forecast_mw"] = on_rows(solar), on_rows(wind)
+    out["residual_load_mw"] = on_rows(residual)
+    out["residual_load_change_mw"] = on_rows(change_over_hour(residual))
+
+    actual = whole_day_values(series_values(known, "load_actual"), day - pd.Timedelta(days=2))
+    if actual is not None:
+        out["load_actual_mean_d2_mw"] = actual.mean()
+
+    d1 = day - pd.Timedelta(days=1)
+    ch = whole_day_values(series_values(known, "price_day_ahead", "CH"), d1)
+    if ch is not None:
+        mean = ch.mean()
+        out["da_price_ch_mean_d1"] = mean
+        # Same clock time on D-1: both passes of a repeated hour are averaged. A clock time D-1 does not
+        # have (02:xx after the short day) takes the daily mean of D-1.
+        by_slot = ch.groupby(slot(pd.Series(ch.index.tz_convert(TZ))).to_numpy()).mean()
+        out["da_price_ch_d1"] = by_slot.reindex(slot(rows["timestamp_local"]).to_numpy()).fillna(mean).to_numpy()
+        for zone, column in SPREAD_ZONES.items():
+            other = whole_day_values(series_values(known, "price_day_ahead", zone), d1)
+            if other is not None:
+                out[column] = mean - other.mean()
+    return out
+
+
+def entsoe_features(table: pd.DataFrame, entsoe: pd.DataFrame | None) -> pd.DataFrame:
+    """``ENTSOE_COLUMNS`` for the rows of ``table``, each delivery day from ``known_at_issue_entsoe``.
+
+    The features need only the local days D-2 to D, so each day gets only that window of the table,
+    with the start of the live period taken from the whole table.
+    """
+    if entsoe is None or entsoe.empty:
+        return pd.DataFrame(np.nan, index=table.index, columns=ENTSOE_COLUMNS)
+    start = live_start(entsoe)
+    by_day = dict(tuple(entsoe.groupby("local_day")))
+    frames = []
+    for day, rows in table.groupby("delivery_day"):
+        window = [by_day[d] for d in (day - pd.Timedelta(days=2), day - pd.Timedelta(days=1), day) if d in by_day]
+        if not window:
+            frames.append(pd.DataFrame(np.nan, index=rows.index, columns=ENTSOE_COLUMNS))
+            continue
+        known = known_at_issue_entsoe(pd.concat(window), day.date(), live_from=start)
+        frames.append(entsoe_day(known, day, rows))
+    return pd.concat(frames).reindex(table.index)
+
+
 def build_table(inputs: Inputs, days: list[pd.Timestamp] | None = None) -> pd.DataFrame:
     """Target and features for every quarter hour of ``days`` (default: all days with a price or weather).
 
     Columns: ``delivery_day``, ``timestamp_local``, ``timestamp_utc``, ``hour``, ``position``,
     ``weekend``, ``holiday_pv_share``, ``radiation``, ``radiation_change``, ``cloud_cover``,
-    ``aep_ct_kwh``, ``short`` and ``HISTORY_COLUMNS``. Missing weather stays NaN; so does the history
-    as long as its days do not exist; target and direction are NaN where no value exists yet.
+    ``aep_ct_kwh``, ``short``, ``HISTORY_COLUMNS`` and ``ENTSOE_COLUMNS``. Missing weather stays NaN;
+    so does the history as long as its days do not exist, and every ENTSO-E value that was not known
+    at the issue time; target and direction are NaN where no value exists yet.
     """
     prices = single_prices(inputs.prices)
     if days is None:
@@ -299,7 +418,8 @@ def build_table(inputs: Inputs, days: list[pd.Timestamp] | None = None) -> pd.Da
     label["timestamp_utc"] = label["timestamp_utc"].astype(table["timestamp_utc"].dtype)
     table = table.merge(label, on="timestamp_utc", how="left", validate="one_to_one")
     table = table.drop(columns="hour_stamp_utc")
-    return pd.concat([table, history_features(table, prices, inputs.balance)], axis=1)
+    table = pd.concat([table, history_features(table, prices, inputs.balance)], axis=1)
+    return pd.concat([table, entsoe_features(table, inputs.entsoe)], axis=1)
 
 
 def complete_days(table: pd.DataFrame, columns: list[str]) -> np.ndarray:

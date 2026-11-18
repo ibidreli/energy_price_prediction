@@ -21,7 +21,7 @@
 ## 3. Vorgehen
 
 - **Modell:** <Verfahren in einem Satz>
-- **Features:** <Feature-Set B1 bis B4 oder neue Blöcke, mit Datenquelle>
+- **Features:** <Feature-Set B1 bis B6 oder neue Blöcke, mit Datenquelle>
 - **Tuning:** <Grid, Trainingsfenster, Zeitraum>
 - **Gewählt:** <Setting `CHOSEN`, vor dem Test festgelegt und danach nicht mehr geändert>
 
