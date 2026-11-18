@@ -463,7 +463,9 @@ Gebotszone Schweiz (EIC `10YCH-SWISSGRIDZ`), Preise zusätzlich für die Nachbar
 
 Das Kriterium steht hier, bevor die erste Messung vorliegt, damit es nicht nachträglich an die Daten angepasst wird:
 
-> Eine Reihe gilt als um D−1 11:00 verfügbar, wenn an **mindestens 7 aufeinanderfolgenden Tagen** ein Lauf mit protokollierter Abrufzeit **vor 11:00** den benötigten Tag **vollständig** enthält: D für Prognosen, D−2 für die tatsächliche Last, D−1 für Preise. Ein Tag ohne Lauf vor 11:00 zählt als nicht verfügbar.
+> Eine Reihe gilt als um D−1 11:00 verfügbar, wenn sie an **mindestens 7 Liefertagen** geprüft wurde und an **jedem** geprüften Tag ein Lauf mit protokollierter Abrufzeit **vor 11:00** den benötigten Tag **vollständig** enthielt: D für Prognosen, D−2 für die tatsächliche Last, D−1 für Preise. Geprüft ist ein Tag, an dem mindestens eine Anfrage vor 11:00 eine Antwort von ENTSO-E erhielt (`ok` oder `no_data`). Schon ein geprüfter Tag ohne vollständige Daten verfehlt das Kriterium, denn „meistens verfügbar“ reicht für eine Prognose, die jeden Tag um 11:00 abgegeben wird, nicht.
+
+Tage ohne Antwort vor 11:00 (Lauf verspätet oder ausgefallen, Netzwerkfehler) sagen nichts über ENTSO-E. Sie werden eigens ausgewiesen (`checked = False`) und zählen nicht zu den 7 Tagen. Im Live-Zeitraum haben solche Liefertage keine ENTSO-E-Werte.
 
 - **Erfüllt die Day-Ahead-Lastprognose das Kriterium**, wird sie verwendet: im Live-Zeitraum ab Abrufzeit, in der Historie als übertragene, dokumentierte Annahme.
 - **Erfüllt sie es nicht**, gilt der Rückfall: die tatsächliche Last bis D−2 oder die Wochenprognose für D, sofern diese das Kriterium erfüllt.
