@@ -334,7 +334,7 @@ Die Wahl von Modell, Metrik und Unsicherheitsmass ist laut Modulbeschreibung Sac
 |---|---|
 | Gelten die Knappheitsschwellen −1200 / +1000 MW für 2026? | **geklärt** am 06.10.: Ja, laut Swissgrid-Webseite; die Regel steht in den Bilanzgruppenvorschriften v3.2, Ziffer 7.1. Ohne Wirkung auf unsere Daten, weil die TSI sie nie erreicht hat. Details und eine Unklarheit zur Höhe des Aufschlags in [`overview.md`](overview.md#preisformel-seit-2026-einpreissystem) |
 | Warum ist die erste Viertelstunde jeder Stunde öfter short? | **geklärt** am 06.10. mit der EDA: H8 oben |
-| ENTSO-E-Lastprognose | **Teamfrage**, siehe unten |
+| ENTSO-E-Lastprognose | **in Arbeit** mit [#37](https://github.com/ibidreli/energy_price_prediction/issues/37): Abruf eingerichtet, Verfügbarkeitsprüfung läuft ([`data.md`](data.md#7-entso-e-last-erzeugung-und-day-ahead-preise)) |
 | Daten von 2025 | **Info an den Owner**, Text unten |
 | Unsicherheitsmass und Metrik | **entschieden** am 06.10.: P10, P50 und P90 pro Viertelstunde, Hauptmetrik mittlerer Pinball-Loss, dazu MAE des Medians, Abdeckung und Intervallbreite. Begründung in [`evaluation.md`](evaluation.md), Code in `src/energy_price/metrics.py` |
 
@@ -346,7 +346,7 @@ Die Wahl von Modell, Metrik und Unsicherheitsmass ist laut Modulbeschreibung Sac
 - Konto auf der Transparency Platform anlegen, dann eine E-Mail an transparency@entsoe.eu mit dem Betreff „Restful API access“. Laut ENTSO-E kommt die Antwort in der Regel innert 3 Arbeitstagen; danach lässt sich der Token in den Kontoeinstellungen erzeugen.
 - Ein Abruf-Modul mit Tests nach dem Muster von `fetch_weather.py`, geschätzt 1 bis 2 Tage.
 
-**Risiko:** Ob die Prognose für den Folgetag um 11:00 schon publiziert ist, lässt sich aus historischen Daten nicht belegen ([`data.md`](data.md#6-nicht-erhoben-entso-e-lastprognose)). Darum zuerst eine Woche lang täglich um 10:45 prüfen. Ist sie dann nicht da, scheidet sie aus.
+**Risiko:** Ob die Prognose für den Folgetag um 11:00 schon publiziert ist, lässt sich aus historischen Daten nicht belegen ([`data.md`](data.md#7-entso-e-last-erzeugung-und-day-ahead-preise)). Darum zuerst eine Woche lang täglich um 10:45 prüfen. Ist sie dann nicht da, scheidet sie aus.
 
 **Optionen:**
 

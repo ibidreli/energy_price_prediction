@@ -70,6 +70,8 @@ Tests are in `tests/`: `test_<package>_<module>.py` for the shared parts, `test_
 | `data/control_area_balance/snapshots/` | Swissgrid control area balance, every downloaded version plus `manifest.csv` (`make fetch-cab`) |
 | `data/weather/ecmwf_ifs/` | Archived ECMWF weather forecasts for six sites, one JSON per model run (`make fetch-weather`) |
 | `data/reservoirs/snapshots/` | Swiss reservoir filling levels directly from the BFE CSV, versioned JSON snapshots with `manifest.csv` and `fetch_log.csv` (`make fetch-reservoirs`) |
+| `data/entsoe/snapshots/` | ENTSO-E load and generation forecasts and day-ahead prices, every changed response with `manifest.csv` and `fetch_log.csv`, committed by the scheduled job [`.github/workflows/fetch-entsoe.yml`](.github/workflows/fetch-entsoe.yml) (#37) |
+| `data/entsoe/backfill/` | ENTSO-E history from 2026-01-01, downloaded once (`make fetch-entsoe-history` or "Run workflow") |
 | `data/meta/` | Weather sites, PV capacity per canton, cantonal holidays (`make sites`, `make holidays`) |
 | `data/external/` | Large third-party downloads (BFE plant register), not in git |
 | `data/processed/` | Generated, not in git. Rebuild with `make data` |

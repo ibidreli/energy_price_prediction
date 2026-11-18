@@ -19,7 +19,7 @@
 | **Wetterprognosen** (ECMWF, 6 Standorte) | Sonne, Wolken, Temperatur, Wind, Niederschlag für den Liefertag | Liefertage 01.01. bis 05.10.2026 | ja, Lauf von D−2 18 UTC |
 | **Feiertage** (alle 26 Kantone) | arbeitsfreie Tage | 2026 und 2027 | ja, gesetzlich festgelegt |
 | **Stauseen** (BFE) | verfügbare Speicherenergie | Wochenwerte 04.01. bis 04.10.2026 | nur rechtzeitig beobachtete Snapshots, siehe [Abschnitt 6](#6-stauseen-bfe) |
-| ENTSO-E Lastprognose | erwarteter Verbrauch | nicht erhoben | **nicht belegbar**, siehe [Abschnitt 7](#7-nicht-erhoben-entso-e-lastprognose) |
+| ENTSO-E (Last, Erzeugung, Day-Ahead-Preise) | erwarteter Verbrauch, Solar und Wind, Marktpreis von D−1 | Abruf ab 18.11.2026, Historie ab 01.01.2026 | Preise bis D−1 ja; Prognosen **in Prüfung**, siehe [Abschnitt 7](#7-entso-e-last-erzeugung-und-day-ahead-preise) |
 
 ![Abdeckung der Daten](figures/coverage.png)
 
@@ -424,15 +424,56 @@ sind nicht belegt.
 
 ---
 
-## 7. Nicht erhoben: ENTSO-E Lastprognose
+## 7. ENTSO-E: Last, Erzeugung und Day-Ahead-Preise
 
-Die ENTSO-E-Transparenzplattform veröffentlicht für die Schweiz eine Prognose des Gesamtverbrauchs für den nächsten Tag. Sie wäre nützlich, **ist aber nicht erhoben**, weil sich ihre Verfügbarkeit um 11:00 nicht belegen lässt:
+> Stand 18.11.2026 ([#37](https://github.com/ibidreli/energy_price_prediction/issues/37)): Der Abruf ist eingerichtet. Die Verfügbarkeitsprüfung beginnt mit dem ersten geplanten Lauf. Bis zum Entscheid gilt jede ENTSO-E-Prognose in der Historie als **nicht belegt**.
+
+### Warum
+
+H8 in [`eda.md`](eda.md) erklärt das Kippen der Systembilanz innerhalb der Stunde mit der Steigung der Residuallast (Verbrauch minus PV). Den Anteil des Verbrauchs konnte die EDA nicht prüfen, weil Lastdaten fehlten. Ausserdem gilt laut Preisformel der Swissix-Day-Ahead-Preis, wenn weder aFRR noch mFRR abgerufen wurden ([`overview.md`](overview.md), Bilanzgruppenvorschriften v3.2, Ziffer 7.1). Der Preis von D−1 ist um 11:00 bekannt und einen Tag jünger als alle Swissgrid-Daten.
+
+### Was abgerufen wird
+
+Gebotszone Schweiz (EIC `10YCH-SWISSGRIDZ`), Preise zusätzlich für die Nachbarzonen. Last und Erzeugung in MW, Preise in EUR/MWh.
+
+| Reihe (`series`) | ENTSO-E-Dokument | Zonen | Benötigt für Liefertag D | Grenze |
+|---|---|---|---|---|
+| `load_day_ahead` | A65, Prozess A01 (Day-Ahead-Lastprognose) | CH | Prognose für D | **offen**, Prüfung unten |
+| `load_week_ahead` | A65, Prozess A31 (Wochenprognose, Minimum und Maximum pro Tag) | CH | Prognose für D, Rückfall | **offen** |
+| `load_actual` | A65, Prozess A16 (tatsächliche Last) | CH | Werte bis D−2 | **offen**, auch D−2 ist zu prüfen |
+| `wind_solar_day_ahead` | A69, Prozess A01 (Prognose Wind und Solar) | CH | Prognose für D | **offen**; ob ENTSO-E für CH überhaupt Werte hat, zeigt erst der Abruf |
+| `price_day_ahead` | A44 (Day-Ahead-Preise) | CH, DE-LU, FR, IT-Nord, AT | Preise bis D−1 | D−1: Die Auktion für D−1 lief an D−2 (CH Schluss 11:00, Resultat ab 11:10). **Der Preis von D ist ausgeschlossen**: Er erscheint erst an D−1 um 11:10. |
+
+### Warum die Verfügbarkeit belegt werden muss
 
 - Die EU-Regel (Verordnung 543/2013) verlangt die Publikation spätestens zwei Stunden vor Auktionsschluss. Die Schweiz ist an diese Verordnung **nicht gebunden**.
-- Die historischen Daten zeigen den Wert, aber nicht, **wann** er publiziert wurde.
-- Die API verlangt einen persönlichen Token.
+- Die API zeigt den Wert, aber nicht, **wann** er publiziert wurde. Auch `createdDateTime` in der Antwort hilft nicht: Es ist der Zeitpunkt der Antwort, nicht der Publikation.
+- Beleg ist deshalb allein unsere eigene, gespeicherte Abrufzeit, analog zu `latest_reservoir_report` (Abschnitt 6).
 
-**Nächster Schritt, falls gewünscht:** Token beantragen, dann eine Woche lang täglich um 10:45 prüfen, ob die Prognose für morgen schon da ist. Erst danach kommt sie ins Modell.
+### Wie abgerufen wird
+
+- **Planung:** Der Job [`.github/workflows/fetch-entsoe.yml`](../.github/workflows/fetch-entsoe.yml) läuft auf GitHub Actions, nicht auf einem Laptop, täglich um 08:17, 09:17, 10:17, 10:37 und 15:17 Schweizer Zeit, bis mindestens Februar 2027. Die Zeiten sind in UTC geplant und gelten bis zur Sommerzeit am 28.03.2027. Geplante Läufe starten bei GitHub oft verspätet. Darum liegt der letzte Lauf vor 11:00 mit Reserve bei 10:37 statt 10:45. Gezählt wird die **protokollierte** Abrufzeit, nicht die geplante.
+- **Was ein Lauf holt:** Jede Reihe wird für den Vortag, den Abruftag und den Folgetag abgefragt. Für die Prognose, die an D−1 ausgegeben wird, sind das D−2 (tatsächliche Last), D−1 (Preise) und D (Prognosen).
+- **Snapshots:** Ändern sich die Werte gegenüber dem letzten Snapshot derselben Reihe und desselben Tags, wird die Rohantwort unter `data/entsoe/snapshots/` gespeichert. `manifest.csv` hält dazu Abrufzeit, Prüfsummen, Zeitraum und die URL **ohne Token** fest. Verglichen wird eine Prüfsumme der Werte (`data_sha256`). Die der Rohbytes taugt nicht, weil ENTSO-E `createdDateTime` und die Dokument-ID bei jeder Anfrage neu setzt.
+- **Log:** `fetch_log.csv` protokolliert **jede** Anfrage, auch erfolglose und unveränderte. `status` ist `ok`, `no_data` (noch nichts publiziert), `http_error`, `network_error`, `parse_error` oder `no_token`. `complete` sagt, ob alle 92, 96 oder 100 Viertelstunden des Tags vorliegen. Der Job committet Snapshots und Log und wird danach rot, wenn eine Anfrage fehlgeschlagen ist. GitHub schickt dann eine E-Mail.
+- **Ohne Abhängigkeiten:** Das Abrufmodul `src/energy_price/data/fetch_entsoe.py` braucht nur die Standardbibliothek (Test in `tests/test_fetch_entsoe.py`). So kann kein neues Paket-Release den Job über die Monate brechen.
+- **Historie:** Die Historie ab 01.01.2026 wird einmalig nach `data/entsoe/backfill/` geladen, in Monatsblöcken. Dazu im Actions-Tab „Run workflow“ mit `history_from = 2026-01-01` starten oder lokal `make fetch-entsoe-history`.
+
+### Prüfung der Verfügbarkeit: vorab festgelegtes Kriterium
+
+Das Kriterium steht hier, bevor die erste Messung vorliegt, damit es nicht nachträglich an die Daten angepasst wird:
+
+> Eine Reihe gilt als um D−1 11:00 verfügbar, wenn an **mindestens 7 aufeinanderfolgenden Tagen** ein Lauf mit protokollierter Abrufzeit **vor 11:00** den benötigten Tag **vollständig** enthält: D für Prognosen, D−2 für die tatsächliche Last, D−1 für Preise. Ein Tag ohne Lauf vor 11:00 zählt als nicht verfügbar.
+
+- **Erfüllt die Day-Ahead-Lastprognose das Kriterium**, wird sie verwendet: im Live-Zeitraum ab Abrufzeit, in der Historie als übertragene, dokumentierte Annahme.
+- **Erfüllt sie es nicht**, gilt der Rückfall: die tatsächliche Last bis D−2 oder die Wochenprognose für D, sofern diese das Kriterium erfüllt.
+
+### Einrichtung
+
+1. Konto auf der Transparency Platform anlegen und eine E-Mail an transparency@entsoe.eu mit dem Betreff „Restful API access“ senden. Nach der Freischaltung lässt sich der Token in den Kontoeinstellungen erzeugen.
+2. Den Token im Repository unter *Settings → Secrets and variables → Actions* als `ENTSOE_API_TOKEN` hinterlegen. Lokal kommt er nur in `.env`, nie in eine eingecheckte Datei (`.env.example`).
+3. Den Workflow auf `main` mergen: Geplante Läufe starten nur vom Default-Branch.
+4. Einmal „Run workflow“ ohne Eingabe für einen Testlauf starten, dann einmal mit `history_from = 2026-01-01`.
 
 ---
 
@@ -443,6 +484,7 @@ flowchart LR
     SG[Swissgrid] -->|make fetch-cab| CAB[(snapshots/*.csv)]
     OM[Open-Meteo ECMWF] -->|make fetch-weather| WX[(ecmwf_ifs/*.json)]
     BFECSV[BFE Original-CSV] -->|make fetch-reservoirs| RES[(reservoirs/snapshots/*.json)]
+    ENTSOE[ENTSO-E API] -->|GitHub Actions, täglich| ENT[(entsoe/snapshots/*.xml)]
     BFE[BFE-Register] -->|make sites| SITES[(weather_sites.csv)]
     SITES --> OM
     PY[python-holidays] -->|make holidays| HOL[(holidays_ch.csv)]
@@ -460,6 +502,8 @@ flowchart LR
 | `data/control_area_balance/snapshots/` | Regelzonenbilanz, jede Version mit `manifest.csv` | ja, die Versionen lassen sich später nicht mehr herunterladen |
 | `data/weather/ecmwf_ifs/` | Wetterprognosen, ein JSON pro Lauf | ja, falls das Archiv verschwindet |
 | `data/reservoirs/snapshots/` | Stausee-Wochenberichte, alle beobachteten Versionen mit Metadaten | ja, für Revisionen und beobachtete Verfügbarkeit |
+| `data/entsoe/snapshots/` | ENTSO-E-Live-Abruf: jede geänderte Rohantwort, `manifest.csv`, `fetch_log.csv` | ja, committet vom geplanten Job; die Abrufzeit ist der Verfügbarkeitsbeleg |
+| `data/entsoe/backfill/` | ENTSO-E-Historie ab 01.01.2026, einmalig geladen | ja |
 | `data/meta/` | Standorte, PV pro Kanton, Standort-Kurve, Feiertage | ja |
 | `data/external/` | BFE-Register (18 MB) | nein, `make sites` lädt es neu |
 | `data/processed/` | aufbereitete Tabellen | nein, `make data` baut sie neu |
@@ -468,6 +512,8 @@ flowchart LR
 |---|---|
 | `make fetch` | holt neue Swissgrid-, Wetter- und Stauseedaten (Netzwerk) |
 | `make fetch-reservoirs` | holt die Schweizer Stauseedaten des aktuellen Kalenderjahres (Europe/Zurich); andere Jahre mit `RESERVOIR_YEARS="2025 2026"` |
+| `make fetch-entsoe` | ein ENTSO-E-Abruf von Hand, braucht `ENTSOE_API_TOKEN`; nur zum Testen, die Live-Reihe schreibt der geplante Job |
+| `make fetch-entsoe-history` | lädt die ENTSO-E-Historie ab `ENTSOE_FROM` (Standard 01.01.2026) |
 | `make sites` | berechnet die Standorte neu aus dem BFE-Register |
 | `make holidays` | schreibt die Feiertage neu |
 | `make data` | baut alle Tabellen in `data/processed/` |
@@ -478,5 +524,5 @@ flowchart LR
 1. **Laptop-Task dokumentieren:** Die Ausführung wurde getestet, die Logdaten gingen wegen eines Scriptfehlers verloren. Die Projektentscheidung ist, die Daten aufgrund der verfügbaren Indizien weiter zu verwenden; die erhaltene Evidenz bleibt entsprechend begrenzt.
 2. **Korrekturen von Swissgrid messen,** sobald passende frühere Snapshots verfügbar sind. Mit dem aktuellen Checkout lässt sich die Differenz provisorischer und finaler Werte nicht vollständig auswerten.
 3. **Knappheitsschwellen klären:** Gelten die Werte von der Swissgrid-Webseite (−1200 / +1000 MW) für 2026? Frage an den Owner oder an Swissgrid.
-4. **ENTSO-E-Token:** entscheiden, ob die Lastprognose geprüft werden soll.
+4. **ENTSO-E:** Verfügbarkeitsprüfung nach dem Kriterium in [Abschnitt 7](#7-entso-e-last-erzeugung-und-day-ahead-preise) auswerten und den Entscheid hier festhalten. Den Abruf bis mindestens Februar 2027 überwachen und Revisionen messen. Dazu die Live-Tage später neu laden und mit den Snapshots vergleichen.
 5. **Historische Stausee-Verfügbarkeit belegen:** archivierte BFE-/Energy-Charts-Versionen und Publikationszeitpunkte suchen, bevor die neuen Werte im Backtest ab Januar als Merkmale verwendet werden.
