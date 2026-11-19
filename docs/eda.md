@@ -4,9 +4,9 @@
 
 ## Kurzfassung
 
-1. **Die Richtung des Systems (short/long) lässt sich aus der Vergangenheit kaum vorhersagen.** Die Richtung von D−2 stimmt nur in 54 % der Viertelstunden mit dem Liefertag überein, Zufall wäre 50.5 %.
+1. **Die Richtung des Systems (short/long) lässt sich aus der Vergangenheit kaum vorhersagen.** Die Richtung von D−2 stimmt nur in 54 % der Viertelstunden mit dem Liefertag überein, Zufall wäre 50.4 %.
 2. **Die Systembilanz kippt innerhalb jeder Stunde, und die Richtung folgt der Tageszeit.** Um 17 Uhr ist das System um :00 zu 30 % short, um :45 zu 79 %; um 21 Uhr ist es umgekehrt (79 % und 29 %). Ursache sind Fahrpläne, die zur vollen Stunde in Stufen wechseln, während Verbrauch und PV gleitend laufen (H8). Die Steigung der Strahlungsprognose erklärt einen Teil davon (Rangkorrelation 0.47) und ist um 11:00 bekannt.
-3. **Die Sonne bestimmt das Preisniveau, nicht die Richtung.** Die Strahlungsprognose hängt mit der TSI praktisch nicht zusammen (Rangkorrelation −0.07), mit dem Preis bei long aber stark (−0.58).
+3. **Die Sonne bestimmt das Preisniveau, nicht die Richtung.** Die Strahlungsprognose hängt mit der TSI praktisch nicht zusammen (Rangkorrelation −0.08), mit dem Preis bei long aber stark (−0.58).
 4. **Die Owner-Entscheidung „nur Daten ab 2026“ wird gestützt.** Die parallel gerechneten Preise von 2025 sind deutlich anders verteilt (Juli und August: 36 % gegenüber 11 % negativ).
 5. **Extreme und Unsicherheit hängen von Uhrzeit und Saison ab.** Tiefe Extreme gibt es nur mittags bei long, die Streuung ist am Nachmittag dreimal so gross wie in der Nacht.
 6. **Ausser Strahlung und Bewölkung bringt das Wetter wenig.** Bewölkung macht die Systembilanz unruhiger (mittags 62 gegenüber 106 MW |TSI| bei klar und bedeckt), das Preisband aber nicht breiter (H9). Temperatur, Wind, Feuchte und Niederschlag tragen bei gleicher Uhrzeit und Strahlung nichts bei (H10).
@@ -17,7 +17,7 @@
 | # | Frage | Erwartung | Warum sie zählt | Ergebnis |
 |---|---|---|---|---|
 | H1 | Ist das System zu bestimmten Uhrzeiten, Wochentagen oder Monaten häufiger short oder long? | Ja, weil Verbrauch und Solarproduktion einem Tages-, Wochen- und Jahresrhythmus folgen. | Die TSI erklärt den Preis am stärksten (Rangkorrelation −0.77). Ihre Muster sind erlaubte Merkmale, die TSI selbst nicht. | **teilweise:** mittags und nach Position in der Stunde ja, Wochentag und Monat schwach |
-| H2 | Ist das System zur gleichen Uhrzeit 2, 3 oder 7 Tage später wieder in derselben Richtung? | Ja, etwas häufiger als per Zufall, weil sich Wetter und Verbrauch über einige Tage ähneln. | Zeigt, ob die Vergangenheit bis D−2 etwas über den Liefertag sagt. | **kaum:** 54 % gegenüber 50.5 % Zufall |
+| H2 | Ist das System zur gleichen Uhrzeit 2, 3 oder 7 Tage später wieder in derselben Richtung? | Ja, etwas häufiger als per Zufall, weil sich Wetter und Verbrauch über einige Tage ähneln. | Zeigt, ob die Vergangenheit bis D−2 etwas über den Liefertag sagt. | **kaum:** 54 % gegenüber 50.4 % Zufall |
 | H3 | Hängt die Strahlungsprognose mit der Systembilanz zusammen oder nur mit dem Preis? | Viel Sonne führt zu grösseren Abweichungen und darüber zu anderen Preisen (Weg „Sonne → Abweichung → Preis“). | Das ist das fachliche Argument für Wetter im Modell. | **widerlegt** für die TSI; mit dem Preis deutlich |
 | H4 | Wann treten Extrempreise unter −100 und über +50 ct/kWh auf? | Sie häufen sich zu bestimmten Uhrzeiten, Wochentagen und Monaten, an Feiertagen und bei grosser \|TSI\|. | Extreme dominieren die Fehler und die Unsicherheit. | **bestätigt** |
 | H5 | Lassen sich die parallel publizierten Preise `aep_ct_kwh` von Juli bis Dezember 2025 zusätzlich nutzen? | Sie sind ähnlich verteilt wie 2026. Dann wären 6 Monate mehr Trainingsdaten nutzbar. | Prüft die Owner-Entscheidung „nur Daten ab 2026“. | **widerlegt:** deutlich andere Verteilung |
@@ -35,14 +35,16 @@
 2. **Manuelle Analyse:** Typen, Fehlwerte, Duplikate, Verteilungen, Ausreisser, Zusammenhänge, Zeitmuster. Danach die Hypothesen H1 bis H7.
 3. **Wiederverwendete Berechnungen** liegen getestet in `src/energy_price/eda.py` (`tests/test_eda.py`): Viertelstunde der Lokalzeit, Feiertagsanteil nach PV-Leistung, Tagtypen, Vergleich der Richtung über Tage, Extremereignisse, Wetter von Stunden auf Viertelstunden.
 
-**Zeiträume:** Preise gibt es bis 31.08.2026, die TSI in der ersten Runde bis 03.10.2026 (Snapshot vom 04.10.). Alles, was TSI und Preis zusammen zeigt (H1, H3, H4, H6, H7, H8), nutzt Januar bis August. H2 betrachtet nur die TSI und nutzt den ganzen Zeitraum. Die zweite Runde (H9 bis H12) nutzt nur Januar bis August und hängt deshalb nicht davon ab, welcher Snapshot der neueste ist. Ein erneuter Lauf des Notebooks mit einem neueren Snapshot verschiebt die Zahlen zu H2 leicht.
+**Zeiträume:** Alle Hypothesen (H1 bis H12) nutzen Januar bis August 2026. Das Notebook schneidet Preis, Regelzonenbilanz (Snapshot vom 04.10., Daten bis 03.10.) und Wetter direkt nach dem Laden vor dem 01.09.2026 ab, weil September und Oktober die Testperiode sind (#36, #50). Einzige Ausnahme ist die Umstellung auf Viertelstunden (H8 vertieft, Notebook Kapitel 1.5.4): Sie liest die Regelzonenbilanz ab September aus dem Snapshot vom 15.11., ohne Preise.
+
+**Vorbehalt zur Testperiode:** Keine Preisbewertung auf September und Oktober, aber TSI und Wetter daraus wurden in einer früheren Fassung der EDA betrachtet (H2 und H3 bis Anfang Oktober). Kapitel 1.5.4 (Umstellung auf Viertelstunden) liest zudem die TSI vom 26.10. bis 14.11.2026, davon 26.10. bis 31.10. aus der Testperiode, ohne Preise. Diese Analyse betrifft den Betrieb nach dem 04.11., nicht die Modellwahl, und bleibt deshalb (Entscheid Luca, 17.11.2026). Die Periode heisst „Testperiode mit Vorbehalt“.
 
 ## Datenqualität
 
 | Befund | Umgang |
 |---|---|
 | Preis und Regelzonenbilanz: keine Duplikate, lückenloses 15-Minuten-Raster, 29.03.2026 mit 92 Viertelstunden | nichts zu tun |
-| Regelzonenbilanz: **eine** Viertelstunde (02.10.2026 14:00) ohne Abrufwerte, TSI und Preis vorhanden | nicht füllen; liegt nach dem letzten Preis |
+| Regelzonenbilanz bis 31.08.2026 ohne Fehlwerte; die einzige Lücke des Snapshots (02.10.2026 14:00, keine Abrufwerte) liegt in der Testperiode | nicht füllen |
 | `mfrr_da_pos_mw`, `mfrr_da_neg_mw` 2026 durchgehend 0 | weglassen |
 | `price_ct_kwh` der Regelzonenbilanz ist für Januar bis August zu 100 % gleich dem finalen Preis | dieselbe Grösse, nur einmal verwenden |
 | Wetterlücken 24.06.2026 (Strahlung, Sonnenscheindauer, Wind 10 m, Luftfeuchte) und 12.06.2026 (Luftfeuchte) | Archivlücke, unabhängig vom Wetter; leer lassen |
@@ -84,19 +86,19 @@ Zuordnung von Wetter zu Viertelstunden: Die Viertelstunden h−1:00 bis h−1:45
 
 **Frage:** Ist das System zur gleichen Uhrzeit 2, 3 oder 7 Tage später wieder in derselben Richtung?
 **Erwartung:** Ja, etwas häufiger als per Zufall.
-**Ergebnis: kaum.** Ganzer TSI-Zeitraum bis 03.10.2026.
+**Ergebnis: kaum.** Januar bis August 2026.
 
 ![Übereinstimmung der Richtung](figures/eda_direction_persistence.png)
 
 | Abstand | gleiche Richtung zur gleichen Uhrzeit | um 11:00 bekannt? |
 |---|---|---|
-| 1 Tag | 55.2 % | **nein** (D−1 noch nicht publiziert) |
+| 1 Tag | 55.1 % | **nein** (D−1 noch nicht publiziert) |
 | 2 Tage | 54.4 % | ja (Annahme D−2) |
-| 3 Tage | 53.7 % | ja |
-| 7 Tage | 53.6 % | ja |
-| Zufall bei 55 % short | 50.5 % | |
+| 3 Tage | 53.6 % | ja |
+| 7 Tage | 53.8 % | ja |
+| Zufall bei 55 % short | 50.4 % | |
 
-Die Autokorrelation der Tagesmittel der TSI liegt bei 0.15 nach 2 Tagen und 0.01 nach 7. **Die Vergangenheit bis D−2 sagt wenig über die Richtung am Liefertag.**
+Die Autokorrelation der Tagesmittel der TSI liegt bei 0.16 nach 2 Tagen und 0.02 nach 7. **Die Vergangenheit bis D−2 sagt wenig über die Richtung am Liefertag.**
 
 ### H3: Strahlung und Systembilanz
 
@@ -106,7 +108,7 @@ Die Autokorrelation der Tagesmittel der TSI liegt bei 0.15 nach 2 Tagen und 0.01
 
 ![Strahlung, TSI und Preis](figures/eda_radiation_tsi.png)
 
-- Strahlungsprognose und TSI derselben Viertelstunde (Tageslicht): Rangkorrelation **−0.07**, mit |TSI| **+0.07**, in keinem Monat über 0.18 im Betrag.
+- Strahlungsprognose und TSI derselben Viertelstunde (Tageslicht): Rangkorrelation **−0.08**, mit |TSI| **+0.07**, in keinem Monat über 0.14 im Betrag.
 - Strahlung und Preis: **−0.23** insgesamt, **−0.58 bei long**, **−0.39 bei short**.
 - Der Weg „Sonne → Abweichung → Preis“ ist damit **nicht** belegt. **Vermutung:** Die Sonne senkt das Preisniveau der abgerufenen Regelenergie, etwa über tiefe Spotpreise am Mittag. Für die TSI wäre der *Fehler* der Strahlungsprognose massgebend, und der ist um 11:00 unbekannt.
 
@@ -210,10 +212,10 @@ Feiertag heisst: Montag bis Freitag, an dem Kantone mit mindestens 50 % der PV-L
 Details mit Code und Grafiken im Notebook, Kapitel 1.5.
 
 **Messung:**
-- **Stabilität:** gleiches Muster an Werktagen, Samstagen und Sonntagen (Korrelation mit dem Gesamtprofil 0.87 bis 0.98) und von Februar bis September (0.91 bis 0.96). Das systematische Kippen, der mittlere Betrag des Profils über die 24 Stunden, beträgt im Januar und Februar 88 bis 89 MW, im August 48 MW.
+- **Stabilität:** gleiches Muster an Werktagen, Samstagen und Sonntagen (Korrelation mit dem Gesamtprofil 0.87 bis 0.98) und von Februar bis August (0.91 bis 0.95). Das systematische Kippen, der mittlere Betrag des Profils über die 24 Stunden, beträgt im Januar und Februar 88 bis 89 MW, im August 48 MW.
 - **Morgenrampe nur an Werktagen:** Von 4 bis 7 Uhr kippt die TSI an Werktagen nach short (bis −120 MW um 6 Uhr), an Samstagen, Sonntagen und Feiertagen kaum.
 - **Sommerzeit:** Nach dem 29.03.2026 passt das Profil besser zum um eine Stunde verschobenen Profil davor (Korrelation 0.90) als zur gleichen Uhrzeit (0.80).
-- **Ohne Sonne deutliches Kippen:** In Stunden mit konstanter Strahlungsprognose, vor allem 20 bis 5 Uhr, beträgt das mittlere |Kippen| 64.7 MW, in Stunden mit sich ändernder Sonne 107.8 MW. Dort hängt es mit der Steigung der Strahlung zusammen (Rangkorrelation 0.47).
+- **Ohne Sonne deutliches Kippen:** In Stunden mit konstanter Strahlungsprognose, vor allem 20 bis 5 Uhr, beträgt das mittlere |Kippen| 68.1 MW, in Stunden mit sich ändernder Sonne 109.0 MW. Dort hängt es mit der Steigung der Strahlung zusammen (Rangkorrelation 0.47).
 - **Umstellung auf Viertelstunden:** systematisches Kippen 38.6 MW vorher (26.10. bis 03.11.2026, Rauschgrenze 32.2 MW) und 18.8 MW nachher (04.11. bis 14.11.2026, Rauschgrenze 23.0 MW). Nachher ist kein systematisches Kippen mehr nachweisbar, das mittlere |Kippen| sinkt aber nur von 61.9 auf 56.4 MW. Das Profil nachher hängt mit dem Profil vorher nicht mehr zusammen (Korrelation −0.25). Rauschgrenze: 95-%-Quantil des systematischen Kippens, wenn jeder Tag ein zufälliges Vorzeichen bekommt (`flip_noise_floor`).
 - **Wert für die Prognose:** Die Referenz mit Quantilen je Viertelstunde statt je Stunde senkt den Pinball-Loss im April und Mai um 2.9 %, fast nur bei :00 und :45.
 
@@ -309,8 +311,8 @@ Nur Merkmale, die um **11:00 an D−1** bekannt sind. Für Swissgrid gilt die am
 | Wochentag bzw. Wochenende | Kalender | immer | mittel | H4: hohe Extreme an Werktagen, tiefe am Wochenende; H6: Wochenenden doppelt so oft negativ |
 | Anteil der PV-Leistung mit Feiertag, Tagtyp | Feiertage und PV-Register | immer | mittel, unsicher | H6: 26 % negativ an Feiertagen, aber nur 5 Tage |
 | Saison (Monat oder Tageslänge) | Kalender | immer | mittel, mit Risiko | H7: Profil hängt stark von der Saison ab; nur 8 Monate Daten, darum eher über die Strahlung abbilden |
-| Mittlere TSI bzw. short-Anteil an D−2 | Swissgrid über `known_at_issue()` | D−2, 24:00 gemäss Projektbestätigung vom 22.10.; Task getestet, Logdaten durch Scriptfehler verloren | gering | H2: Autokorrelation 0.15 nach 2 Tagen |
-| Richtung zur gleichen Uhrzeit an D−2 oder D−7 | Swissgrid über `known_at_issue()` | D−2, 24:00 gemäss Projektbestätigung vom 22.10.; Task getestet, Logdaten durch Scriptfehler verloren | gering | H2: 54 % gegenüber 50.5 % Zufall |
+| Mittlere TSI bzw. short-Anteil an D−2 | Swissgrid über `known_at_issue()` | D−2, 24:00 gemäss Projektbestätigung vom 22.10.; Task getestet, Logdaten durch Scriptfehler verloren | gering | H2: Autokorrelation 0.16 nach 2 Tagen |
+| Richtung zur gleichen Uhrzeit an D−2 oder D−7 | Swissgrid über `known_at_issue()` | D−2, 24:00 gemäss Projektbestätigung vom 22.10.; Task getestet, Logdaten durch Scriptfehler verloren | gering | H2: 54 % gegenüber 50.4 % Zufall |
 | Preisniveau der Vergangenheit (Quantile je Viertelstunde über 8 Wochen bis D−2) | Swissgrid über `known_at_issue()` | zeitlich D−2, 24:00 gemäss Projektbestätigung; Werte können heute final statt damals provisorisch sein | gering, als Ausgangspunkt der Baseline | H11: Rangkorrelation 0.16 nach 2 Tagen; Quantile über 56 Tage decken 75 % statt 80 % ab |
 | Bewölkung bzw. Streuung der Strahlungsprognose zwischen den Standorten | ECMWF, Lauf D−2 18 UTC | ja | mittel für die Grösse von \|TSI\|, gering für das Preisband | H9: mittags 62 gegenüber 106 MW \|TSI\| bei klar und bedeckt, ab März in jedem Monat |
 | Temperatur, Wind, Feuchte, Niederschlag, übrige Strahlungsvariablen | ECMWF, Lauf D−2 18 UTC | ja | **keiner**, vorerst weglassen | H10: bei gleicher Uhrzeit und Strahlung alle Mediane nahe null; Strahlungsvariablen untereinander 0.92 bis 0.99 |
@@ -323,7 +325,7 @@ Nur Merkmale, die um **11:00 an D−1** bekannt sind. Für Swissgrid gilt die am
 Nur Fragen, die den Auftrag betreffen und die das Team nicht selbst entscheiden kann. Alle drei stehen schon als offene Punkte im [Meeting-Protokoll vom 01.10.](meetings/2026-10-01_owner.md); die EDA macht sie dringlicher.
 
 1. **Was genau wird vorhergesagt: nur der Preis oder auch die Richtung (short/long)?** Der Preis besteht aus zwei getrennten Verteilungen je Richtung, und die Richtung ist um 11:00 kaum vorhersagbar (H2). Eine eigene Prognose der Richtung wäre ein anderes Ergebnis als ein Preisband.
-2. **Gehört eine Intraday-Prognose zum Auftrag?** Die Richtung von D−1 würde mit 55.2 % kaum mehr helfen als die von D−2 (H2); der Nutzen von Intraday käme aus jüngeren Daten am Liefertag selbst.
+2. **Gehört eine Intraday-Prognose zum Auftrag?** Die Richtung von D−1 würde mit 55.1 % kaum mehr helfen als die von D−2 (H2); der Nutzen von Intraday käme aus jüngeren Daten am Liefertag selbst.
 3. **Wie werden die Umstellungstage behandelt?** Am 29.03. hat der Liefertag 92 und am 25.10. 100 Viertelstunden: Prognose in Lokalzeit mit variabler Länge?
 
 Die Wahl von Modell, Metrik und Unsicherheitsmass ist laut Modulbeschreibung Sache des Teams und muss begründet werden; sie ist darum keine Frage an den Owner.
