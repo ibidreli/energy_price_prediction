@@ -110,8 +110,8 @@ Merkmale „zur gleichen Uhrzeit“ (`direction_d2`, `direction_d7`, die Preisqu
 | Liefertag | Merkmal | Bezugstag | Betroffen |
 |---|---|---|---|
 | 31.03.2026 | `direction_d2` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
-| 05.04.2026 (Tuning) | `direction_d7` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
-| 27.10.2026 (Holdout) | `direction_d2` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
+| 05.04.2026 (Validierung) | `direction_d7` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
+| 27.10.2026 (Test) | `direction_d2` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
 | 01.11.2026 | `direction_d7` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
 
 **Tagesmerkmale** (`price_mean_d2`, `tsi_mean_d2`, `short_share_d2`) brauchen keine Sonderregel: Sie mitteln über alle Viertelstunden des Tages, also 92, 96 oder 100. Die **Preisquantile** rechnen wie die Referenz, nach einem kurzen Tag also mit einem Wert weniger für 02:xx und nach einem langen Tag mit einem mehr. Am **Liefertag 25.10.** erhalten beide Durchgänge von 02:xx dieselben Merkmale, weil sie dieselbe Uhrzeit haben.
