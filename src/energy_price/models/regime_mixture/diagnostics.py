@@ -1,8 +1,9 @@
 """How much is the direction worth? The regime model with four values of P(short) on the same price parts.
 
 The regime model only beats a single quantile model if it knows the direction (short or long) well
-enough. This script keeps the weekly fits of the price quantiles per direction exactly as in the
-backtest and only swaps p in the mixture F(x) = p * F_short(x) + (1 - p) * F_long(x):
+enough. This script keeps the fits of the price quantiles per direction exactly as in the last
+``select`` run (same days, same refit frequency, checked against ``select_forecasts.parquet``) and
+only swaps p in the mixture F(x) = p * F_short(x) + (1 - p) * F_long(x):
 
 - ``constant``: share of short quarter hours in the training rows (one value per fit),
 - ``slot``: share of short per quarter hour of the day (hour x position) in the training rows,
@@ -10,22 +11,23 @@ backtest and only swaps p in the mixture F(x) = p * F_short(x) + (1 - p) * F_lon
 - ``oracle``: the actual direction of the delivery quarter hour (0 or 1). Not available at D-1,
   11:00; it is an upper bound for the value of a perfect direction forecast.
 
-Nothing is selected here, so the test period may be used. Every p is scored with the pinball loss
-of the mixture, and the three forecast values of p also with Brier score, log loss and AUC.
+The settings are those of ``CHOSEN`` with a single training window (a window mean has no single
+fit to take apart). Nothing is selected here and only validation days are used. Every p is scored
+with the pinball loss of the mixture, and the three forecast values of p also with Brier score, log
+loss and AUC.
 
-Usage (repository root)::
+Usage (repository root, after ``make select MODEL=regime_mixture``)::
 
-    python -m energy_price.models.regime_mixture.diagnostics            # test, June to August
-    python -m energy_price.models.regime_mixture.diagnostics --period tune
+    python -m energy_price.models.regime_mixture.diagnostics
 
-Writes ``reports/regime_mixture/<period>_direction_forecasts.parquet``, ``_direction_scores.csv`` and
-``_direction_reliability.csv``
-and the figure ``docs/figures/regime_mixture/<period>_direction_reliability.png``.
+Writes ``reports/regime_mixture/validation_direction_forecasts.parquet``, ``_direction_scores.csv`` and
+``_direction_reliability.csv`` and the figure ``docs/figures/regime_mixture/validation_direction_reliability.png``.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import numpy as np
@@ -33,10 +35,11 @@ import pandas as pd
 from joblib import Parallel, delayed, parallel_config
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
-from energy_price.evaluation.backtest import development_inputs, evaluate, folds, run_reference, training_rows
-from energy_price.evaluation.design import validation_days, window_days
-from energy_price.features.dataset import DIRECTION, build_table, load_inputs
-from energy_price.models.regime_mixture.model import CHOSEN, RegimeMixtureModel, mixture_quantiles
+from energy_price.evaluation.backtest import evaluate, folds, run_reference, training_rows
+from energy_price.evaluation.design import DESIGN, WINDOW_MEAN, window_days
+from energy_price.evaluation.experiment import check_days, development_table, label, load, windows_of
+from energy_price.features.dataset import DIRECTION
+from energy_price.models.regime_mixture.model import RegimeMixtureModel, mixture_quantiles
 from energy_price.models.shared.base import COLUMNS, QUANTILES
 from energy_price.paths import FIGURES_DIR, REPORTS_DIR
 
@@ -69,9 +72,9 @@ def p_variants(train: pd.DataFrame, target: pd.DataFrame, p_model: np.ndarray) -
 
 
 def _fold(table: pd.DataFrame, block: list[pd.Timestamp], settings: dict) -> pd.DataFrame:
-    """One weekly fit: forecasts of every p variant for the days of ``block``."""
+    """One fit: forecasts of every p variant for the days of ``block``."""
     params = {k: v for k, v in settings.items() if k != "window"}
-    window = window_days(settings.get("window", "expanding"))
+    window = window_days(settings["window"])
     train = training_rows(table, block[0], window)
     model = RegimeMixtureModel(**params).fit(train)
     target = table[table["delivery_day"].isin(block)]
@@ -93,11 +96,31 @@ def _fold(table: pd.DataFrame, block: list[pd.Timestamp], settings: dict) -> pd.
     return pd.concat(frames, ignore_index=True)
 
 
-def run(table: pd.DataFrame, days: list[pd.Timestamp], settings: dict, jobs: int = -1) -> pd.DataFrame:
-    """Forecasts of all p variants and of the reference for ``days``, with the same weekly folds as the backtest."""
+def run(table: pd.DataFrame, days: list[pd.Timestamp], settings: dict, jobs: int = -1,
+        refit_every: int = DESIGN.refit_every) -> pd.DataFrame:
+    """Forecasts of all p variants and of the reference for ``days``, with the folds of the backtest."""
+    if settings["window"] == WINDOW_MEAN:
+        raise ValueError("the direction diagnostics need a single training window, not the window mean")
     with parallel_config(backend="loky", inner_max_num_threads=1):
-        parts = Parallel(n_jobs=jobs)(delayed(_fold)(table, block, settings) for block in folds(days))
+        parts = Parallel(n_jobs=jobs)(delayed(_fold)(table, block, settings) for block in folds(days, refit_every))
     return pd.concat([run_reference(table, days), *parts], ignore_index=True)
+
+
+def select_name(settings: dict, grid: list[dict], windows: tuple[str, ...]) -> str:
+    """Name of ``settings`` (incl. ``window``) among the select candidates: a GRID setting with a window."""
+    for params in grid:
+        for window in windows:
+            if {**params, "window": window} == settings:
+                return label({**params, "window": window})
+    raise ValueError(f"{settings} is not a candidate of select; rerun select")
+
+
+def check_matches_select(forecasts: pd.DataFrame, saved: pd.DataFrame, name: str) -> None:
+    """``p_model`` must reproduce the select forecast ``name``, otherwise code, data or settings have changed."""
+    old = saved[saved["model"] == name].set_index("timestamp_utc")[[COLUMNS[tau] for tau in QUANTILES]]
+    new = forecasts[forecasts["model"] == "p_model"].set_index("timestamp_utc")[old.columns].reindex(old.index)
+    if old.empty or not np.allclose(old.to_numpy(), new.to_numpy(), atol=1e-9, equal_nan=True):
+        raise ValueError(f"the mixture with the model's p differs from the select forecast {name}; rerun select")
 
 
 def direction_scores(forecasts: pd.DataFrame) -> pd.DataFrame:
@@ -110,7 +133,7 @@ def direction_scores(forecasts: pd.DataFrame) -> pd.DataFrame:
         out[f"p_{variant}"] = {
             "brier": brier_score_loss(y, p),
             "log_loss": log_loss(y, p, labels=[0.0, 1.0]),
-            # A constant p does not rank quarter hours within a week: its AUC is 0.5 by definition.
+            # A constant p does not rank the quarter hours of a fit: its AUC is 0.5 by definition.
             "auc": 0.5 if variant == "constant" else roc_auc_score(y, p),
             "mean_p": p.mean(),
             "share_short": y.mean(),
@@ -164,26 +187,32 @@ def reliability_figure(table: pd.DataFrame, path: Path) -> Path:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--period", choices=("validation",), default="validation")
     parser.add_argument("--jobs", type=int, default=-1)
     args = parser.parse_args(argv)
 
-    settings = CHOSEN[NAME]
-    forecasts = run(build_table(development_inputs(load_inputs())), validation_days(), settings, args.jobs)
+    module = load(NAME)
+    out = REPORTS_DIR / NAME
+    selection_path = out / "select_selection.json"
+    if not selection_path.exists():
+        raise FileNotFoundError(f"{selection_path} is missing: run make select MODEL={NAME} first")
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    settings = module.CHOSEN[NAME]
+    name = select_name(settings, module.GRID, windows_of(module))
+    forecasts = run(development_table(), check_days(tuple(selection["period"])), settings, args.jobs,
+                    selection["refit_every"])
+    check_matches_select(forecasts, pd.read_parquet(out / "select_forecasts.parquet"), name)
     scores, daily = evaluate(forecasts)
     scores = scores.join(direction_scores(forecasts))
 
-    out = REPORTS_DIR / NAME
-    out.mkdir(parents=True, exist_ok=True)
-    forecasts.to_parquet(out / f"{args.period}_direction_forecasts.parquet", index=False)
-    scores.to_csv(out / f"{args.period}_direction_scores.csv")
+    forecasts.to_parquet(out / "validation_direction_forecasts.parquet", index=False)
+    scores.to_csv(out / "validation_direction_scores.csv")
     calibration = reliability(forecasts)
-    calibration.to_csv(out / f"{args.period}_direction_reliability.csv", index=False)
-    figure = reliability_figure(calibration, FIGURES_DIR / NAME / f"{args.period}_direction_reliability.png")
+    calibration.to_csv(out / "validation_direction_reliability.csv", index=False)
+    figure = reliability_figure(calibration, FIGURES_DIR / NAME / "validation_direction_reliability.png")
 
     pd.set_option("display.width", 160)
-    columns = ["pinball", "mae_q50", "coverage_80", "width_80", "skill_vs_reference", "share_days_better",
-               "brier", "log_loss", "auc", "n_days"]
+    columns = ["mean_daily_pinball", "pinball", "mae_q50", "coverage_80", "width_80", "skill_vs_reference",
+               "share_days_better", "brier", "log_loss", "auc", "n_days"]
     print(scores[[c for c in columns if c in scores.columns]].round(4))
     print(calibration.round(3))
     print(f"figure: {figure}")

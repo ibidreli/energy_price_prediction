@@ -9,8 +9,8 @@ change. Shared building blocks to reuse:
 - ``energy_price.models.shared.linear``   ``LinearQuantileModel`` of the baseline
 
 The placeholder below runs end to end (quantiles of the training prices, no features), so the
-backtest of a fresh copy works before the real model is written:
-``make backtest MODEL=<name> STEP=tune``, then ``STEP=test``.
+backtest of a fresh copy works before the real model is written: ``make select MODEL=<name>``, or a
+quick smoke run with ``python -m energy_price.evaluation.experiment <name> select --days 2026-04-01 2026-04-03``.
 """
 
 from sklearn.dummy import DummyRegressor
@@ -30,8 +30,9 @@ class Model(PerQuantileModel):
 
 MODEL = Model
 
-# TODO: settings to compare on April and May; keyword arguments of Model plus "window".
-GRID = [{"feature_set": "B1", "window": w} for w in ("expanding", "rolling_56d")]
+# TODO: settings compared by `select`: keyword arguments of Model, WITHOUT "window". Every setting runs
+# with every window of WINDOWS (optional here, default DESIGN.windows) and their window mean.
+GRID = [{"feature_set": "B1"}]
 
-# TODO: the best entry of reports/<name>/tune_scores.csv, fixed before the test period is run.
+# TODO: the selected candidate of reports/<name>/select_selection.json (settings incl. "window"), copied by hand.
 CHOSEN = {"template": {"feature_set": "B1", "window": "expanding"}}

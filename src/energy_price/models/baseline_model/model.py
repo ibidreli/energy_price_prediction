@@ -18,14 +18,12 @@ GRID = [
 # Sparse linear model: the only one that also tries 28 days (docs/training_pipeline.md).
 WINDOWS = ("expanding", "rolling_28d", "rolling_56d", "rolling_90d")
 
-# Chosen on the tuning period (`make baseline-tune`): for both feature sets the expanding window
-# without penalty had the lowest mean pinball loss, see docs/models/baseline_model.md.
+# provisional until #51
 CHOSEN = {
     "B1": {"feature_set": "B1", "window": "expanding", "alpha": 0.0},
     "B2": {"feature_set": "B2", "window": "expanding", "alpha": 0.0},
 }
 
-COEFFICIENTS_OF = "B2"
 COEFFICIENTS_SHOWN = {
     "radiation_100": "Radiation, per 100 W/m²",
     "radiation_change_100_x_position": "Radiation change × position in hour",

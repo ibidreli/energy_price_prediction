@@ -1,5 +1,9 @@
 # Bandit über die Modelle: explorative Architekturprüfung
 
+> **Status: getestet und verworfen (#21).** Der Bandit erreichte 3.207 gegenüber 3.163 von `gbm_quantile` (Pinball, Juni bis August, alte Pipeline) und wählte fast zufällig.
+> Der Code bleibt lauffähig, damit der Befund nachvollziehbar ist; er ist kein Modellkandidat.
+> Neue Pipeline: `make bandit-exploration STEP=fit-spans|evaluate-spans`, nur auf Validierungstagen (April und Mai, Juni bis August).
+
 **Status:** abgeschlossen, nicht weiterverfolgt, kein Modellkandidat nach Standardablauf · **Verantwortlich:** Luca Manna · **Issue:** [#21](https://github.com/ibidreli/energy_price_prediction/issues/21) · **Stand der Zahlen:** 05.11.2026
 
 Lesbarer Einstieg: [`notebooks/03_bandit_architektur.ipynb`](../../../notebooks/03_bandit_architektur.ipynb). Der Holdout wurde nicht verwendet.

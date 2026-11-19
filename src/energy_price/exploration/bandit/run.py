@@ -1,12 +1,18 @@
-"""Explorative architecture check of a bandit over the models (``make bandit-exploration STEP=tune|test``).
+"""Explorative check of a bandit over the models (``make bandit-exploration STEP=fit-spans|evaluate-spans``).
 
-Issue #21. This is not a model candidate and does not follow the standard model workflow, see
-docs/exploration/bandit/README.md. ``tune`` sees only April and May and picks the settings per
-strategy. ``test`` applies ``CHOSEN`` to June to August, with the state carried over from April.
-There is no holdout step, so this check never touches the holdout.
+Status: tested and rejected (issue #21). The Thompson bandit reached a pinball loss of 3.207 against
+3.163 of ``gbm_quantile`` (June to August, old pipeline) and chose its arms almost at random. The code
+stays runnable so that the finding can be reproduced; it is not a model candidate and not part of
+``experiment select``/``compare``, see docs/exploration/bandit/README.md.
+
+The check has its own split inside the validation period (``DESIGN.validation``), never the test
+period. ``fit-spans`` sees only April and May and picks the settings per strategy. ``evaluate-spans``
+applies ``CHOSEN`` to June to August, with the state carried over from April. Both steps build the
+table from development data only (``development_inputs``) and refuse any day outside validation.
 
 Full outputs go to ``reports/bandit_exploration/``. The results that document the check are written
-to ``docs/exploration/bandit/results/``, because ``reports/`` is not versioned.
+to ``docs/exploration/bandit/results/``, because ``reports/`` is not versioned. The files with the
+prefixes ``tune_`` and ``test_`` there are the results of the old pipeline.
 """
 
 from __future__ import annotations
@@ -19,17 +25,20 @@ import numpy as np
 import pandas as pd
 
 from energy_price.evaluation.backtest import development_inputs, run_info, run_reference
+from energy_price.evaluation.design import DESIGN, validation_days
 from energy_price.evaluation.experiment import load, run_variant
 from energy_price.evaluation.figures import AXIS, CATEGORICAL, GRID as GRID_COLOUR, INK, INK_SECONDARY, RC, SURFACE
 from energy_price.evaluation.scores import QUANTILES, pinball
 from energy_price.exploration.bandit.strategies import ARMS, CHOSEN, EXPLORATION_FLOOR, GRID, SLOTS_PER_DAY, \
-    TEST_SEEDS, TUNE_SEEDS, hour_groups, run_strategy, thompson
+    EVALUATE_SEEDS, FIT_SEEDS, hour_groups, run_strategy, thompson
 from energy_price.features.dataset import TARGET, build_table, load_inputs
 from energy_price.paths import REPORTS_DIR, ROOT
 
 RESULTS_DIR = ROOT / "docs" / "exploration" / "bandit" / "results"
-# The bandit's own split, both inside the validation period, never the test period (#36). Naming: issue #49.
-SPANS = {"tune": ("2026-04-01", "2026-05-31"), "test": ("2026-06-01", "2026-08-31")}
+# The bandit's own split of the validation period (#36, #49): fit on April and May, evaluate on June to August.
+EVALUATE_START = pd.Timestamp("2026-06-01")
+SPANS = {"fit": (DESIGN.validation[0], str((EVALUATE_START - pd.Timedelta(days=1)).date())),
+         "evaluate": (str(EVALUATE_START.date()), DESIGN.validation[1])}
 BEST_SINGLE = "gbm_quantile"  # lowest pinball loss of the arms on April and May, so the benchmark needs no hindsight
 BOOTSTRAP_REPS = 5000
 BOOTSTRAP_BLOCK_DAYS = 7
@@ -40,14 +49,14 @@ FIGURE_LABELS = {
     "thompson_bandit": "Thompson bandit per slot, 5 % floor",
     "thompson_bandit_no_floor": "Thompson bandit per slot, no floor",
     "thompson_full_info": "Thompson with all losses visible",
-    "slot_winner_from_tune": "Fixed slot winner from April/May",
-    "hour_winner_from_tune": "Fixed hour winner from April/May",
+    "slot_winner_from_fit": "Fixed slot winner from April/May",
+    "hour_winner_from_fit": "Fixed hour winner from April/May",
     "mean_all": "Plain mean of all arms",
     "hedge_global": "Online weights, one set for the day",
     "hedge_hour": "Online weights per hour",
     "hedge_slot": "Online weights per slot",
     "follow_leader_slot": "Recent best per slot, no random choice",
-    "HINDSIGHT_slot_winner_of_test": "Hindsight: slot winner of the test itself",
+    "HINDSIGHT_slot_winner_of_evaluate": "Hindsight: slot winner of June to August itself",
 }
 
 
@@ -55,8 +64,23 @@ def span_days(span: str) -> list[pd.Timestamp]:
     return list(pd.date_range(*SPANS[span], freq="D"))
 
 
+def span_mask(days: list[pd.Timestamp], span: str, valid: np.ndarray) -> np.ndarray:
+    """True for the complete days of ``days`` that belong to ``span``."""
+    start, end = map(pd.Timestamp, SPANS[span])
+    stamps = pd.DatetimeIndex(days)
+    return np.asarray((stamps >= start) & (stamps <= end)) & valid
+
+
+def check_validation(days: list[pd.Timestamp]) -> None:
+    """Refuse any day outside the validation period, above all the locked test period."""
+    outside = sorted(set(days) - set(validation_days()))
+    if outside:
+        raise ValueError(f"the bandit check runs on validation days only, got {[str(d.date()) for d in outside]}")
+
+
 def member_forecasts(table: pd.DataFrame, days: list[pd.Timestamp], jobs: int) -> pd.DataFrame:
     """Walk-forward forecasts of all arms, from the shared backtest and the chosen settings of each model."""
+    check_validation(days)
     frames = [run_reference(table, days)]
     for arm, (folder, variant) in SPEC.items():
         module = load(folder)
@@ -64,10 +88,9 @@ def member_forecasts(table: pd.DataFrame, days: list[pd.Timestamp], jobs: int) -
     return pd.concat(frames, ignore_index=True)
 
 
-def tune_and_test_forecasts(table: pd.DataFrame, jobs: int) -> pd.DataFrame:
-    """Forecasts per period: one run over both would shift the weekly refit days of the official test."""
-    return pd.concat([member_forecasts(table, span_days(period), jobs) for period in ("tune", "test")],
-                     ignore_index=True)
+def fit_and_evaluate_forecasts(table: pd.DataFrame, jobs: int) -> pd.DataFrame:
+    """Forecasts of both spans in one run from the validation start, with the refit days of ``experiment select``."""
+    return member_forecasts(table, span_days("fit") + span_days("evaluate"), jobs)
 
 
 def to_arrays(frame: pd.DataFrame, days: list[pd.Timestamp]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -118,12 +141,12 @@ def block_bootstrap(diff: np.ndarray, reps: int = BOOTSTRAP_REPS, block: int = B
     return float(low), float(high)
 
 
-def tune_selection(forecasts: np.ndarray, prices: np.ndarray, valid: np.ndarray) -> pd.DataFrame:
+def fit_selection(forecasts: np.ndarray, prices: np.ndarray, valid: np.ndarray) -> pd.DataFrame:
     """Every ``GRID`` setting on the days given; the lowest pinball loss per strategy is marked."""
     losses = pinball_losses(forecasts, prices)
     rows = []
     for name, settings_list in GRID.items():
-        seeds = TUNE_SEEDS if name in THOMPSON else 1
+        seeds = FIT_SEEDS if name in THOMPSON else 1
         for settings in settings_list:
             values = [score(run_strategy(name, forecasts, losses, valid, settings, seed), prices, valid)["pinball"]
                       for seed in range(seeds)]
@@ -133,59 +156,59 @@ def tune_selection(forecasts: np.ndarray, prices: np.ndarray, valid: np.ndarray)
     return table
 
 
-def fixed_strategies(forecasts: np.ndarray, losses: np.ndarray, tune: np.ndarray,
-                     test: np.ndarray) -> dict[str, np.ndarray]:
+def fixed_strategies(forecasts: np.ndarray, losses: np.ndarray, fit: np.ndarray,
+                     evaluate: np.ndarray) -> dict[str, np.ndarray]:
     """Plain mean, winners chosen on April and May, and the two hindsight bounds no forecast can reach."""
     joint = losses.mean(axis=-1)
     slots = np.arange(forecasts.shape[1])
     hours = hour_groups(forecasts.shape[1])
-    slot_winner = joint[tune].mean(axis=0).argmin(axis=1)
-    hour_winner = np.array([joint[tune][:, hours == h].mean(axis=(0, 1)).argmin() for h in np.unique(hours)])
+    slot_winner = joint[fit].mean(axis=0).argmin(axis=1)
+    hour_winner = np.array([joint[fit][:, hours == h].mean(axis=(0, 1)).argmin() for h in np.unique(hours)])
     best_each = np.nan_to_num(joint, nan=np.inf).argmin(axis=2)
     return {
         "mean_all": np.sort(forecasts.mean(axis=2), axis=-1),
-        "slot_winner_from_tune": forecasts[:, slots, slot_winner],
-        "hour_winner_from_tune": forecasts[:, slots, hour_winner[hours]],
-        "HINDSIGHT_slot_winner_of_test": forecasts[:, slots, joint[test].mean(axis=0).argmin(axis=1)],
+        "slot_winner_from_fit": forecasts[:, slots, slot_winner],
+        "hour_winner_from_fit": forecasts[:, slots, hour_winner[hours]],
+        "HINDSIGHT_slot_winner_of_evaluate": forecasts[:, slots, joint[evaluate].mean(axis=0).argmin(axis=1)],
         "HINDSIGHT_each_forecast": np.take_along_axis(forecasts, best_each[:, :, None, None], axis=2)[:, :, 0],
     }
 
 
-def persistence(losses: np.ndarray, tune: np.ndarray, test: np.ndarray) -> pd.DataFrame:
-    """Do slot differences between models repeat? Tune against test, and odd against even test days."""
+def persistence(losses: np.ndarray, fit: np.ndarray, evaluate: np.ndarray) -> pd.DataFrame:
+    """Do slot differences between models repeat? Fit against evaluation span, and odd against even evaluation days."""
     joint = losses.mean(axis=-1)
-    index = np.flatnonzero(test)
+    index = np.flatnonzero(evaluate)
     odd, even = index[::2], index[1::2]
     hours = hour_groups(joint.shape[1])
     rows = []
     for a, b in PAIRS:
         diff = joint[:, :, ARMS.index(a)] - joint[:, :, ARMS.index(b)]
-        slot_tune, slot_test = pd.Series(diff[tune].mean(axis=0)), pd.Series(diff[test].mean(axis=0))
+        slot_fit, slot_evaluate = pd.Series(diff[fit].mean(axis=0)), pd.Series(diff[evaluate].mean(axis=0))
         slot_odd, slot_even = pd.Series(diff[odd].mean(axis=0)), pd.Series(diff[even].mean(axis=0))
-        sd = diff[test].std(axis=0, ddof=1)
+        sd = diff[evaluate].std(axis=0, ddof=1)
         rows.append({
             "pair": f"{a} - {b}",
-            "spearman_slots_tune_test": slot_tune.corr(slot_test, method="spearman"),
+            "spearman_slots_fit_evaluate": slot_fit.corr(slot_evaluate, method="spearman"),
             "spearman_slots_odd_even": slot_odd.corr(slot_even, method="spearman"),
-            "spearman_hours_tune_test": slot_tune.groupby(hours).mean().corr(slot_test.groupby(hours).mean(),
-                                                                             method="spearman"),
-            "same_sign_slots_tune_test": float((np.sign(slot_tune) == np.sign(slot_test)).mean()),
-            "median_abs_slot_diff": float(np.median(np.abs(slot_test))),
+            "spearman_hours_fit_evaluate": slot_fit.groupby(hours).mean().corr(
+                slot_evaluate.groupby(hours).mean(), method="spearman"),
+            "same_sign_slots_fit_evaluate": float((np.sign(slot_fit) == np.sign(slot_evaluate)).mean()),
+            "median_abs_slot_diff": float(np.median(np.abs(slot_evaluate))),
             "median_slot_sd": float(np.median(sd)),
-            "median_days_for_80pct_power": float(np.median((2.8 * sd / np.maximum(np.abs(slot_test), 1e-12)) ** 2)),
+            "median_days_for_80pct_power": float(np.median((2.8 * sd / np.maximum(np.abs(slot_evaluate), 1e-12)) ** 2)),
         })
     table = pd.DataFrame(rows)
-    table["same_winner_slots_tune_test"] = float(
-        (joint[tune].mean(axis=0).argmin(axis=1) == joint[test].mean(axis=0).argmin(axis=1)).mean())
+    table["same_winner_slots_fit_evaluate"] = float(
+        (joint[fit].mean(axis=0).argmin(axis=1) == joint[evaluate].mean(axis=0).argmin(axis=1)).mean())
     table["same_winner_slots_odd_even"] = float(
         (joint[odd].mean(axis=0).argmin(axis=1) == joint[even].mean(axis=0).argmin(axis=1)).mean())
     return table
 
 
-def cross_fit_winner(forecasts: np.ndarray, losses: np.ndarray, test: np.ndarray) -> np.ndarray:
-    """Slot winners picked on the odd test days and applied to the even ones, and the other way round."""
+def cross_fit_winner(forecasts: np.ndarray, losses: np.ndarray, evaluate: np.ndarray) -> np.ndarray:
+    """Slot winners picked on the odd evaluation days and applied to the even ones, and the other way round."""
     joint = losses.mean(axis=-1)
-    index = np.flatnonzero(test)
+    index = np.flatnonzero(evaluate)
     odd, even = index[::2], index[1::2]
     slots = np.arange(forecasts.shape[1])
     out = np.full((*forecasts.shape[:2], forecasts.shape[3]), np.nan)
@@ -194,46 +217,46 @@ def cross_fit_winner(forecasts: np.ndarray, losses: np.ndarray, test: np.ndarray
     return out
 
 
-def compare(days_loss: np.ndarray, base: np.ndarray, test: np.ndarray) -> dict[str, float]:
+def compare(days_loss: np.ndarray, base: np.ndarray, evaluate: np.ndarray) -> dict[str, float]:
     """Mean difference to the benchmark in percent and its bootstrap interval in ct/kWh."""
-    diff = days_loss[test] - base[test]
+    diff = days_loss[evaluate] - base[evaluate]
     low, high = block_bootstrap(diff)
-    return {"vs_best_single_pct": 100 * diff.mean() / base[test].mean(), "ci_low_ct": low, "ci_high_ct": high}
+    return {"vs_best_single_pct": 100 * diff.mean() / base[evaluate].mean(), "ci_low_ct": low, "ci_high_ct": high}
 
 
-def evaluate_strategies(forecasts: np.ndarray, prices: np.ndarray, valid: np.ndarray, tune: np.ndarray,
-                        test: np.ndarray, chosen: dict) -> pd.DataFrame:
-    """Scores of all arms and strategies on the test days, sorted by pinball loss."""
+def evaluate_strategies(forecasts: np.ndarray, prices: np.ndarray, valid: np.ndarray, fit: np.ndarray,
+                        evaluate: np.ndarray, chosen: dict) -> pd.DataFrame:
+    """Scores of all arms and strategies on the evaluation days, sorted by pinball loss."""
     losses = pinball_losses(forecasts, prices)
     base = daily_loss(forecasts[:, :, ARMS.index(BEST_SINGLE)], prices)
     rows: dict[str, dict] = {}
     shown = {arm: forecasts[:, :, i] for i, arm in enumerate(ARMS)}
-    shown |= fixed_strategies(forecasts, losses, tune, test)
-    shown["cross_fit_slot_winner_within_test"] = cross_fit_winner(forecasts, losses, test)
+    shown |= fixed_strategies(forecasts, losses, fit, evaluate)
+    shown["cross_fit_slot_winner_within_evaluate"] = cross_fit_winner(forecasts, losses, evaluate)
     for name, settings in chosen.items():
         if name not in THOMPSON:
             shown[name] = run_strategy(name, forecasts, losses, valid, settings)
     for name, forecast in shown.items():
-        rows[name] = {**score(forecast, prices, test), **compare(daily_loss(forecast, prices), base, test)}
+        rows[name] = {**score(forecast, prices, evaluate), **compare(daily_loss(forecast, prices), base, evaluate)}
     for name in THOMPSON:
-        runs = [run_strategy(name, forecasts, losses, valid, chosen[name], seed) for seed in range(TEST_SEEDS)]
-        scores = pd.DataFrame([score(run, prices, test) for run in runs])
+        runs = [run_strategy(name, forecasts, losses, valid, chosen[name], seed) for seed in range(EVALUATE_SEEDS)]
+        scores = pd.DataFrame([score(run, prices, evaluate) for run in runs])
         mean_daily = np.mean([daily_loss(run, prices) for run in runs], axis=0)
-        rows[name] = {**scores.mean().to_dict(), **compare(mean_daily, base, test),
+        rows[name] = {**scores.mean().to_dict(), **compare(mean_daily, base, evaluate),
                       "seed_p5": float(scores["pinball"].quantile(0.05)),
                       "seed_p95": float(scores["pinball"].quantile(0.95))}
     return pd.DataFrame(rows).T.sort_values("pinball").rename_axis("strategy")
 
 
-def bandit_shares(forecasts: np.ndarray, prices: np.ndarray, valid: np.ndarray, test: np.ndarray,
+def bandit_shares(forecasts: np.ndarray, prices: np.ndarray, valid: np.ndarray, evaluate: np.ndarray,
                   half_life: float) -> pd.DataFrame:
-    """Share of each arm in the real bandit on the test days, mean over the seeds: does it learn anything?"""
+    """Share of each arm in the real bandit on the evaluation days, mean over the seeds: does it learn anything?"""
     losses = pinball_losses(forecasts, prices)
     shares = []
-    for seed in range(TEST_SEEDS):
+    for seed in range(EVALUATE_SEEDS):
         _, choices = thompson(forecasts, losses, valid, half_life, False, EXPLORATION_FLOOR, seed)
-        shares.append(np.bincount(choices[test].ravel(), minlength=len(ARMS)) / choices[test].size)
-    return pd.DataFrame({"arm": ARMS, "share_test": np.mean(shares, axis=0)})
+        shares.append(np.bincount(choices[evaluate].ravel(), minlength=len(ARMS)) / choices[evaluate].size)
+    return pd.DataFrame({"arm": ARMS, "share_evaluate": np.mean(shares, axis=0)})
 
 
 def figure(table: pd.DataFrame, path: Path) -> None:
@@ -267,43 +290,43 @@ def figure(table: pd.DataFrame, path: Path) -> None:
         plt.close(fig)
 
 
-def run_tune(table: pd.DataFrame, jobs: int, out: Path) -> None:
-    days = span_days("tune")
+def run_fit(table: pd.DataFrame, jobs: int, out: Path) -> None:
+    days = span_days("fit")
     forecasts, prices, valid = to_arrays(member_forecasts(table, days, jobs), days)
-    selection = tune_selection(forecasts, prices, valid)
+    selection = fit_selection(forecasts, prices, valid)
     out.mkdir(parents=True, exist_ok=True)
-    selection.to_csv(out / "tune_selection.csv", index=False)
+    selection.to_csv(out / "fit_selection.csv", index=False)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    selection.to_csv(RESULTS_DIR / "tune_selection.csv", index=False, float_format="%.4f")
-    arms ={arm: score(forecasts[:, :, i], prices, valid)["pinball"] for i, arm in enumerate(ARMS)}
+    selection.to_csv(RESULTS_DIR / "fit_selection.csv", index=False, float_format="%.4f")
+    arms = {arm: score(forecasts[:, :, i], prices, valid)["pinball"] for i, arm in enumerate(ARMS)}
     print(pd.Series(arms).round(4).to_string())
     print(selection[selection["chosen"]].round(4).to_string(index=False))
 
 
-def run_test(table: pd.DataFrame, jobs: int, out: Path) -> None:
+def run_evaluate(table: pd.DataFrame, jobs: int, out: Path) -> None:
     if set(CHOSEN) != set(GRID):
-        raise ValueError("CHOSEN must hold one setting per strategy: run STEP=tune first")
-    days = span_days("tune") + span_days("test")
-    forecasts, prices, valid = to_arrays(tune_and_test_forecasts(table, jobs), days)
-    stamps = pd.DatetimeIndex(days)
-    tune = np.asarray(stamps <= SPANS["tune"][1]) & valid
-    test = np.asarray((stamps >= SPANS["test"][0]) & (stamps <= SPANS["test"][1])) & valid
-    results = evaluate_strategies(forecasts, prices, valid, tune, test, CHOSEN)
-    stable = persistence(pinball_losses(forecasts, prices), tune, test)
-    shares = bandit_shares(forecasts, prices, valid, test, CHOSEN["thompson_bandit"]["half_life"])
+        raise ValueError("CHOSEN must hold one setting per strategy: run STEP=fit-spans first")
+    days = span_days("fit") + span_days("evaluate")
+    forecasts, prices, valid = to_arrays(fit_and_evaluate_forecasts(table, jobs), days)
+    fit, evaluate = span_mask(days, "fit", valid), span_mask(days, "evaluate", valid)
+    results = evaluate_strategies(forecasts, prices, valid, fit, evaluate, CHOSEN)
+    stable = persistence(pinball_losses(forecasts, prices), fit, evaluate)
+    shares = bandit_shares(forecasts, prices, valid, evaluate, CHOSEN["thompson_bandit"]["half_life"])
 
     out.mkdir(parents=True, exist_ok=True)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     for folder in (out, RESULTS_DIR):
-        results.to_csv(folder / "test_results.csv", float_format="%.4f")
-        stable.to_csv(folder / "test_persistence.csv", index=False, float_format="%.4f")
-        shares.to_csv(folder / "test_bandit_shares.csv", index=False, float_format="%.4f")
-    info = run_info({"arms": list(ARMS), "chosen": {k: str(v) for k, v in CHOSEN.items()}, "test_seeds": TEST_SEEDS})
-    (out / "test_run_info.json").write_text(json.dumps(info, indent=2))
-    figure(results, RESULTS_DIR / "test_strategies.png")
+        results.to_csv(folder / "evaluate_results.csv", float_format="%.4f")
+        stable.to_csv(folder / "evaluate_persistence.csv", index=False, float_format="%.4f")
+        shares.to_csv(folder / "evaluate_bandit_shares.csv", index=False, float_format="%.4f")
+    info = run_info({"arms": list(ARMS), "chosen": {k: str(v) for k, v in CHOSEN.items()},
+                     "evaluate_seeds": EVALUATE_SEEDS, "spans": SPANS, "design": DESIGN.as_config()})
+    (out / "evaluate_run_info.json").write_text(json.dumps(info, indent=2))
+    figure(results, RESULTS_DIR / "evaluate_strategies.png")
 
     pd.set_option("display.width", 180)
-    print(f"days tune {tune.sum()}, test {test.sum()}, dropped {[str(d.date()) for d in stamps[~valid]]}")
+    stamps = pd.DatetimeIndex(days)
+    print(f"days fit {fit.sum()}, evaluate {evaluate.sum()}, dropped {[str(d.date()) for d in stamps[~valid]]}")
     print(results.round(4).to_string())
     print(stable.round(3).T.to_string())
     print(shares.round(3).to_string(index=False))
@@ -311,15 +334,15 @@ def run_test(table: pd.DataFrame, jobs: int, out: Path) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("step", choices=["tune", "test"])
+    parser.add_argument("step", choices=["fit-spans", "evaluate-spans"])
     parser.add_argument("--jobs", type=int, default=-1, help="parallel folds, -1 uses all cores")
     parser.add_argument("--out", type=Path, default=REPORTS_DIR / "bandit_exploration")
     args = parser.parse_args(argv)
     table = build_table(development_inputs(load_inputs()))
-    if args.step == "tune":
-        run_tune(table, args.jobs, args.out)
+    if args.step == "fit-spans":
+        run_fit(table, args.jobs, args.out)
     else:
-        run_test(table, args.jobs, args.out)
+        run_evaluate(table, args.jobs, args.out)
 
 
 if __name__ == "__main__":

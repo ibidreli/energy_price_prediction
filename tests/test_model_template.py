@@ -48,7 +48,7 @@ def test_backtest_runs_end_to_end_against_the_reference():
     module = load(NAME)
     variant, settings = next(iter(module.CHOSEN.items()))
 
-    forecasts, _ = run_variant(module, table, days, variant, settings, jobs=1)
+    forecasts, _ = run_variant(module, table, days, variant, settings, jobs=1, refit_every=7)
     scores, _ = evaluate(pd.concat([run_reference(table, days), forecasts], ignore_index=True))
 
     assert set(scores.index) == {"reference", variant}
