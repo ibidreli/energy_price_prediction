@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from energy_price.evaluation.backtest import PERIODS, period_days, run_info, run_reference
+from energy_price.evaluation.backtest import development_inputs, run_info, run_reference
 from energy_price.evaluation.experiment import load, run_variant
 from energy_price.evaluation.figures import AXIS, CATEGORICAL, GRID as GRID_COLOUR, INK, INK_SECONDARY, RC, SURFACE
 from energy_price.evaluation.scores import QUANTILES, pinball
@@ -28,6 +28,8 @@ from energy_price.features.dataset import TARGET, build_table, load_inputs
 from energy_price.paths import REPORTS_DIR, ROOT
 
 RESULTS_DIR = ROOT / "docs" / "exploration" / "bandit" / "results"
+# The bandit's own split, both inside the validation period, never the test period (#36). Naming: issue #49.
+SPANS = {"tune": ("2026-04-01", "2026-05-31"), "test": ("2026-06-01", "2026-08-31")}
 BEST_SINGLE = "gbm_quantile"  # lowest pinball loss of the arms on April and May, so the benchmark needs no hindsight
 BOOTSTRAP_REPS = 5000
 BOOTSTRAP_BLOCK_DAYS = 7
@@ -49,6 +51,10 @@ FIGURE_LABELS = {
 }
 
 
+def span_days(span: str) -> list[pd.Timestamp]:
+    return list(pd.date_range(*SPANS[span], freq="D"))
+
+
 def member_forecasts(table: pd.DataFrame, days: list[pd.Timestamp], jobs: int) -> pd.DataFrame:
     """Walk-forward forecasts of all arms, from the shared backtest and the chosen settings of each model."""
     frames = [run_reference(table, days)]
@@ -60,7 +66,7 @@ def member_forecasts(table: pd.DataFrame, days: list[pd.Timestamp], jobs: int) -
 
 def tune_and_test_forecasts(table: pd.DataFrame, jobs: int) -> pd.DataFrame:
     """Forecasts per period: one run over both would shift the weekly refit days of the official test."""
-    return pd.concat([member_forecasts(table, period_days(period), jobs) for period in ("tune", "test")],
+    return pd.concat([member_forecasts(table, span_days(period), jobs) for period in ("tune", "test")],
                      ignore_index=True)
 
 
@@ -262,7 +268,7 @@ def figure(table: pd.DataFrame, path: Path) -> None:
 
 
 def run_tune(table: pd.DataFrame, jobs: int, out: Path) -> None:
-    days = period_days("tune")
+    days = span_days("tune")
     forecasts, prices, valid = to_arrays(member_forecasts(table, days, jobs), days)
     selection = tune_selection(forecasts, prices, valid)
     out.mkdir(parents=True, exist_ok=True)
@@ -277,11 +283,11 @@ def run_tune(table: pd.DataFrame, jobs: int, out: Path) -> None:
 def run_test(table: pd.DataFrame, jobs: int, out: Path) -> None:
     if set(CHOSEN) != set(GRID):
         raise ValueError("CHOSEN must hold one setting per strategy: run STEP=tune first")
-    days = period_days("tune") + period_days("test")
+    days = span_days("tune") + span_days("test")
     forecasts, prices, valid = to_arrays(tune_and_test_forecasts(table, jobs), days)
     stamps = pd.DatetimeIndex(days)
-    tune = np.asarray(stamps <= PERIODS["tune"][1]) & valid
-    test = np.asarray((stamps >= PERIODS["test"][0]) & (stamps <= PERIODS["test"][1])) & valid
+    tune = np.asarray(stamps <= SPANS["tune"][1]) & valid
+    test = np.asarray((stamps >= SPANS["test"][0]) & (stamps <= SPANS["test"][1])) & valid
     results = evaluate_strategies(forecasts, prices, valid, tune, test, CHOSEN)
     stable = persistence(pinball_losses(forecasts, prices), tune, test)
     shares = bandit_shares(forecasts, prices, valid, test, CHOSEN["thompson_bandit"]["half_life"])
@@ -309,7 +315,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--jobs", type=int, default=-1, help="parallel folds, -1 uses all cores")
     parser.add_argument("--out", type=Path, default=REPORTS_DIR / "bandit_exploration")
     args = parser.parse_args(argv)
-    table = build_table(load_inputs())
+    table = build_table(development_inputs(load_inputs()))
     if args.step == "tune":
         run_tune(table, args.jobs, args.out)
     else:

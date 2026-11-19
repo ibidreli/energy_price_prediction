@@ -28,10 +28,10 @@ def test_outer_future_prices_and_inner_calibration_targets_never_enter_training(
     source = table()
     day = pd.Timestamp("2026-04-04")
     factory = lambda: calibration.CalibratedQuantileModel(grouping="hour")
-    before, _ = run_model(source, [day], factory, "calibrated", jobs=1)
+    before, _, _ = run_model(source, [day], factory, "calibrated", jobs=1)
     poisoned = source.copy()
     poisoned.loc[poisoned["delivery_day"] > day - pd.Timedelta(days=2), TARGET] = 1e9
-    after, _ = run_model(poisoned, [day], factory, "calibrated", jobs=1)
+    after, _, _ = run_model(poisoned, [day], factory, "calibrated", jobs=1)
     pd.testing.assert_frame_equal(before[["q10", "q50", "q90"]], after[["q10", "q50", "q90"]])
     known = source[source["delivery_day"] <= day - pd.Timedelta(days=2)]
     model = factory().fit(known)
@@ -101,15 +101,15 @@ def test_tuning_persists_model_specific_selection(tmp_path, monkeypatch):
     from test_evaluation_backtest import MeanModel, synthetic_table
 
     expected = {"calibrated": {"window": "rolling_56d"}}
-    module = SimpleNamespace(MODEL=MeanModel, GRID=[{"window": "expanding"}, {"window": "rolling_56d"}],
+    module = SimpleNamespace(MODEL=MeanModel, GRID=[{}], WINDOWS=("expanding", "rolling_56d"),
                              select_candidates=lambda scores, settings: expected)
     monkeypatch.setattr(experiment, "load", lambda name: module)
-    monkeypatch.setattr(experiment, "period_days", lambda period: [pd.Timestamp("2026-04-10")])
+    monkeypatch.setattr(experiment, "development_table", lambda design=None: synthetic_table(days=12))
     monkeypatch.setattr(experiment, "diagnostic_scores",
                         lambda frame: pd.DataFrame({"model": frame["model"].unique()}))
     tracked = []
     monkeypatch.setattr(experiment, "track_reference", lambda *args, **kwargs: None)
     monkeypatch.setattr(experiment, "track", lambda *args, **kwargs: tracked.append(args[2]))
-    experiment.tune("baseline_model", synthetic_table(days=12), 1, tmp_path, do_track=True)
-    assert json.loads((tmp_path / "tune_selection.json").read_text())["chosen"] == expected
+    experiment.select("baseline_model", jobs=1, out_dir=tmp_path, do_track=True, days=("2026-04-10", "2026-04-10"))
+    assert json.loads((tmp_path / "select_selection.json").read_text())["chosen"] == expected
     assert [config["window"] for config in tracked if config["selected"]] == ["rolling_56d"]

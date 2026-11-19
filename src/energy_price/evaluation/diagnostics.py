@@ -7,6 +7,7 @@ import pandas as pd
 from joblib import Parallel, delayed, parallel_config
 
 from energy_price.evaluation.backtest import common_rows, folds, training_rows
+from energy_price.evaluation.design import DESIGN
 from energy_price.evaluation.scores import score
 from energy_price.models.shared.base import QuantileModel
 from energy_price.models.shared.importance import grouped_permutation_importance
@@ -36,15 +37,17 @@ def backtest_importance(
     n_repeats: int = 5,
     random_state: int = 0,
     jobs: int = -1,
+    refit_every: int = DESIGN.refit_every,
 ) -> pd.DataFrame:
-    """Fit on history up to D-2, explain only the following validation block.
+    """Fit on history up to D-2, explain only the following validation fold.
 
-    Each weekly model is explained separately; validation targets are never passed to fit.
+    Each fold's model (refitted every ``refit_every`` days) is explained separately; validation
+    targets are never passed to fit.
     """
     with parallel_config(backend="loky", inner_max_num_threads=1):
         results = Parallel(n_jobs=jobs)(
             delayed(_importance_fold)(table, block, make_model, groups, window_days, n_repeats, random_state)
-            for block in folds(days)
+            for block in folds(days, refit_every)
         )
     return pd.concat(results, ignore_index=True)
 

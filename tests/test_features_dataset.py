@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from energy_price.evaluation.backtest import PERIODS
+from energy_price.evaluation.backtest import development_inputs
+from energy_price.evaluation.design import validation_days
 from energy_price.features.dataset import (
     DIRECTION,
     HISTORY_COLUMNS,
@@ -451,11 +452,10 @@ def test_cloud_cover_never_comes_from_the_next_run():
 @pytest.mark.realdata
 @pytest.mark.skipif(not all((PROCESSED / f"{name}.parquet").exists() for name in SOURCE_TABLES),
                     reason="processed tables not built, run make data")
-@pytest.mark.parametrize("period", ["tune", "test"])
-def test_b3_and_b4_lose_no_delivery_day_that_b2_has(period):
+def test_b3_and_b4_lose_no_delivery_day_that_b2_has():
     # A missing feature removes a day for every model, so B3 and B4 must not cost any further days.
-    days = list(pd.date_range(*PERIODS[period], freq="D"))
-    table = build_table(load_inputs(), days=days)
+    days = validation_days()
+    table = build_table(development_inputs(load_inputs()), days=days)
 
     def complete(feature_set):
         ok = design_matrix(table, feature_set).notna().all(axis=1)

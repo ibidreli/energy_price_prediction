@@ -30,7 +30,8 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from energy_price.evaluation.backtest import REFERENCE, evaluate, period_days
+from energy_price.evaluation.backtest import REFERENCE, development_inputs, evaluate
+from energy_price.evaluation.design import validation_days
 from energy_price.evaluation.experiment import BASELINE_VARIANT, label, load, run_variant
 from energy_price.evaluation.scores import COLUMNS, block_bootstrap
 from energy_price.features.dataset import build_table, load_inputs
@@ -150,7 +151,7 @@ def main(argv: list[str] | None = None) -> None:
         coefficients = pd.read_csv(out / "test_coefficients.csv", parse_dates=["fit_day"])
 
     saved = pd.read_parquet(out / f"{args.period}_forecasts.parquet")
-    scores, compared, features = analyse(build_table(load_inputs()), period_days(args.period), saved, candidates,
+    scores, compared, features = analyse(build_table(development_inputs(load_inputs())), validation_days(), saved, candidates,
                                          coefficients, args.jobs)
     scores.to_csv(out / f"{args.period}_diagnostic_scores.csv")
     compared.to_csv(out / f"{args.period}_comparison.csv", index=False)

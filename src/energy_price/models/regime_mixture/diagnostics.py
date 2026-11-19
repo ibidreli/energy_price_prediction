@@ -33,7 +33,8 @@ import pandas as pd
 from joblib import Parallel, delayed, parallel_config
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
-from energy_price.evaluation.backtest import evaluate, folds, period_days, run_reference, training_rows
+from energy_price.evaluation.backtest import development_inputs, evaluate, folds, run_reference, training_rows
+from energy_price.evaluation.design import validation_days, window_days
 from energy_price.features.dataset import DIRECTION, build_table, load_inputs
 from energy_price.models.regime_mixture.model import CHOSEN, RegimeMixtureModel, mixture_quantiles
 from energy_price.models.shared.base import COLUMNS, QUANTILES
@@ -70,7 +71,7 @@ def p_variants(train: pd.DataFrame, target: pd.DataFrame, p_model: np.ndarray) -
 def _fold(table: pd.DataFrame, block: list[pd.Timestamp], settings: dict) -> pd.DataFrame:
     """One weekly fit: forecasts of every p variant for the days of ``block``."""
     params = {k: v for k, v in settings.items() if k != "window"}
-    window = {"expanding": None, "rolling_56d": 56}[settings.get("window", "expanding")]
+    window = window_days(settings.get("window", "expanding"))
     train = training_rows(table, block[0], window)
     model = RegimeMixtureModel(**params).fit(train)
     target = table[table["delivery_day"].isin(block)]
@@ -163,12 +164,12 @@ def reliability_figure(table: pd.DataFrame, path: Path) -> Path:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--period", choices=("tune", "test"), default="test")
+    parser.add_argument("--period", choices=("validation",), default="validation")
     parser.add_argument("--jobs", type=int, default=-1)
     args = parser.parse_args(argv)
 
     settings = CHOSEN[NAME]
-    forecasts = run(build_table(load_inputs()), period_days(args.period), settings, args.jobs)
+    forecasts = run(build_table(development_inputs(load_inputs())), validation_days(), settings, args.jobs)
     scores, daily = evaluate(forecasts)
     scores = scores.join(direction_scores(forecasts))
 

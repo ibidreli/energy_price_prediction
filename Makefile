@@ -39,7 +39,7 @@ RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
+.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs profile notebook test test-all tracking-check select compare final-test bandit-exploration clean-data FORCE
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -175,20 +175,21 @@ test-all: $(ENV_READY) ## Run unit tests and checks against the real data
 tracking-check: $(ENV_READY) ## Check the W&B login and team entity (network, see docs/experiment_tracking.md)
 	$(PY) -m energy_price.evaluation.tracking
 
-baseline-tune: data ## Choose the baseline settings on April and May (docs/models/baseline_model.md)
-	$(PY) -m energy_price.evaluation.experiment baseline_model tune
-
-baseline: data ## Backtest reference and baseline on June to August (docs/models/baseline_model.md)
-	$(PY) -m energy_price.evaluation.experiment baseline_model test $(if $(TRACK),--track)
-
-# Any model folder src/energy_price/models/<name>/, e.g. `make backtest MODEL=baseline_model STEP=tune`.
-# TRACK=1 logs to W&B, UNLOCK=1 releases the holdout (STEP=holdout) once.
+# Walk-forward backtest (docs/training_pipeline.md). MODEL is a folder in src/energy_price/models/.
+# JOBS parallel folds (-1: all cores), TRACK=1 logs to W&B, REFIT=k refits every k days (default: model).
 MODEL ?= baseline_model
-STEP  ?= test
 JOBS  ?= -1
-backtest: data ## Backtest MODEL (default baseline_model) on STEP tune, test or holdout (docs/models/README.md)
-	$(PY) -m energy_price.evaluation.experiment $(MODEL) $(STEP) --jobs $(JOBS) $(if $(TRACK),--track) $(if $(UNLOCK),--unlock-holdout)
+select: data ## Every GRID setting x window of MODEL on all validation days (Apr to Aug), reports/MODEL/select_*
+	$(PY) -m energy_price.evaluation.experiment $(MODEL) select --jobs $(JOBS) $(if $(TRACK),--track) $(if $(REFIT),--refit-every $(REFIT))
 
+compare: data ## CHOSEN of every model, reference and B2 on the same validation days, reports/compare/
+	$(PY) -m energy_price.evaluation.experiment compare --jobs $(JOBS) $(if $(TRACK),--track)
+
+final-test: data ## The one run on the locked test period (Sep, Oct) after the freeze; needs UNLOCK_TEST=1 (issue #53)
+	$(PY) -m energy_price.evaluation.experiment final-test --jobs $(JOBS) $(if $(TRACK),--track) $(if $(UNLOCK_TEST),--unlock-test)
+
+# The explorative bandit check keeps its own split inside the validation period, STEP tune or test.
+STEP  ?= test
 bandit-exploration: data ## Explorative check of a bandit over the models, STEP tune or test (docs/exploration/bandit/README.md)
 	$(PY) -m energy_price.exploration.bandit.run $(STEP) --jobs $(JOBS)
 
