@@ -127,7 +127,7 @@ Es zählen nur Daten ab 01.01.2026 (Owner-Entscheid Einpreissystem), auch wenn `
 | `price_mean_7d` | 09.01.2026 |
 | `price_q10_56d`, `price_q50_56d`, `price_q90_56d` | 30.01.2026 |
 
-Damit beginnt das Training von `B3` und `B4` am 30.01.2026, das von `B1` und `B2` weiterhin am 01.01.2026. Beim ersten Fit im Tuning (01.04.) sind das 60 statt 89 Tage. Ein Vergleich mit `B2` beruht also nicht auf identischen Trainingszeilen.
+Damit beginnt das Training von `B3` und `B4` am 30.01.2026, das von `B1` und `B2` weiterhin am 01.01.2026. Beim ersten Fit der Validierung (Ursprung 01.04.) sind das 60 statt 89 Tage. Ein Vergleich mit `B2` beruht also nicht auf identischen Trainingszeilen.
 
 **Unvollständige Tage:** Ohne vollständigen D−2 bleiben alle Merkmale der betroffenen Quelle leer. `price_mean_7d` braucht alle 7 Tage und `direction_d7` den vollständigen D−7, beide mitteln nie über weniger Tage. Die Quantile lassen einen unvollständigen Tag innerhalb des Fensters dagegen ganz weg und rechnen weiter, solange mindestens 28 ganze Tage bleiben. Nur in diesem Fall weichen sie von der Referenz ab, die auch die vorhandenen Viertelstunden eines solchen Tages verwendet. Von Januar bis August 2026 sind alle Preistage vollständig, die Abweichung kommt also bisher nicht vor.
 
