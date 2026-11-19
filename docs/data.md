@@ -110,8 +110,8 @@ Merkmale „zur gleichen Uhrzeit“ (`direction_d2`, `direction_d7`, die Preisqu
 | Liefertag | Merkmal | Bezugstag | Betroffen |
 |---|---|---|---|
 | 31.03.2026 | `direction_d2` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
-| 05.04.2026 (Tuning) | `direction_d7` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
-| 27.10.2026 (Holdout) | `direction_d2` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
+| 05.04.2026 (Validierung) | `direction_d7` | 29.03. (kurz) | 02:00 bis 02:45 erhalten 0 |
+| 27.10.2026 (Test) | `direction_d2` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
 | 01.11.2026 | `direction_d7` | 25.10. (lang) | 02:00 bis 02:45 erhalten das Mittel |
 
 **Tagesmerkmale** (`price_mean_d2`, `tsi_mean_d2`, `short_share_d2`) brauchen keine Sonderregel: Sie mitteln über alle Viertelstunden des Tages, also 92, 96 oder 100. Die **Preisquantile** rechnen wie die Referenz, nach einem kurzen Tag also mit einem Wert weniger für 02:xx und nach einem langen Tag mit einem mehr. Am **Liefertag 25.10.** erhalten beide Durchgänge von 02:xx dieselben Merkmale, weil sie dieselbe Uhrzeit haben.
@@ -127,7 +127,7 @@ Es zählen nur Daten ab 01.01.2026 (Owner-Entscheid Einpreissystem), auch wenn `
 | `price_mean_7d` | 09.01.2026 |
 | `price_q10_56d`, `price_q50_56d`, `price_q90_56d` | 30.01.2026 |
 
-Damit beginnt das Training von `B3` und `B4` am 30.01.2026, das von `B1` und `B2` weiterhin am 01.01.2026. Beim ersten Fit im Tuning (01.04.) sind das 60 statt 89 Tage. Ein Vergleich mit `B2` beruht also nicht auf identischen Trainingszeilen.
+Damit beginnt das Training von `B3` und `B4` am 30.01.2026, das von `B1` und `B2` weiterhin am 01.01.2026. Beim ersten Fit der Validierung (Ursprung 01.04.) sind das 60 statt 89 Tage. Ein Vergleich mit `B2` beruht also nicht auf identischen Trainingszeilen.
 
 **Unvollständige Tage:** Ohne vollständigen D−2 bleiben alle Merkmale der betroffenen Quelle leer. `price_mean_7d` braucht alle 7 Tage und `direction_d7` den vollständigen D−7, beide mitteln nie über weniger Tage. Die Quantile lassen einen unvollständigen Tag innerhalb des Fensters dagegen ganz weg und rechnen weiter, solange mindestens 28 ganze Tage bleiben. Nur in diesem Fall weichen sie von der Referenz ab, die auch die vorhandenen Viertelstunden eines solchen Tages verwendet. Von Januar bis August 2026 sind alle Preistage vollständig, die Abweichung kommt also bisher nicht vor.
 

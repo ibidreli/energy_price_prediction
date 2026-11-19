@@ -6,28 +6,60 @@
 
 **Status:** abgeschlossen, nicht weiterverfolgt, kein Modellkandidat nach Standardablauf · **Verantwortlich:** Luca Manna · **Issue:** [#21](https://github.com/ibidreli/energy_price_prediction/issues/21) · **Stand der Zahlen:** 05.11.2026
 
-Lesbarer Einstieg: [`notebooks/03_bandit_architektur.ipynb`](../../../notebooks/03_bandit_architektur.ipynb). Der Holdout wurde nicht verwendet.
+Lesbarer Einstieg: [`notebooks/03_bandit_architektur.ipynb`](../../../notebooks/03_bandit_architektur.ipynb). Die Testperiode (September und Oktober) wurde nie verwendet.
 
-## 1. Hypothese
+## Ablauf in der neuen Pipeline
+
+Die Prüfung teilt die Validierung (01.04. bis 31.08.2026) selbst auf und verweigert jeden Tag ausserhalb davon (`check_validation`). Konzept der Pipeline: [`training_pipeline.md`](../../training_pipeline.md).
+
+```mermaid
+gantt
+    title Bandit-Prüfung innerhalb der Validierung 2026
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat %b
+    tickInterval 1month
+    section Validierung
+    fit-spans, Einstellungen wählen      :active, 2026-04-01, 2026-06-01
+    evaluate-spans, CHOSEN auswerten     :active, 2026-06-01, 2026-09-01
+    section Test
+    nie verwendet                        :crit, 2026-09-01, 2026-11-01
+```
+
+| Schritt | Tage | schreibt nach `results/` |
+|---|---|---|
+| `make bandit-exploration STEP=fit-spans` | 01.04. bis 31.05. | `fit_selection.csv` (Einstellung je Strategie) |
+| `make bandit-exploration STEP=evaluate-spans` | 01.06. bis 31.08. | `evaluate_results.csv`, `evaluate_persistence.csv`, `evaluate_bandit_shares.csv`, `evaluate_strategies.png` |
+
+Die Arme (Referenz, B1, B2, `gbm_quantile`) entstehen im täglichen Walk-forward mit dem `CHOSEN` der Modelle. Mit der neuen Pipeline ist die Prüfung noch nicht gerechnet, die Zahlen unten stammen aus der alten.
+
+| | Standardablauf | Diese Prüfung |
+|---|---|---|
+| Start | `make select MODEL=<name>` | `make bandit-exploration STEP=fit-spans\|evaluate-spans` |
+| Reihenfolge | Hypothese vor dem Test | Hypothese nach dem Vorlauf |
+| Testperiode | einmal am Schluss (#53) | keine, nur Validierungstage |
+
+## Entscheid
+
+**Nicht weiterverfolgt**, weil Thompson Sampling als Architektur nicht zu diesem Problem passt und die laufende Gewichtung keinen gesicherten Vorteil bringt, der die zusätzliche Komplexität rechtfertigt.
+
+## Historie (alte Pipeline)
+
+> Stand 05.11.2026. Alte Pipeline: Auswahl auf April und Mai, Test auf Juni bis August, Modelle wöchentlich neu trainiert. Die Dateien `results/tune_*` und `results/test_*` gehören dazu. In der neuen Pipeline heissen die Schritte `fit-spans` und `evaluate-spans`, die festen Gewinner `*_from_fit`.
+
+### 1. Hypothese
 
 Ein Bandit kann pro Viertelstunde laufend das beste bestehende Modell wählen und so `gbm_quantile` im Pinball-Loss schlagen (3.1633, Juni bis August).
 
 **Kriterium:** Pinball-Loss tiefer als `gbm_quantile`, und das 95-%-Intervall der täglichen Differenz liegt ganz unter 0 (Block-Bootstrap über Tage, Blöcke von 7 Tagen, 5000 Wiederholungen).
 
-## 2. Herleitung
+### 2. Herleitung
 
 - **Herkunft der Idee:** ein Vortrag von CH Media. Dort verteilt ein Bandit mit Thompson Sampling den Traffic live auf mehrere Empfehlungs-Blends, weil sich die Nachfrage mit der Nachrichtenlage ändert
 - **Übertragung:** Kein Modell ist zu jeder Tageszeit das beste. Mittags hilft die Sonne, abends ist oft die Referenz besser (`gbm_quantile`, `baseline_model`)
-- **Grenzen der Aussage:** Diese Prüfung weicht vom [Standardablauf](../../models/README.md) ab, der Vergleich mit den regulären Modellen ist deshalb nicht gleichwertig
+- **Grenzen der Aussage:** Diese Prüfung wich vom damaligen Standardablauf ab: Die Modelle wurden wöchentlich neu trainiert, der Bandit entschied täglich mit Fehlern bis D−2, und die Hypothese entstand erst nach dem Vorlauf. Der Vergleich mit den regulären Modellen war deshalb nicht gleichwertig
 
-| | Standardablauf | Diese Prüfung |
-|---|---|---|
-| Start | `make backtest MODEL=<name>` | `make bandit-exploration STEP=tune\|test` |
-| Rückmeldung | wöchentlich neu trainiert | täglich, sobald Fehler bis D−2 bekannt sind |
-| Reihenfolge | Hypothese vor dem Test | Hypothese nach dem Vorlauf |
-| Holdout | einmal am Schluss | keiner |
-
-## 3. Vorgehen
+### 3. Vorgehen
 
 1. Der [Vorlauf](vorlauf/) mit fünf Modellen, inklusive Regime-Modell, wertete die Testmonate am 05.11.2026 aus
 2. Erst danach wurden Frage und Kriterium festgehalten, und danach entstand diese versionierte Fassung mit vier Modellen. Der Test ist deshalb **nicht blind**, die Einstellungen stammen aber nur aus April und Mai
@@ -46,7 +78,7 @@ Die Arme sind die Prognosen von Referenz, B1, B2 und Gradient Boosting aus dem g
 
 Einstellungen: [`tune_selection.csv`](results/tune_selection.csv). Thompson wird über 200 Seeds gemittelt.
 
-## 4. Erkenntnisse
+### 4. Erkenntnisse
 
 **Der Bandit lernt praktisch nichts**
 - Die Anteile bleiben nahe bei je 25 %, er wählt also fast zufällig
@@ -74,7 +106,7 @@ Einstellungen: [`tune_selection.csv`](results/tune_selection.csv). Thompson wird
 
 **Grenzen:** nur eine Saison und ein Dutzend verglichene Strategien ohne Korrektur für Mehrfachtests. Ein kleiner Nutzen laufender Gewichte in einer anderen Saison oder mit unterschiedlicheren Modellen ist damit nicht ausgeschlossen.
 
-## 5. Outcome
+### 5. Outcome
 
 Test Juni bis August, 91 Tage. Differenz zu `gbm_quantile`, das auch auf April und Mai das beste Einzelmodell war. Alle Werte: [`test_results.csv`](results/test_results.csv).
 
@@ -107,20 +139,16 @@ Stabilität der Gewinner ([`test_persistence.csv`](results/test_persistence.csv)
 | Gewinner auf den jeweils anderen Testtagen gewählt | nur −0.27 % statt −1.72 % im Nachhinein |
 | Tage für 80 % Power beim Vergleich Boosting gegen Referenz in einer Viertelstunde | Median 651, vorhanden sind 91 |
 
-## 6. Entscheid
-
-**Nicht weiterverfolgt**, weil Thompson Sampling als Architektur nicht zu diesem Problem passt und die laufende Gewichtung keinen gesicherten Vorteil bringt, der die zusätzliche Komplexität rechtfertigt.
-
-## 7. Belege
+## Belege
 
 - **Issue und PR:** #21, PR #22
-- **Code:** [`src/energy_price/exploration/bandit/`](../../../src/energy_price/exploration/bandit/). Ein Holdout-Schritt existiert nicht
+- **Code:** [`src/energy_price/exploration/bandit/`](../../../src/energy_price/exploration/bandit/). Ein Schritt auf der Testperiode existiert nicht
 - **Tests:** `tests/test_bandit_exploration.py`. Sie prüfen unter anderem, dass keine Entscheidung Preise nach D−2 sieht und der Bandit nur vom gewählten Modell lernt
-- **Kontrolle:** Die Arme reproduzieren die dokumentierten Test-Scores der Modelle (Boosting 3.1633, Referenz 3.2018, B2 3.2254)
+- **Kontrolle (alte Pipeline):** Die Arme reproduzierten die dokumentierten Test-Scores der Modelle (Boosting 3.1633, Referenz 3.2018, B2 3.2254)
 - **Vorlauf:** [`vorlauf/`](vorlauf/) enthält die Skripte und die Rohausgabe unverändert. Die Skripte brauchen die Prognosen aller fünf Modelle, das Regime-Modell ist seit #29 in `main`
 
 ```bash
-make bandit-exploration STEP=tune   # Einstellungen auf April und Mai wählen
-make bandit-exploration STEP=test   # CHOSEN auf Juni bis August, schreibt results/
+make bandit-exploration STEP=fit-spans        # Einstellungen auf April und Mai wählen
+make bandit-exploration STEP=evaluate-spans   # CHOSEN auf Juni bis August, schreibt results/
 pytest tests/test_bandit_exploration.py
 ```
