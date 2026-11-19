@@ -188,9 +188,10 @@ compare: data ## CHOSEN of every model, reference and B2 on the same validation 
 final-test: data ## The one run on the locked test period (Sep, Oct) after the freeze; needs UNLOCK_TEST=1 (issue #53)
 	$(PY) -m energy_price.evaluation.experiment final-test --jobs $(JOBS) $(if $(TRACK),--track) $(if $(UNLOCK_TEST),--unlock-test)
 
-# The explorative bandit check keeps its own split inside the validation period, STEP tune or test.
-STEP  ?= test
-bandit-exploration: data ## Explorative check of a bandit over the models, STEP tune or test (docs/exploration/bandit/README.md)
+# The bandit check (#21, tested and rejected) splits the validation period itself: fit-spans on April
+# and May, evaluate-spans on June to August. It never uses test days.
+STEP  ?= evaluate-spans
+bandit-exploration: data ## Rejected bandit check (#21), STEP fit-spans or evaluate-spans (docs/exploration/bandit/README.md)
 	$(PY) -m energy_price.exploration.bandit.run $(STEP) --jobs $(JOBS)
 
 clean-data: ## Delete the processed data (raw data stays untouched)

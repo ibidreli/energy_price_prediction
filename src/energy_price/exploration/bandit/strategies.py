@@ -1,4 +1,4 @@
-"""Bandit and online aggregation over existing models: explorative check, not a model candidate.
+"""Bandit and online aggregation over existing models: tested and rejected (#21), not a model candidate.
 
 Issue #21, documented in docs/exploration/bandit/README.md. The strategies choose or weight the forecasts of existing models per delivery day. All of them
 work on arrays with the axes day, quarter hour of the day, arm (model) and quantile:
@@ -11,9 +11,9 @@ Availability rule of the project: the decision for delivery day D uses only loss
 D-2, because later prices are not published at the issue time (``energy_price.availability``).
 Every strategy therefore reads the feedback through ``_known_day``.
 
-These strategies get new feedback every day, while ``make backtest`` refits weekly. ``run.py`` in
-this folder therefore evaluates them outside the standard workflow, on the same forecasts, days and
-scores.
+These strategies are not models with ``GRID``/``CHOSEN`` in ``energy_price.models``; they combine the
+walk-forward forecasts of existing models. ``run.py`` in this folder therefore evaluates them outside
+``experiment select``/``compare``, on validation days only.
 """
 
 from __future__ import annotations
@@ -25,17 +25,17 @@ import numpy as np
 ARMS = ("reference", "B1", "B2", "gbm_quantile")
 SLOTS_PER_DAY = 96
 SEED = 0
-TUNE_SEEDS = 20
-TEST_SEEDS = 200
+FIT_SEEDS = 20
+EVALUATE_SEEDS = 200
 FEEDBACK_LAG_DAYS = 2
-EXPLORATION_FLOOR = 0.05  # minimum share per arm, as in the production bandit that inspired the test
+EXPLORATION_FLOOR = 0.05  # minimum share per arm, as in the production bandit that inspired the check
 
 HALF_LIVES = (7, 14, 28, 56, np.inf)
 ETAS = (0.01, 0.03, 0.1, 0.3, 1.0, 3.0)
 _HEDGE_GRID = [{"eta": eta, "half_life": half_life} for eta in ETAS for half_life in HALF_LIVES]
 _HALF_LIFE_GRID = [{"half_life": half_life} for half_life in HALF_LIVES]
 
-# Settings tried on April and May (`make bandit-exploration STEP=tune`).
+# Settings tried on April and May (`make bandit-exploration STEP=fit-spans`).
 GRID: dict[str, list[dict[str, float]]] = {
     "hedge_global": _HEDGE_GRID,
     "hedge_hour": _HEDGE_GRID,
@@ -46,7 +46,8 @@ GRID: dict[str, list[dict[str, float]]] = {
     "thompson_full_info": _HALF_LIFE_GRID,
 }
 
-# Lowest pinball loss on April and May (docs/exploration/bandit/results/tune_selection.csv).
+# Lowest pinball loss on April and May, old pipeline (docs/exploration/bandit/results/tune_selection.csv).
+# A new ``fit-spans`` run writes fit_selection.csv; CHOSEN is only updated by hand.
 CHOSEN: dict[str, dict[str, float]] = {
     "hedge_global": {"eta": 0.3, "half_life": 7},
     "hedge_hour": {"eta": 0.1, "half_life": 14},
