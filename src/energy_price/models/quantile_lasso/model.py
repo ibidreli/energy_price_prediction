@@ -12,17 +12,17 @@ from energy_price.models.shared.linear import LinearQuantileModel
 MODEL = LinearQuantileModel
 ISSUE = 27
 
-# Tuning on April and May: feature set x L1 penalty. Finer than the baseline (0, 0.01, 0.1), which
-# chose 0: at 0.01 only part of the coefficients survives, so the old grid mainly tested strong penalties.
+# Compared by `select`: feature set x L1 penalty, each with every window of DESIGN.windows. Finer than
+# the baseline (0, 0.01, 0.1): at 0.01 only part of the coefficients survives, so a coarser grid would
+# mainly test strong penalties.
 GRID = [
-    {"feature_set": fs, "window": "expanding", "alpha": a}
+    {"feature_set": fs, "alpha": a}
     for fs in ("B2", "B3", "B4")
     for a in (0.001, 0.003, 0.01, 0.03)
 ]
 
-# Fixed after tuning on April and May (2026-11-06, commit 95c7787), before the test. The best setting
-# overall uses B2. Issue #27 asks whether data until D-2 help, so the best setting with such data (B4,
-# 0.0009 below B3) is tested as well. Not changed after the test.
+# provisional until #51. Two variants: the best setting overall and, because issue #27 asks whether
+# data until D-2 help, the best setting with such data (B3 or B4).
 CHOSEN = {
     "quantile_lasso": {"feature_set": "B2", "window": "expanding", "alpha": 0.001},
     "quantile_lasso_d2": {"feature_set": "B4", "window": "expanding", "alpha": 0.03},

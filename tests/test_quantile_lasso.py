@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 
 from energy_price.evaluation.backtest import REFERENCE, evaluate, run_reference
-from energy_price.evaluation.experiment import label, load, run_variant
+from energy_price.evaluation.design import DESIGN
+from energy_price.evaluation.experiment import label, load, run_variant, windows_of
 from energy_price.features.dataset import Inputs, build_table, calendar_features, quarter_hours
 from energy_price.models.quantile_lasso.diagnostics import (
     BASELINE,
@@ -80,13 +81,15 @@ def test_grid_is_the_one_of_the_issue():
     assert len(grid) == 12
     assert {s["feature_set"] for s in grid} == {"B2", "B3", "B4"}
     assert {s["alpha"] for s in grid} == {0.001, 0.003, 0.01, 0.03}
-    assert {s["window"] for s in grid} == {"expanding"}
+    assert all("window" not in s for s in grid)
+    assert windows_of(load(NAME)) == DESIGN.windows
 
 
 def test_chosen_only_holds_settings_of_the_grid():
     module = load(NAME)
 
-    assert all(settings in module.GRID for settings in module.CHOSEN.values())
+    assert all({k: v for k, v in settings.items() if k != "window"} in module.GRID
+               for settings in module.CHOSEN.values())
 
 
 def test_model_fulfils_the_interface_with_sorted_quantiles():

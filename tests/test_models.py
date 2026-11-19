@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from energy_price.evaluation.design import WINDOW_DAYS, WINDOW_MEAN
+from energy_price.evaluation.experiment import grid_settings, load, windows_of
 from energy_price.features.dataset import calendar_features, quarter_hours
 from energy_price.features.design import design_matrix
 from energy_price.models.shared.linear import LinearQuantileModel
@@ -158,3 +160,34 @@ def test_rows_with_missing_features_get_no_forecast():
 def test_unknown_feature_set_is_rejected():
     with pytest.raises(ValueError, match="feature set"):
         LinearQuantileModel("B9")
+
+
+# calibrated_bands follows its own selection (select_candidates) and is checked in its own tests.
+CONTRACT_MODELS = ["baseline_model", "gbm_quantile", "quantile_lasso", "regime_mixture", "_template"]
+
+
+@pytest.mark.parametrize("name", CONTRACT_MODELS)
+def test_grid_has_no_window_and_windows_are_known(name):
+    module = load(name)
+
+    grid = grid_settings(module)  # raises if a setting names a window or settings repeat
+    windows = windows_of(module)  # WINDOWS, else DESIGN.windows; raises for an unknown name
+
+    assert grid and all("window" not in settings for settings in grid)
+    assert set(windows) <= set(WINDOW_DAYS)
+
+
+@pytest.mark.parametrize("name", CONTRACT_MODELS)
+def test_only_the_sparse_linear_baseline_tries_28_days(name):
+    assert ("rolling_28d" in windows_of(load(name))) == (name == "baseline_model")
+
+
+@pytest.mark.parametrize("name", CONTRACT_MODELS)
+def test_every_chosen_setting_is_a_grid_setting_with_one_of_its_windows(name):
+    module = load(name)
+    windows = {*windows_of(module), WINDOW_MEAN}
+
+    assert module.CHOSEN
+    for variant, settings in module.CHOSEN.items():
+        assert settings.get("window") in windows, variant
+        assert {k: v for k, v in settings.items() if k != "window"} in module.GRID, variant

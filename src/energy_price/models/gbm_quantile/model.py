@@ -1,22 +1,20 @@
-"""Issue #17: quantile boosting on B2, compared using the shared weekly backtest."""
+"""Issue #17: quantile boosting on B2, compared in the shared daily walk-forward backtest."""
 
 from energy_price.models.shared.boosting import GradientBoostingQuantileModel
 
 MODEL = GradientBoostingQuantileModel
 ISSUE = 17
 
-# Four conservative configurations, each with both training windows. The first is
-# the anchor; the others change learning rate, tree size or leaf support individually.
+# Four conservative configurations, each run by `select` with every window of DESIGN.windows. The
+# first is the anchor; the others change learning rate, tree size or leaf support individually.
 GRID = [
-    {"feature_set": "B2", "window": window, "learning_rate": rate, "max_iter": 150,
+    {"feature_set": "B2", "learning_rate": rate, "max_iter": 150,
      "max_leaf_nodes": leaves, "min_samples_leaf": support, "l2_regularization": 1.0,
      "random_state": 0}
-    for window in ("expanding", "rolling_56d")
     for rate, leaves, support in ((0.05, 7, 50), (0.1, 7, 50), (0.05, 15, 50), (0.05, 7, 100))
 ]
 
-# Lowest mean pinball on April/May (3.3086848336904033), fixed before any test run.
-# Full selection record: reports/gbm_quantile/tune_selection.json.
+# provisional until #51
 CHOSEN = {
     "gbm_quantile": {
         "feature_set": "B2", "window": "expanding", "learning_rate": 0.05, "max_iter": 150,

@@ -124,16 +124,11 @@ class RegimeMixtureModel:
 MODEL = RegimeMixtureModel
 ISSUE = 16
 
-# Tuning on April and May: feature set x training window (logistic C = 1, no L1 penalty, as the
-# baseline chose alpha = 0 on the same period).
-GRID = [
-    {"feature_set": fs, "window": w}
-    for fs in ("B1", "B2")
-    for w in ("expanding", "rolling_56d")
-]
+# Compared by `select`: feature set, each with every window of DESIGN.windows (logistic C = 1 and no
+# L1 penalty, like the CHOSEN baseline).
+GRID = [{"feature_set": fs} for fs in ("B1", "B2")]
 
-# Chosen on the tuning period (`make backtest MODEL=regime_mixture STEP=tune`): B2 with the expanding
-# window had the lowest pinball loss (3.323 against 3.449 of the reference); fixed before the test.
+# provisional until #51
 CHOSEN = {"regime_mixture": {"feature_set": "B2", "window": "expanding"}}
 
 RUN_INFO = {"deterministic": "LogisticRegression (lbfgs) and QuantileRegressor (HiGHS) have no random component"}
