@@ -99,15 +99,17 @@ Der mittlere Pinball-Loss ist das Mittel über alle Viertelstunden und die drei 
 
 ## Bewertungsverfahren
 
-> Dieser Teil wird mit #36 (Pipeline neu aufbauen, Luca Manna) überarbeitet. Stand 14.11.2026.
+> Seit #36, Stand 19.11.2026. Ablauf, Fenster, Beispiele und Quellen stehen nur in [`training_pipeline.md`](training_pipeline.md), hier die Regeln der Bewertung.
 
-- **Rollierender Backtest:** pro Liefertag einmal um 11:00 an D−1 prognostizieren, nur mit dem damaligen Wissensstand (Meeting vom 01.10.2026, `known_at_issue()`), kein zufälliger Split
-- **Perioden heute** (`PERIODS` in `src/energy_price/evaluation/backtest.py`):
-    - Training ab Januar
-    - Auswahl der Settings auf April und Mai
-    - Vergleich auf Juni bis August
-    - Holdout September und Oktober, gesperrt
-- **Geplant in #36:** tägliches Walk-forward, Auswahl über mehrere Blöcke und eine einzige Testperiode am Schluss
+| Schritt | Regel |
+|---|---|
+| **Walk-forward** | Jeder Liefertag D ist ein Ursprung: Prognose um 11:00 an D−1, Training nur mit Daten bis Ende D−2 (`known_at_issue()`, Meeting vom 01.10.2026), kein zufälliger Split |
+| **Auswahl** (`make select`) | Validierung 01.04. bis 31.08.2026. Gewählt wird der kleinste mittlere tägliche Pinball-Loss über alle Validierungstage, jeder Tag gleich gewichtet. Ausgewiesen zusätzlich je Monat (2026-04 bis 2026-08) mit Rang |
+| **Vergleich** (`make compare`) | Alle Modelle, Referenz und B2 auf identischen Viertelstunden (`common_rows`). Skill und mittlere tägliche Differenz gegen Referenz und gegen B2, mit 95-%-Intervall aus einem Block-Bootstrap (Blöcke von 7 Tagen, 5000 Wiederholungen) |
+| **Test** (`make final-test UNLOCK_TEST=1`) | 01.09. bis 31.10.2026, „Testperiode mit Vorbehalt“: im Code gesperrt, nach dem Freeze genau einmal ausgewertet (#53) |
+
+**Lesart des Intervalls:** Liegt es ganz unter 0, war das Modell auf diesen Tagen besser als der Vergleich. Schliesst es 0 ein, ist der Unterschied nicht gesichert. Die Blöcke halten die Abhängigkeit benachbarter Tage zusammen.
+
 - **Alle Metriken zusätzlich aufgeschlüsselt** nach Uhrzeit, Monat und Richtung (short/long), weil sich der Preis dort stark unterscheidet (H1, H7, H8 in `docs/eda.md`)
 - **Kreuzende Quantile** (P10 über P90) lehnt `metrics.py` ab. Das Modell muss sie vorher sortieren oder korrigieren
 - **Leakage aus der EDA, gelöst mit #50:** Das Notebook schneidet Preis, Systembilanz und Wetter direkt nach dem Laden vor dem 01.09.2026 ab. H2 und H3 nutzen seither nur Januar bis August, die Zahlen in `docs/eda.md` sind nachgeführt
