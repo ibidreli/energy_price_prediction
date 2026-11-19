@@ -260,7 +260,7 @@ def test_model_file_matches_the_select_contract():
     assert set(chosen) == set(calibrated_bands.CHOSEN)
 
 
-def test_tuning_persists_model_specific_selection(tmp_path, monkeypatch):
+def test_select_persists_model_specific_selection(tmp_path, monkeypatch):
     import json
     from test_evaluation_backtest import MeanModel, synthetic_table
 
