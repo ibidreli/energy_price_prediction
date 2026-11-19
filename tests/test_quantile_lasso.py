@@ -6,13 +6,16 @@ import pytest
 
 from energy_price.evaluation.backtest import REFERENCE, evaluate, run_reference
 from energy_price.evaluation.design import DESIGN
-from energy_price.evaluation.experiment import label, load, run_variant, windows_of
+from energy_price.evaluation.experiment import load, run_variant, windows_of
 from energy_price.features.dataset import Inputs, build_table, calendar_features, quarter_hours
 from energy_price.models.quantile_lasso.diagnostics import (
     BASELINE,
     BOOSTING,
     analyse,
     best_per_feature_set,
+    candidate_coefficients,
+    candidates_of,
+    chosen_candidates,
     comparison,
     first_complete_day,
     surviving_features,
@@ -71,7 +74,7 @@ def inputs_of(prices: pd.DataFrame, balance: pd.DataFrame, days: pd.DatetimeInde
 def forecast_for(day: pd.Timestamp, prices: pd.DataFrame, balance: pd.DataFrame, days: pd.DatetimeIndex) -> pd.DataFrame:
     table = build_table(inputs_of(prices, balance, days), days=list(days))
     settings = {"feature_set": "B4", **LASSO}
-    forecast, _ = run_variant(load(NAME), table, [day], "lasso", settings, jobs=1)
+    forecast, _ = run_variant(load(NAME), table, [day], "lasso", settings, jobs=1, refit_every=7)
     return forecast[["q10", "q50", "q90"]]
 
 
@@ -117,7 +120,8 @@ def test_backtest_runs_end_to_end_on_the_same_quarter_hours_as_the_reference():
     table = synthetic_table()
     days = list(pd.date_range("2026-04-01", "2026-04-08", freq="D"))
 
-    forecast, coefficients = run_variant(load(NAME), table, days, "lasso", {"feature_set": "B3", **LASSO}, jobs=1)
+    forecast, coefficients = run_variant(load(NAME), table, days, "lasso", {"feature_set": "B3", **LASSO}, jobs=1,
+                                         refit_every=7)
     scores, _ = evaluate(pd.concat([run_reference(table, days), forecast], ignore_index=True))
 
     assert set(scores.index) == {REFERENCE, "lasso"}
@@ -156,13 +160,57 @@ class TestLeakage:
         assert not original.equals(changed)
 
 
-def test_best_per_feature_set_takes_the_lowest_pinball_of_each_set():
-    grid = [{"feature_set": fs, "window": "expanding", "alpha": a} for fs in ("B2", "B3") for a in (0.01, 0.03)]
-    scores = pd.DataFrame({"pinball": [3.0, 2.0, 1.0, 4.0]}, index=[label(s) for s in grid])
+def test_candidates_are_named_like_in_select():
+    grid = [{"feature_set": "B2", "alpha": 0.01}]
 
-    best = best_per_feature_set(scores, grid)
+    candidates = candidates_of(grid, ("expanding", "rolling_56d"))
 
-    assert best == {"B2|expanding|0.03": grid[1], "B3|expanding|0.01": grid[2]}
+    assert candidates == {
+        "B2|0.01|expanding": {"feature_set": "B2", "alpha": 0.01, "window": "expanding"},
+        "B2|0.01|rolling_56d": {"feature_set": "B2", "alpha": 0.01, "window": "rolling_56d"},
+        "B2|0.01|window_mean": {"feature_set": "B2", "alpha": 0.01, "window": "window_mean"},
+    }
+    assert list(candidates_of(grid, ("expanding",))) == ["B2|0.01|expanding"]
+
+
+def test_best_per_feature_set_takes_the_lowest_mean_daily_pinball_of_each_set():
+    candidates = candidates_of([{"feature_set": fs, "alpha": a} for fs in ("B2", "B3") for a in (0.01, 0.03)],
+                               ("expanding",))
+    # "pinball" (pooled over rows) would pick other candidates than the selection criterion
+    scores = pd.DataFrame({"mean_daily_pinball": [3.0, 2.0, 1.0, 4.0], "pinball": [1.0, 2.0, 4.0, 3.0]},
+                          index=list(candidates))
+    scores.loc[REFERENCE] = [0.5, 0.5]
+
+    best = best_per_feature_set(scores, candidates)
+
+    assert best == {"B2|0.03|expanding": candidates["B2|0.03|expanding"],
+                    "B3|0.01|expanding": candidates["B3|0.01|expanding"]}
+
+
+def test_chosen_settings_are_found_under_their_select_name():
+    candidates = candidates_of([{"feature_set": "B2", "alpha": 0.01}], ("expanding", "rolling_56d"))
+    chosen = {"lasso": {"feature_set": "B2", "window": "window_mean", "alpha": 0.01}}
+
+    assert chosen_candidates(chosen, candidates) == {"B2|0.01|window_mean": chosen["lasso"]}
+    with pytest.raises(ValueError, match="not a candidate"):
+        chosen_candidates({"lasso": {"feature_set": "B4", "window": "expanding", "alpha": 0.01}}, candidates)
+
+
+def test_a_window_mean_gets_the_coefficients_of_all_its_windows():
+    windows = ("expanding", "rolling_56d")
+    candidates = candidates_of([{"feature_set": "B2", "alpha": 0.01}], windows)
+    saved = pd.DataFrame({"feature": "radiation_100", "q10": [1.0, 2.0], "q50": 1.0, "q90": 1.0,
+                          "fit_day": pd.Timestamp("2026-04-01"), "window": list(windows),
+                          "model": ["B2|0.01|expanding", "B2|0.01|rolling_56d"]})
+    mean = {"B2|0.01|window_mean": candidates["B2|0.01|window_mean"]}
+    single = {"B2|0.01|rolling_56d": candidates["B2|0.01|rolling_56d"]}
+
+    out = candidate_coefficients(saved, mean, windows)
+
+    assert set(out["model"]) == {"B2|0.01|window_mean"} and list(out["q10"]) == [1.0, 2.0]
+    assert list(candidate_coefficients(saved, single, windows)["q10"]) == [2.0]
+    with pytest.raises(ValueError, match="missing"):
+        candidate_coefficients(saved[saved["window"] == "expanding"], mean, windows)
 
 
 def test_first_complete_day_of_a_feature_set():
@@ -187,7 +235,17 @@ def test_comparison_reports_the_daily_difference_and_its_interval():
     assert row["n_days"] == 28
 
 
-def test_surviving_features_count_the_weekly_fits_with_a_coefficient():
+def test_comparison_of_a_smoke_run_has_no_interval():
+    days = pd.date_range("2026-04-01", periods=3, freq="D")
+    daily = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [2.0, 2.0, 2.0]}, index=days)
+
+    row = comparison(daily, [("a", "b")]).iloc[0]
+
+    assert row["mean_difference"] == pytest.approx(0.0)
+    assert np.isnan(row["low"]) and np.isnan(row["high"])
+
+
+def test_surviving_features_count_the_fits_with_a_coefficient():
     fits = pd.to_datetime(["2026-04-01", "2026-04-08"])
     coefficients = pd.DataFrame({
         "feature": ["price_mean_d2", "hour_01", "price_mean_d2", "hour_01"],
@@ -219,16 +277,19 @@ class TestAnalyse:
     def saved(self, table: pd.DataFrame, with_baseline: bool = True) -> pd.DataFrame:
         module = load(NAME)
         frames = [run_reference(table, self.DAYS)]
-        frames += [run_variant(module, table, self.DAYS, n, s, jobs=1)[0] for n, s in self.CANDIDATES.items()]
+        frames += [run_variant(module, table, self.DAYS, n, s, jobs=1, refit_every=7)[0]
+                   for n, s in self.CANDIDATES.items()]
         if with_baseline:
-            frames.append(run_variant(module, table, self.DAYS, BASELINE, {"feature_set": "B2", **LASSO}, jobs=1)[0])
+            frames.append(run_variant(module, table, self.DAYS, BASELINE, {"feature_set": "B2", **LASSO}, jobs=1,
+                                      refit_every=7)[0])
         return pd.concat(frames, ignore_index=True)
 
     def test_compares_on_the_same_days_with_all_models_of_the_issue(self):
         table = synthetic_table()
         table.loc[table["delivery_day"] < "2026-03-05", "price_q50_56d"] = np.nan
 
-        scores, compared, features = analyse(table, self.DAYS, self.saved(table), self.CANDIDATES, jobs=1)
+        scores, compared, features = analyse(table, self.DAYS, self.saved(table), self.CANDIDATES, jobs=1,
+                                             refit_every=7)
 
         same_rows_b2 = "lasso_b2_from_03-05"
         assert set(scores.index) == {REFERENCE, BASELINE, BOOSTING, "lasso_b3", "lasso_b2", same_rows_b2}
@@ -242,7 +303,8 @@ class TestAnalyse:
         table = synthetic_table()
 
         with pytest.raises(ValueError, match="baseline"):
-            analyse(table, self.DAYS, self.saved(table, with_baseline=False), self.CANDIDATES, jobs=1)
+            analyse(table, self.DAYS, self.saved(table, with_baseline=False), self.CANDIDATES, jobs=1,
+                    refit_every=7)
 
     def test_stops_if_a_fresh_fit_differs_from_the_saved_forecast(self):
         table = synthetic_table()
@@ -251,7 +313,7 @@ class TestAnalyse:
         saved.loc[rows, "q50"] += 1.0
 
         with pytest.raises(ValueError, match="lasso_b3"):
-            analyse(table, self.DAYS, saved, self.CANDIDATES, jobs=1)
+            analyse(table, self.DAYS, saved, self.CANDIDATES, jobs=1, refit_every=7)
 
 
 def test_linear_model_is_the_one_of_the_baseline():

@@ -89,7 +89,7 @@ def test_backtest_runs_end_to_end_against_the_reference():
     module = load(NAME)
     settings = {"feature_set": "B1", "window": "expanding"}
 
-    forecasts, _ = run_variant(module, table, days, "R1", settings, jobs=1)
+    forecasts, _ = run_variant(module, table, days, "R1", settings, jobs=1, refit_every=7)
     scores, _ = evaluate(pd.concat([run_reference(table, days), forecasts], ignore_index=True))
 
     assert set(scores.index) == {"reference", "R1"}
@@ -130,7 +130,7 @@ def test_diagnostics_rank_the_oracle_first_on_a_clear_direction_pattern():
     table = synthetic_table(days=40)
     days = list(pd.date_range("2026-05-01", "2026-05-03", freq="D"))
 
-    forecasts = run(table, days, {"feature_set": "B1", "window": "expanding"}, jobs=1)
+    forecasts = run(table, days, {"feature_set": "B1", "window": "expanding"}, jobs=1, refit_every=7)
     scores, _ = evaluate(forecasts)
 
     assert set(scores.index) == {"reference", "p_constant", "p_slot", "p_model", "p_oracle"}
@@ -145,6 +145,41 @@ def test_diagnostics_score_the_reference_on_the_same_days_when_features_are_miss
     days = list(pd.date_range("2026-05-01", "2026-05-03", freq="D"))
     table.loc[table["delivery_day"] == days[1], "radiation"] = np.nan
 
-    scores, _ = evaluate(run(table, days, {"feature_set": "B2", "window": "expanding"}, jobs=1))
+    scores, _ = evaluate(run(table, days, {"feature_set": "B2", "window": "expanding"}, jobs=1, refit_every=7))
 
     assert (scores["n_days"] == len(days) - 1).all()
+
+
+def test_diagnostics_reject_the_window_mean():
+    from energy_price.models.regime_mixture.diagnostics import run
+
+    table = synthetic_table(days=40)
+
+    with pytest.raises(ValueError, match="single training window"):
+        run(table, [pd.Timestamp("2026-05-01")], {"feature_set": "B1", "window": "window_mean"}, jobs=1)
+
+
+def test_chosen_settings_are_found_under_their_select_name():
+    from energy_price.models.regime_mixture.diagnostics import select_name
+
+    grid = [{"feature_set": "B1"}, {"feature_set": "B2"}]
+    windows = ("expanding", "rolling_56d")
+
+    assert select_name({"feature_set": "B2", "window": "rolling_56d"}, grid, windows) == "B2|rolling_56d"
+    with pytest.raises(ValueError, match="not a candidate"):
+        select_name({"feature_set": "B2", "window": "rolling_90d"}, grid, windows)
+
+
+def test_model_p_reproduces_the_select_forecast_of_the_same_setting():
+    from energy_price.models.regime_mixture.diagnostics import check_matches_select, run
+
+    table = synthetic_table(days=40)
+    days = list(pd.date_range("2026-05-01", "2026-05-03", freq="D"))
+    settings = {"feature_set": "B1", "window": "expanding"}
+    saved, _ = run_variant(load(NAME), table, days, "B1|expanding", settings, jobs=1, refit_every=7)
+
+    forecasts = run(table, days, settings, jobs=1, refit_every=7)
+
+    check_matches_select(forecasts, saved, "B1|expanding")
+    with pytest.raises(ValueError, match="differs"):
+        check_matches_select(forecasts, saved.assign(q50=saved["q50"] + 1.0), "B1|expanding")
