@@ -1,23 +1,34 @@
-"""Asymmetric rolling calibration from strictly out-of-sample weekly forecasts.
+"""Asymmetric rolling calibration from strictly out-of-sample forecasts of a frozen base model.
 
-The outer backtest supplies only observed prices up to its weekly D-2 cutoff.
-Inner weekly forecasts have their own D-2 cutoff; no calibration target is
-used to fit its forecaster. Corrections stay fixed until the next outer refit.
-Time dependence means this is empirical calibration, not an IID coverage guarantee.
+The base is a CHOSEN variant of another model folder (``"baseline_model:B2"``) and runs exactly as in
+its own walk-forward backtest: its training window (``window`` in CHOSEN, ``window_mean`` = mean of the
+per-window forecasts over its ``WINDOWS``) and its refit frequency (``REFIT_EVERY``, else the design
+default). The outer backtest supplies only rows with a price known at its issue time (up to D-2).
+Inside ``fit`` the base forecasts the calibration days fold by fold (``folds(days, refit_every)``);
+each fold's base sees only ``training_rows(table, fit_day, window)``, so no calibration target is used
+to fit its forecaster. ``predict`` refits the base on the rows given to ``fit`` with fit day = last
+training day + 2. Corrections stay fixed until the next outer refit. Time dependence means this is
+empirical calibration, not an IID coverage guarantee.
 """
 
+from dataclasses import dataclass
+from hashlib import sha256
 from importlib import import_module
 from importlib.metadata import version
-from hashlib import sha256
 import math
 
 from joblib import Memory
 import numpy as np
 import pandas as pd
 
-from energy_price.evaluation.backtest import training_rows
-from energy_price.features.dataset import FIRST_DAY, TARGET
+from energy_price.evaluation.backtest import KEYS, QUANTILE_COLUMNS, folds, training_rows, window_mean
+from energy_price.evaluation.design import DESIGN, WINDOW_MEAN, window_days
+from energy_price.evaluation.experiment import refit_every_of, windows_of
+from energy_price.features.dataset import TARGET
 from energy_price.paths import REPORTS_DIR, ROOT
+
+# Days of data before the first historical base forecast (fit day >= first training day + 29).
+WARMUP_DAYS = 28
 
 # Joblib hashes the cached function, but not the implementation of a model class
 # supplied as an argument. Namespace by all package sources and numerical versions
@@ -28,20 +39,65 @@ _digest = sha256(b"".join(path.read_bytes() for path in _sources)
 _memory = Memory(REPORTS_DIR / "calibrated_bands" / "cache" / _digest.hexdigest(), verbose=0)
 
 
-def _forecast(base: str, train: pd.DataFrame, target: pd.DataFrame) -> pd.DataFrame:
-    """Content-addressed cache, including data and the frozen base configuration."""
-    module_name, variant = base.split(":")
+@dataclass(frozen=True)
+class Base:
+    """A frozen base variant: model class, settings without window, its window(s) and refit frequency."""
+
+    model: type
+    settings: dict
+    window: str                  # CHOSEN window, may be ``window_mean``
+    windows: tuple[str, ...]     # the single window, or the windows averaged by ``window_mean``
+    refit_every: int
+
+
+def _base(name: str) -> Base:
+    """The CHOSEN variant ``"<model folder>:<variant>"`` with its window and refit frequency from model.py."""
+    module_name, variant = name.split(":")
     module = import_module(f"energy_price.models.{module_name}.model")
     settings = dict(module.CHOSEN[variant])
-    window = settings.pop("window", "expanding")
-    if window != "expanding":
-        raise ValueError("calibration currently requires an expanding base model")
-    return _cached_forecast(module.MODEL, settings, train, target)
+    window = settings.pop("window", None)
+    if window is None:
+        raise ValueError(f"CHOSEN {name} has no 'window'")
+    if window == WINDOW_MEAN:
+        windows = windows_of(module)
+    else:
+        window_days(window)  # rejects unknown names
+        windows = (window,)
+    return Base(module.MODEL, settings, window, tuple(windows), refit_every_of(module))
 
 
-@_memory.cache
-def _cached_forecast(model, settings, train, target):
+def _fit_predict(model, settings, window, refit_every, train, target):
+    """Fit one base model and forecast ``target``. ``window`` and ``refit_every`` are part of the cache key only."""
+    del window, refit_every
     return model(**settings).fit(train).predict(target)
+
+
+# Content-addressed: data, base configuration, window and refit frequency.
+_cached_forecast = _memory.cache(_fit_predict)
+
+
+def _forecast(base: Base, window: str, train: pd.DataFrame, target: pd.DataFrame) -> pd.DataFrame:
+    return _cached_forecast(base.model, base.settings, window, base.refit_every, train, target)
+
+
+def _mean_over_windows(target: pd.DataFrame, forecasts: list[pd.DataFrame]) -> pd.DataFrame:
+    """``backtest.window_mean`` of per-window base forecasts, back on the index of ``target``."""
+    keys = target[KEYS]
+    frames = [keys.join(forecast[QUANTILE_COLUMNS]).assign(model=str(i)) for i, forecast in enumerate(forecasts)]
+    mean = window_mean(frames).set_index(KEYS)[QUANTILE_COLUMNS]
+    values = mean.reindex(pd.MultiIndex.from_frame(keys)).to_numpy()
+    return pd.DataFrame(values, index=target.index, columns=QUANTILE_COLUMNS)
+
+
+def _base_forecast(base: Base, table: pd.DataFrame, fit_day: pd.Timestamp,
+                   target: pd.DataFrame) -> tuple[pd.DataFrame, pd.Timestamp]:
+    """Base forecast of ``target`` fitted at ``fit_day`` on its window(s), and the last training day."""
+    forecasts = []
+    for window in base.windows:
+        train = training_rows(table, fit_day, window_days(window))
+        forecasts.append(_forecast(base, window, train, target))
+    out = forecasts[0] if len(forecasts) == 1 else _mean_over_windows(target, forecasts)
+    return out, train["delivery_day"].max()  # the window limits the start only, the end is D-2 for all
 
 
 def upper_quantile(values: np.ndarray, alpha: float = 0.1) -> float:
@@ -57,9 +113,9 @@ def upper_quantile(values: np.ndarray, alpha: float = 0.1) -> float:
 class CalibratedQuantileModel:
     """Wrap a frozen named base model; independently correct each 10% tail.
 
-    ``base`` identifies a model folder and its CHOSEN variant. Historical
-    forecasters use at least 28 days of warm-up and weekly expanding fits.
-    Sparse hour groups fall back to pooled residuals. P50 is never changed.
+    ``base`` identifies a model folder and its CHOSEN variant. Historical base forecasts cover the last
+    ``calibration_days`` training days (after ``WARMUP_DAYS`` of data) with the base's own window and
+    refit folds. Sparse hour groups fall back to pooled residuals. P50 is never changed.
     """
 
     def __init__(self, base="baseline_model:B2", calibration_days=28, grouping="global", calibrated=True):
@@ -84,26 +140,23 @@ class CalibratedQuantileModel:
         self.corrections_ = {}
         if not self.calibrated:
             return self
+        base = _base(self.base)
         last = table["delivery_day"].max()
         first = last - pd.Timedelta(days=self.calibration_days - 1)
+        start = max(first, DESIGN.first_train_day + pd.Timedelta(days=WARMUP_DAYS + 1))
         frames = []
-        for day in pd.date_range(FIRST_DAY + pd.Timedelta(days=29), last, freq="7D"):
-            end = day + pd.Timedelta(days=6)
-            if end < first:
-                continue
-            target = table[table["delivery_day"].between(day, end)]
+        for block in folds(list(pd.date_range(start, last, freq="D")), base.refit_every):
+            target = table[table["delivery_day"].isin(block)]
             if target.empty:
                 continue
-            train = training_rows(table, day, None)
-            pred = _forecast(self.base, train, target.drop(columns=[TARGET]))
+            pred, train_last = _base_forecast(base, table, block[0], target.drop(columns=[TARGET]))
             rows = target[["delivery_day", "hour", TARGET]].join(pred)
-            rows["fit_day"] = day
-            rows["train_last_day"] = train["delivery_day"].max()
+            rows["fit_day"] = block[0]
+            rows["train_last_day"] = train_last
             frames.append(rows)
         if not frames:
             raise ValueError("no out-of-sample calibration history after warm-up")
-        history = pd.concat(frames)
-        history = history[history["delivery_day"] >= first].dropna(subset=[TARGET, "q10", "q90"])
+        history = pd.concat(frames).dropna(subset=[TARGET, "q10", "q90"])
         history = history[np.isfinite(history[[TARGET, "q10", "q90"]]).all(axis=1)]
         self.calibration_ = history.copy()
         lower = history["q10"] - history[TARGET]
@@ -121,7 +174,10 @@ class CalibratedQuantileModel:
             raise RuntimeError("fit the model first")
         if table.empty:
             return pd.DataFrame(index=table.index, columns=["q10", "q50", "q90"], dtype=float)
-        out = _forecast(self.base, self.train_, table.drop(columns=[TARGET], errors="ignore")).copy()
+        fit_day = self.train_["delivery_day"].max() + pd.Timedelta(days=2)
+        out, _ = _base_forecast(_base(self.base), self.train_, fit_day,
+                                table.drop(columns=[TARGET], errors="ignore"))
+        out = out.copy()
         if self.calibrated:
             corrections = [self.corrections_.get(g, self.pooled_) for g in self._groups(table)]
             correction = np.asarray(corrections).reshape(-1, 2)
