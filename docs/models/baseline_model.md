@@ -3,50 +3,36 @@
 ## Kurzfassung
 
 - **Was:** Am Vortag um 11:00 sagen wir für jede Viertelstunde des nächsten Tages drei Preise voraus: eine untere Grenze (P10), einen mittleren Wert (P50) und eine obere Grenze (P90).
-- **Modell:** lineare Quantilregression, ein einfaches und erklärbares Modell.
+- **Modell:** lineare Quantilregression, ein einfaches und erklärbares Modell. Variante B2 ist der Massstab für alle anderen Modelle.
 - **Vergleich:** eine Referenz, die einfach die Preise derselben Uhrzeit der letzten 56 Tage nimmt.
-- **Ergebnis:** Das Modell ist etwa gleich gut wie die Referenz, aber nicht besser.
+- **Ablauf:** täglich neu trainiert, ausgewählt und verglichen auf April bis August, Test im September und Oktober ([Trainingspipeline](../training_pipeline.md)).
+- **Ergebnis:** Folgt nach den Auswahlläufen in #51. In der alten Pipeline war das Modell etwa gleich gut wie die Referenz ([Historie](#historie-alte-pipeline)).
 
 ## 1. Ausführen
 
 ```bash
-make test              # Tests, unter anderem gegen Data Leakage
-make baseline-tune     # Einstellungen auf April und Mai wählen (= make backtest STEP=tune)
-make baseline          # Backtest auf Juni bis August, mit Grafiken (= make backtest STEP=test)
-make baseline TRACK=1  # zusätzlich in W&B, Gruppe issue-6 (docs/experiment_tracking.md)
+make test                                         # Tests, unter anderem gegen Data Leakage
+python -m energy_price.evaluation.experiment baseline_model select --days 2026-04-01 2026-04-03   # Probelauf
+make select MODEL=baseline_model                  # 30 Kandidaten auf allen Validierungstagen, mit Grafiken
+make select MODEL=baseline_model TRACK=1 JOBS=4   # zusätzlich in W&B (docs/experiment_tracking.md)
+make compare                                      # nachdem CHOSEN in model.py festgehalten und committet ist
 ```
 
-Ergebnisse landen in `reports/baseline_model/` (nicht im Git), Grafiken in `docs/figures/baseline_model/`. Unter Windows zuerst die Umgebung aktivieren ([README](../../README.md#windows--powershell)).
+Ergebnisse landen in `reports/baseline_model/select_*` (nicht im Git), Grafiken in `docs/figures/baseline_model/select_*.png`. Den Test rechnet nur `make final-test UNLOCK_TEST=1`, einmal nach dem Freeze (#53). Unter Windows zuerst die Umgebung aktivieren ([README](../../README.md#windows--powershell)).
 
 ## 2. Dateien
 
-Seit #13 gilt für alle Modelle derselbe Aufbau ([Modellstruktur](README.md)). Der Ordner `src/energy_price/models/baseline_model/` enthält nur `model.py` (Varianten B1 und B2, Tuning-Raster, gewählte Einstellungen) und `README.md` (Steckbrief). Alles Weitere wurde für die Baseline gebaut und steht jetzt allen Modellen zur Verfügung:
+Für alle Modelle gilt derselbe Aufbau ([Modellstruktur](README.md)). Der Ordner `src/energy_price/models/baseline_model/` enthält nur `model.py` (`GRID`, `WINDOWS`, `CHOSEN`) und `README.md` (Steckbrief). Die übrigen Bausteine wurden für die Baseline gebaut und gelten für alle Modelle:
 
 | Datei | Inhalt | Warum |
 |---|---|---|
-| `features/dataset.py` | Preis und Features pro Viertelstunde | gemeinsame Grundlage; nur Daten, die um 11:00 bekannt sind |
-| `features/design.py` | Feature-Sets B1 und B2 | dieselben Features für jedes Modell |
-| `models/shared/base.py` | Grundgerüst eines Quantil-Modells | Standardisierung nur auf Trainingsdaten, sortierte Quantile |
-| `models/shared/linear.py` | lineare Quantilregression | das Modell der Baseline, wiederverwendbar |
+| `features/dataset.py`, `features/design.py` | Preis und Features pro Viertelstunde, Feature-Sets B1 bis B4 | nur Daten, die um 11:00 bekannt sind |
+| `models/shared/linear.py`, `models/shared/base.py` | lineare Quantilregression, Grundgerüst | Standardisierung nur auf Trainingsdaten, sortierte Quantile |
 | `models/shared/reference.py` | Referenz aus den letzten 56 Tagen | Massstab für jedes Modell |
-| `evaluation/scores.py` | Pinball Loss, MAE, Coverage, Skill Score | Bewertung vorab festgelegt, für alle Modelle gleich |
-| `evaluation/backtest.py` | Walk-forward, Folds, Holdout-Sperre | realistischer Test ohne Data Leakage |
-| `evaluation/experiment.py` | Ablauf tune, test, holdout mit Ausgabe und W&B | ein Befehl für jedes Modell |
-| `evaluation/figures.py` | Fehler pro Stunde, Coverage pro Monat, Koeffizienten | gleiche Grafiken für jedes Modell |
-| `tests/test_models.py`, `tests/test_baseline_model.py`, `tests/test_evaluation_*.py`, `tests/test_features_dataset.py` | Tests | prüfen automatisch, dass keine späteren Daten ins Modell gelangen |
-| `docs/models/baseline_model.md` | dieses Dokument | Vorgehen und Ergebnisse für das Team |
-| `docs/figures/baseline_model/test_*.png` | 3 Grafiken | Ergebnisse auf einen Blick |
-
-**Geändert (#6 und #13):**
-
-| Datei | Änderung | Warum |
-|---|---|---|
-| `pyproject.toml`, `requirements.lock` | `scikit-learn` ergänzt | liefert die Quantilregression |
-| `Makefile` | `make baseline-tune`, `make baseline`, `make backtest MODEL=...` | Backtest mit einem Befehl, für jedes Modell gleich |
-| `.gitignore` | `reports/` | Ergebnisse entstehen bei jedem Lauf neu |
-| `README.md` | Verweis auf dieses Dokument | auffindbar für alle |
-
-Die Datenmodule (`availability.py`, `data/weather.py` usw.) sind inhaltlich unverändert.
+| `evaluation/design.py` | Perioden, Fenster, Testsperre | ein Ort für das Design |
+| `evaluation/backtest.py`, `evaluation/experiment.py` | tägliches Walk-forward, `select`, `compare`, `final-test` | ein Befehl für jedes Modell |
+| `evaluation/scores.py`, `evaluation/figures.py` | Pinball-Loss, MAE, Coverage, Skill Score, Grafiken | für alle Modelle gleich |
+| `tests/test_baseline_model.py`, `tests/test_evaluation_*.py` | Tests | prüfen automatisch, dass keine späteren Daten ins Modell gelangen |
 
 ## 3. Begriffe
 
@@ -122,7 +108,7 @@ Das sind **Quantile, kein Mittelwert.** Ein Mittelwert würde von einzelnen Extr
 | Genug Werte | 56 Werte pro Uhrzeit reichen für stabile P10 und P90; bei 7 Tagen wären es nur 7 |
 | Aktuell genug | Ältere Daten, etwa aus dem Winter, fallen heraus. Die Referenz passt sich laufend an |
 
-**Hinweis:** Die 56 Tage wurden in der EDA auf Daten gewählt, die auch den Testzeitraum enthalten. Das macht die Referenz eher stärker. Der Vergleich ist für unser Modell also eher streng als zu günstig.
+**Hinweis:** Die 56 Tage wurden in der EDA auf den Liefertagen 27.02. bis 31.08. gewählt, also auch auf der Validierung, nicht aber auf dem Test. Das macht die Referenz in der Validierung eher stärker. Der Vergleich ist für unser Modell also eher streng als zu günstig.
 
 ### Features
 
@@ -156,35 +142,40 @@ Der Pinball Loss misst, wie gut die drei Grenzen liegen. Er bestraft Bänder, di
 
 ## 6. Backtest ohne Data Leakage
 
-- **Tag für Tag nachgespielt:** Für jeden Tag wird so prognostiziert, wie es um 11:00 am Vortag möglich gewesen wäre.
-- **Training nur mit Preisen bis D−2.**
-- **Wöchentlich neu trainiert.**
-- **Automatisch geprüft:** Die Tests in `tests/test_model_*.py` stellen sicher, dass keine späteren Daten ins Modell gelangen.
+Details und Herleitung stehen in der [Trainingspipeline](../training_pipeline.md). Kurz:
+
+- **Jeder Liefertag ist ein Ursprung:** Für D = 03.06. wird am 02.06. um 11:00 prognostiziert, trainiert mit Preisen bis Ende 01.06. (D−2).
+- **Täglich neu trainiert**, in jedem der vier Fenster (`expanding`, `rolling_28d`, `rolling_56d`, `rolling_90d`) und ihrem Mittel `window_mean`.
+- **Automatisch geprüft:** Die Tests stellen sicher, dass keine späteren Daten ins Modell gelangen.
 
 | Zeitraum | Zweck |
 |---|---|
 | Januar bis März | nur Training |
-| April und Mai | Einstellungen wählen |
-| Juni bis August | Test |
-| September | Schlusstest (Holdout) mit Daten, die vorher niemand angeschaut hat |
+| April bis August (153 Tage, fünf Monatsblöcke) | Validierung: Einstellungen wählen (`make select`) und Modelle vergleichen (`make compare`) |
+| September und Oktober | Testperiode mit Vorbehalt, im Code gesperrt, einmal nach dem Freeze (#53) |
 
-**Gewählte Einstellungen:** Auf April und Mai wurden Trainingsfenster (alle Daten ab 01.01. oder nur die letzten 56 Tage) und Regularisierung (Bremse gegen zu grosse Koeffizienten) verglichen. Am besten waren **alle Daten ab 01.01. ohne Regularisierung**, für B1 und B2.
+**Einstellungen:** `GRID` = B1 und B2 × Regularisierung `alpha` 0, 0.01, 0.1 (Bremse gegen zu grosse Koeffizienten). Bis #51 gilt provisorisch `expanding` ohne Regularisierung.
 
-**Restrisiko:** Trainiert wird mit den finalen Preisen. Um 11:00 gab es nur provisorische Werte. Die Ergebnisse sind darum leicht zu gut.
+**Restrisiko:** Trainiert wird mit den finalen Preisen. Um 11:00 gab es nur provisorische Werte. Die Ergebnisse sind darum leicht zu gut ([`data.md`](../data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)).
 
 ## 7. Aktuell noch offen
 
-| Punkt | Woher es kommt | Was zu tun ist |
-|---|---|---|
-| **Schlusstest September** | Swissgrid veröffentlicht finale Preise bis zum 15. Arbeitstag des Folgemonats, für September also bis etwa 21.10. ([`data.md`](../data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)) | einmal mit unveränderten Einstellungen laufen lassen |
-| **Hauptkennzahl** | Festgelegt ist der Pinball Loss (Wahl von `CHOSEN`, Vergleich der Modelle), MAE und Coverage ergänzend. `docs/metric.md` (PR #9) nannte noch den MAE | erledigt mit #41: `docs/evaluation.md` ist das gültige Dokument, `docs/metric.md` verweist darauf |
+| Punkt | Was zu tun ist |
+|---|---|
+| **Auswahl** | `make select MODEL=baseline_model`, `CHOSEN` festhalten (#51) |
+| **Test** | einmal `make final-test UNLOCK_TEST=1` mit unveränderten `CHOSEN` aller Modelle (#53) |
 
-**Grenze D−2:** Am 22.10.2026 hat der Nutzer die tägliche Verfügbarkeit bis D−2 am
-Prognosezeitpunkt im Projekt bestätigt. Die bisher verwendete Grenze bleibt bestehen;
-siehe [`data.md`](../data.md#1-die-regel-gegen-datenlecks). Das Restrisiko nachträglicher
-Preisrevisionen bleibt davon unabhängig bestehen.
+## 8. Ergebnisse (neue Pipeline)
 
-## 8. Ergebnisse
+Folgt nach den Auswahlläufen in #51.
+
+## Historie (alte Pipeline)
+
+> Gewählt auf April und Mai, verglichen auf Juni bis August, wöchentlich neu trainiert, Fenster `expanding` oder 56 Tage. Juni bis August waren nicht mehr blind (#21). Ersetzt durch #36.
+
+**Zeiträume damals:** Januar bis März Training, April und Mai Einstellungen wählen, Juni bis August Test, September als Holdout geplant.
+
+**Gewählte Einstellungen:** Auf April und Mai wurden Trainingsfenster (alle Daten ab 01.01. oder nur die letzten 56 Tage) und Regularisierung verglichen. Am besten waren **alle Daten ab 01.01. ohne Regularisierung**, für B1 und B2.
 
 | Juni bis August (91 Tage) | Pinball Loss | Coverage | gegenüber Referenz |
 |---|---|---|---|
@@ -206,15 +197,15 @@ Preisrevisionen bleibt davon unabhängig bestehen.
 
 **Was das Modell gelernt hat:** Pro 100 W/m² Sonne sinkt P10 um 3 ct/kWh, P90 nur um 0.6. Sonne macht tiefe Preise also wahrscheinlicher, hohe kaum seltener.
 
-## 9. Fazit
+### Fazit
 
-### Was verglichen wurde
+#### Was verglichen wurde
 
 - **Referenz:** die einfachste Prognose ohne Modell und ohne Wetterdaten: P10, P50 und P90 der Preise derselben Uhrzeit aus den letzten 56 Tagen ([Abschnitt 5](#referenz)).
 - **Baseline B2:** unser Modell. Es nutzt zusätzlich Kalender und Sonnenprognose.
 - **Frage:** Bringt das Modell mehr als der Blick in die Vergangenheit?
 
-### Was die Zahlen bedeuten
+#### Was die Zahlen bedeuten
 
 | Kennzahl | B2 gegenüber Referenz | Einordnung |
 |---|---|---|
@@ -224,7 +215,7 @@ Preisrevisionen bleibt davon unabhängig bestehen.
 | Coverage | 74 % statt 75 % | Ziel 80 %: Etwa jede vierte statt jede fünfte Viertelstunde liegt ausserhalb des Bands |
 | B2 gegenüber B1 | 3.23 statt 3.25 | Die Sonne verbessert das Modell, aber nur leicht |
 
-### Gesamtfazit
+#### Gesamtfazit
 
 - **Die Antwort auf die Frage ist nein:** Das Modell ist nicht besser als der Blick in die Vergangenheit, aber auch nicht schlechter.
 - **Das ist erwartbar:** Laut Literatur sind Ausgleichspreise am Vortag kaum vorhersagbar.
