@@ -34,7 +34,7 @@ def test_backtest_never_trains_on_unknown_prices_or_uses_actual_direction():
     changed.loc[changed["delivery_day"] >= day - pd.Timedelta(days=1), "aep_ct_kwh"] = 1e9
     changed["tsi_mw"] = 1e9  # Unavailable actual direction must not enter B2.
     settings = {"feature_set": "B2", "window": "expanding", "max_iter": 25}
-    original, _ = run_variant(load("gbm_quantile"), table, [day], "gbm", settings, jobs=1)
-    perturbed, _ = run_variant(load("gbm_quantile"), changed, [day], "gbm", settings, jobs=1)
+    original, _ = run_variant(load("gbm_quantile"), table, [day], "gbm", settings, jobs=1, refit_every=7)
+    perturbed, _ = run_variant(load("gbm_quantile"), changed, [day], "gbm", settings, jobs=1, refit_every=7)
     pd.testing.assert_frame_equal(original[["q10", "q50", "q90"]], perturbed[["q10", "q50", "q90"]])
     assert training_rows(table, day, None)["delivery_day"].max() == day - pd.Timedelta(days=2)
