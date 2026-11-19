@@ -312,3 +312,81 @@ def test_track_uploads_importance_tables_and_artifacts_without_network(tmp_path,
     track("select", "gbm", {"model": "gbm_quantile", "window": "expanding"}, pd.Series({"pinball": 1.0}),
           1, ("2026-04-01", "2026-08-31"), issue=17,
           tables={"feature_importance": importance}, files=[artifact])
+
+
+# --- review findings: preflight of final-test, dropped days in select ----------------------------
+
+
+def test_final_test_checks_chosen_settings_before_it_writes_the_protocol(tmp_path, final):
+    final.modules["toy"] = toy_module(CHOSEN={})
+    protocol = tmp_path / "protocol.json"
+
+    with pytest.raises(ValueError, match="CHOSEN of toy is empty"):
+        experiment.final_test(True, jobs=1, out_dir=tmp_path, protocol=protocol, names=["toy"], design=SHORT)
+    assert not protocol.exists()
+
+
+@pytest.mark.parametrize("settings", [{"shift": 0.0}, {"shift": 0.0, "window": "rolling_7d"}])
+def test_final_test_rejects_a_chosen_window_before_it_writes_the_protocol(tmp_path, final, settings):
+    final.modules["toy"] = toy_module(CHOSEN={"toy": settings})
+    protocol = tmp_path / "protocol.json"
+
+    with pytest.raises(ValueError, match="window"):
+        experiment.final_test(True, jobs=1, out_dir=tmp_path, protocol=protocol, names=["toy"], design=SHORT)
+    assert not protocol.exists()
+
+
+def test_final_test_rejects_an_invalid_refit_frequency_before_it_writes_the_protocol(tmp_path, final):
+    final.modules["toy"] = toy_module(CHOSEN={"toy": {"shift": 0.0, "window": "expanding"}}, REFIT_EVERY=0)
+    protocol = tmp_path / "protocol.json"
+
+    with pytest.raises(ValueError, match="refit_every"):
+        experiment.final_test(True, jobs=1, out_dir=tmp_path, protocol=protocol, names=["toy"], design=SHORT)
+    assert not protocol.exists()
+
+
+def test_final_test_names_missing_test_days_before_it_writes_the_protocol(tmp_path, final, monkeypatch):
+    def table(inputs):
+        frame = synthetic_table(first="2026-06-01", days=94)  # ends 2026-09-02, test runs to 09-05
+        frame.loc[frame["delivery_day"] == pd.Timestamp("2026-09-01"), "aep_ct_kwh"] = float("nan")
+        return frame
+
+    monkeypatch.setattr(experiment, "build_table", table)
+    protocol = tmp_path / "protocol.json"
+
+    with pytest.raises(ValueError, match="2026-09-01.*2026-09-03"):
+        experiment.final_test(True, jobs=1, out_dir=tmp_path, protocol=protocol, names=["toy"], design=SHORT)
+    assert not protocol.exists()
+
+
+class GapModel(ShiftModel):
+    """No forecast on 2026-04-30 for the shifted setting: a broken candidate."""
+
+    def predict(self, table):
+        out = super().predict(table)
+        if self.shift:
+            out.loc[table["delivery_day"] == pd.Timestamp("2026-04-30")] = float("nan")
+        return out
+
+
+def test_select_fails_when_a_candidate_lacks_too_many_days(tmp_path, toy):
+    toy.modules["toy"] = toy_module(MODEL=GapModel)  # 1 of 7 days = 14 % > 5 %
+
+    with pytest.raises(ValueError, match=r"3\.0\|expanding"):
+        experiment.select("toy", jobs=1, out_dir=tmp_path, days=SMOKE_DAYS)
+
+
+def test_select_records_and_reports_dropped_days(tmp_path, toy, monkeypatch, capsys):
+    toy.modules["toy"] = toy_module(MODEL=GapModel)
+    monkeypatch.setattr(experiment, "MAX_MISSING_SHARE", 0.5)
+
+    experiment.select("toy", jobs=1, out_dir=tmp_path, days=SMOKE_DAYS)
+
+    selection = json.loads((tmp_path / "select_selection.json").read_text())
+    assert selection["n_days"] == 6
+    [dropped] = selection["dropped_days"]
+    assert dropped["day"] == "2026-04-30"
+    assert set(dropped["models"]) == {"3.0|expanding", "3.0|rolling_56d", "3.0|rolling_90d", "3.0|window_mean"}
+    info = json.loads((tmp_path / "select_run_info.json").read_text())
+    assert info["selection"]["dropped_days"] == selection["dropped_days"]
+    assert "2026-04-30" in capsys.readouterr().out

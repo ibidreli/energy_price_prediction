@@ -180,6 +180,30 @@ def common_rows(forecasts: pd.DataFrame) -> pd.DataFrame:
     """
     if forecasts.empty:
         return forecasts
+    good = _complete_days(forecasts)
+    out = forecasts[forecasts["delivery_day"].isin(good.index[good.all(axis=1)])]
+
+    keys = {m: set(map(tuple, g[KEYS].to_numpy())) for m, g in out.groupby("model")}
+    if len({frozenset(k) for k in keys.values()}) > 1:
+        raise ValueError("models are scored on different quarter hours")
+    return out
+
+
+def missing_days(forecasts: pd.DataFrame, days: list[pd.Timestamp] | None = None) -> dict[pd.Timestamp, list[str]]:
+    """Delivery days that ``common_rows`` drops, each with the models that lack a complete forecast.
+
+    A day of ``days`` without any row is missing for every model.
+    """
+    models = sorted(forecasts["model"].unique())
+    good = _complete_days(forecasts) if not forecasts.empty else pd.DataFrame(columns=models, dtype=bool)
+    if days is not None:
+        good = good.reindex(pd.DatetimeIndex(days).union(good.index), fill_value=False)
+    return {pd.Timestamp(day): [m for m in models if not row[m]]
+            for day, row in good.iterrows() if not row.all()}
+
+
+def _complete_days(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Per delivery day and model: True if the model has every quarter hour of the day exactly once, complete."""
     models = forecasts["model"].unique()
     days = sorted(forecasts["delivery_day"].unique())
     expected = quarter_hours([pd.Timestamp(day) for day in days])[KEYS]
@@ -197,19 +221,14 @@ def common_rows(forecasts: pd.DataFrame) -> pd.DataFrame:
     })
     n = per_model.index.get_level_values("delivery_day").map(n_expected).to_numpy()
     per_model["good"] = per_model["ok"] & (per_model["n"] == n) & (per_model["n_unique"] == n)
-    good = per_model["good"].unstack("model").reindex(columns=models).fillna(False).astype(bool).all(axis=1)
-    out = forecasts[forecasts["delivery_day"].isin(good.index[good])]
-
-    keys = {m: set(map(tuple, g[KEYS].to_numpy())) for m, g in out.groupby("model")}
-    if len({frozenset(k) for k in keys.values()}) > 1:
-        raise ValueError("models are scored on different quarter hours")
-    return out
+    return per_model["good"].unstack("model").reindex(columns=models).fillna(False).astype(bool)
 
 
 def evaluate(forecasts: pd.DataFrame, reference: str = REFERENCE) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Scores per model and daily pinball loss per model, on the common rows.
 
-    ``mean_daily_pinball`` weights every delivery day equally; it is the selection criterion.
+    ``mean_daily_pinball`` weights every delivery day equally; it is the selection criterion, and
+    ``skill_vs_reference`` (1 - model / reference) is computed from it as well.
     """
     rows = common_rows(forecasts)
     if rows.empty:
@@ -219,8 +238,8 @@ def evaluate(forecasts: pd.DataFrame, reference: str = REFERENCE) -> tuple[pd.Da
     daily = pd.DataFrame({m: daily_pinball(g) for m, g in rows.groupby("model")})
     scores["mean_daily_pinball"] = daily.mean()
     if reference in scores.index:
-        ref = scores.loc[reference, "pinball"]
-        scores["skill_vs_reference"] = [skill_score(v, ref) for v in scores["pinball"]]
+        ref = scores.loc[reference, "mean_daily_pinball"]
+        scores["skill_vs_reference"] = [skill_score(v, ref) for v in scores["mean_daily_pinball"]]
     if reference in daily.columns:
         better = daily.drop(columns=reference).lt(daily[reference], axis=0).mean()
         scores["share_days_better"] = better.reindex(scores.index)

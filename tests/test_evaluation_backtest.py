@@ -10,6 +10,7 @@ from energy_price.evaluation.backtest import (
     evaluate,
     folds,
     log_daily,
+    missing_days,
     run_model,
     run_reference,
     training_rows,
@@ -403,3 +404,31 @@ def test_reference_logs_no_difference_to_itself():
     log_daily(run, "select", pd.Series([1.0, 2.0], index=days))
 
     assert all(set(row) == {"select/daily_pinball"} for _, row in run.rows)
+
+
+def test_skill_vs_reference_weighs_every_day_equally():
+    # 2026-03-29 has 92, 2026-03-30 96 quarter hours: pooled and daily means differ.
+    rows = quarter_hours([pd.Timestamp("2026-03-29"), pd.Timestamp("2026-03-30")])
+    rows["aep_ct_kwh"] = 0.0
+    reference = rows.assign(model="reference", q10=1.0, q50=1.0, q90=1.0)  # 0.5 per row on both days
+    level = np.where(rows["delivery_day"] == pd.Timestamp("2026-03-29"), 0.0, 2.0)  # 0 on day 1, 1.0 on day 2
+    model = rows.assign(model="B2", q10=level, q50=level, q90=level)
+
+    scores, daily = evaluate(pd.concat([reference, model], ignore_index=True))
+
+    assert daily["B2"].mean() == pytest.approx(daily["reference"].mean())
+    assert scores.loc["B2", "skill_vs_reference"] == pytest.approx(0.0)
+
+
+def test_missing_days_name_the_models_without_a_complete_forecast():
+    rows = quarter_hours([pd.Timestamp("2026-06-01"), pd.Timestamp("2026-06-02")])
+    rows["aep_ct_kwh"] = 1.0
+    full = rows.assign(q10=0.0, q50=1.0, q90=2.0)
+    a = full.assign(model="a")
+    b = full.assign(model="b")
+    b.loc[b["delivery_day"] == pd.Timestamp("2026-06-02"), "q50"] = np.nan
+    days = [pd.Timestamp("2026-06-01"), pd.Timestamp("2026-06-02"), pd.Timestamp("2026-06-03")]
+
+    missing = missing_days(pd.concat([a, b], ignore_index=True), days)
+
+    assert missing == {pd.Timestamp("2026-06-02"): ["b"], pd.Timestamp("2026-06-03"): ["a", "b"]}

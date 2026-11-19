@@ -51,6 +51,7 @@ from energy_price.evaluation.backtest import (
     development_inputs,
     evaluate,
     folds,
+    missing_days,
     run_info,
     run_model,
     run_reference,
@@ -72,13 +73,15 @@ from energy_price.evaluation.design import (
 from energy_price.evaluation.diagnostics import backtest_importance, breakdown_scores, importance_summary
 from energy_price.evaluation.figures import backtest_figures, coefficients_figure
 from energy_price.evaluation.scores import daily_pinball, score
-from energy_price.features.dataset import build_table, load_inputs
+from energy_price.features.dataset import TARGET, build_table, load_inputs, quarter_hours
 from energy_price.paths import FIGURES_DIR, REPORTS_DIR, ROOT
 
 BASELINE_MODEL, BASELINE_VARIANT = "baseline_model", "B2"
 MODELS_DIR = ROOT / "src" / "energy_price" / "models"
 COMPARE_DIR = REPORTS_DIR / "compare"
 TEST_PROTOCOL = ROOT / "docs" / "test_protocol.json"
+# A candidate without a complete forecast on more than this share of the days is broken: select stops.
+MAX_MISSING_SHARE = 0.05
 
 
 def load(name: str) -> ModuleType:
@@ -279,13 +282,15 @@ def select(name: str, jobs: int = -1, out_dir: Path | None = None, do_track: boo
         runtimes.append(runtime.assign(setting=BASELINE))
 
     forecasts = pd.concat(frames, ignore_index=True)
+    dropped = check_dropped_days(forecasts, days, list(candidates))
     scores, daily = evaluate(forecasts)
     by_block = block_scores(forecasts, list(candidates))
     best = scores.loc[list(candidates), "mean_daily_pinball"].idxmin()
     period = (str(days[0].date()), str(days[-1].date()))
     selection = {"variant": best, "settings": candidates[best], "metric": "mean_daily_pinball",
                  "value": float(scores.loc[best, "mean_daily_pinball"]), "period": list(period),
-                 "n_days": int(scores.loc[best, "n_days"]), "refit_every": refit, "windows": list(windows)}
+                 "n_days": int(scores.loc[best, "n_days"]), "refit_every": refit, "windows": list(windows),
+                 "dropped_days": dropped}
     selected = {best}
     if hasattr(module, "select_candidates"):
         selection["chosen"] = module.select_candidates(scores, candidates)
@@ -338,6 +343,27 @@ def select(name: str, jobs: int = -1, out_dir: Path | None = None, do_track: boo
                                    refit_every=baseline_refit, design=design)
         (out_dir / "select_wandb_urls.json").write_text(json.dumps(urls, indent=2), encoding="utf-8")
     return by_block
+
+
+def check_dropped_days(forecasts: pd.DataFrame, days: list[pd.Timestamp], candidates: list[str]) -> list[dict]:
+    """Days that drop out of the comparison, each with the models lacking a complete forecast.
+
+    A dropped day is removed for every candidate, so one broken candidate could change the winner. The
+    days are printed and recorded; a candidate missing more than ``MAX_MISSING_SHARE`` of the days stops
+    the run with an error.
+    """
+    missing = missing_days(forecasts, days)
+    share = {c: sum(c in models for models in missing.values()) / len(days) for c in candidates}
+    broken = {c: s for c, s in share.items() if s > MAX_MISSING_SHARE}
+    if broken:
+        listed = ", ".join(f"{c} ({s:.0%})" for c, s in sorted(broken.items()))
+        raise ValueError(f"candidates without a complete forecast on more than {MAX_MISSING_SHARE:.0%} of the "
+                         f"days: {listed}")
+    dropped = [{"day": str(day.date()), "models": models} for day, models in missing.items()]
+    for record in dropped:
+        print(f"select: WARNING {record['day']} drops out for all models, incomplete: "
+              f"{', '.join(record['models'])}", flush=True)
+    return dropped
 
 
 def runtime_summary(runtime: pd.DataFrame) -> dict:
@@ -409,13 +435,44 @@ def git_status() -> str:
                           encoding="utf-8", check=True).stdout.strip()
 
 
+def check_chosen(name: str, module: ModuleType, design: Design = DESIGN) -> None:
+    """CHOSEN of a model is runnable: not empty, every setting names a known window, valid refit frequency."""
+    if not module.CHOSEN:
+        raise ValueError(f"CHOSEN of {name} is empty: run select and fix the selected settings first")
+    for variant, settings in module.CHOSEN.items():
+        window = settings.get("window")
+        if window is None:
+            raise ValueError(f"CHOSEN {name}/{variant} has no 'window'")
+        if window == WINDOW_MEAN:
+            windows_of(module, design)
+        else:
+            window_days(window)
+    refit_every_of(module, None, design)
+    if name == BASELINE_MODEL and BASELINE_VARIANT not in module.CHOSEN:
+        raise ValueError(f"CHOSEN of {name} has no {BASELINE_VARIANT}, the comparison model")
+
+
+def check_test_days(table: pd.DataFrame, days: list[pd.Timestamp]) -> None:
+    """Every test day has all its quarter hours (92, 96 or 100) and a price in each; else name the days."""
+    bad = []
+    for day in days:
+        rows = table[table["delivery_day"] == day]
+        if len(rows) != len(quarter_hours([day])) or rows[TARGET].isna().any():
+            bad.append(str(day.date()))
+    if bad:
+        raise ValueError(f"test days without all quarter hours or prices: {', '.join(bad)}")
+
+
 def final_test(unlock_test: bool = False, jobs: int = -1, out_dir: Path = COMPARE_DIR,
                protocol: Path = TEST_PROTOCOL, names: list[str] | None = None, design: Design = DESIGN,
                do_track: bool = False) -> pd.DataFrame:
     """The one evaluation on the test period (issue #53), after the freeze. Scaffold, not run in #36.
 
-    Requires ``unlock_test``, a clean git tree and no ``docs/test_protocol.json``. Writes the protocol
-    (commit, CHOSEN of all models, design, time) BEFORE anything is scored, so a second run is refused.
+    Requires ``unlock_test``, a clean git tree and no ``docs/test_protocol.json``. Before the protocol is
+    written, every CHOSEN setting and refit frequency is checked and every test day must be in the table
+    with all its quarter hours and prices, so a broken setup cannot use up the one run. The protocol
+    (commit, CHOSEN of all models, design, time) is written BEFORE anything is scored, so a second run
+    is refused.
     """
     if not unlock_test:
         raise TestLockedError("the test period is locked; run final-test --unlock-test exactly once after the freeze")
@@ -425,6 +482,10 @@ def final_test(unlock_test: bool = False, jobs: int = -1, out_dir: Path = COMPAR
         raise RuntimeError(f"{protocol} exists: the test period has already been evaluated, it is run only once")
     days = test_days(design, unlock=True)
     names = names or model_names()
+    for name in dict.fromkeys([BASELINE_MODEL, *names]):
+        check_chosen(name, load(name), design)
+    table = build_table(load_inputs())
+    check_test_days(table, days)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
                             encoding="utf-8", check=True).stdout.strip()
     record = {"created_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "git_commit": commit,
@@ -434,7 +495,6 @@ def final_test(unlock_test: bool = False, jobs: int = -1, out_dir: Path = COMPAR
     protocol.parent.mkdir(parents=True, exist_ok=True)
     with protocol.open("x", encoding="utf-8") as handle:  # fails if a parallel run wrote it first
         json.dump(record, handle, indent=2)
-    table = build_table(load_inputs())
     return _compare_step("test", table, days, names, jobs, out_dir, do_track, design,
                          {"protocol": str(protocol), "unlock_test": True})
 
