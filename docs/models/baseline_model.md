@@ -6,7 +6,7 @@
 - **Modell:** lineare Quantilregression, ein einfaches und erklärbares Modell. Variante B2 ist der Massstab für alle anderen Modelle.
 - **Vergleich:** eine Referenz, die einfach die Preise derselben Uhrzeit der letzten 56 Tage nimmt.
 - **Ablauf:** täglich neu trainiert, ausgewählt und verglichen auf April bis August, Test im September und Oktober ([Trainingspipeline](../training_pipeline.md)).
-- **Ergebnis:** Folgt nach den Auswahlläufen in #51. In der alten Pipeline war das Modell etwa gleich gut wie die Referenz ([Historie](#historie-alte-pipeline)).
+- **Ergebnis:** Auf der Validierung hat B2 einen Pinball Loss von 3.248 und einen MAE von 9.793 ct/kWh, die Referenz 3.301 und 9.943. Der Vorsprung ist nicht gesichert ([Abschnitt 8](#8-ergebnisse-neue-pipeline)).
 
 ## 1. Ausführen
 
@@ -154,7 +154,7 @@ Details und Herleitung stehen in der [Trainingspipeline](../training_pipeline.md
 | April bis August (153 Tage, fünf Monatsblöcke) | Validierung: Einstellungen wählen (`make select`) und Modelle vergleichen (`make compare`) |
 | September und Oktober | Testperiode mit Vorbehalt, im Code gesperrt, einmal nach dem Freeze (#53) |
 
-**Einstellungen:** `GRID` = B1 und B2 × Regularisierung `alpha` 0, 0.01, 0.1 (Bremse gegen zu grosse Koeffizienten). Bis #51 gilt provisorisch `expanding` ohne Regularisierung.
+**Einstellungen:** `GRID` = B1 und B2 × Regularisierung `alpha` 0, 0.01, 0.1 (Bremse gegen zu grosse Koeffizienten). Gewählt in #51: B2 mit `rolling_90d`, B1 mit `window_mean`, beide ohne Regularisierung.
 
 **Restrisiko:** Trainiert wird mit den finalen Preisen. Um 11:00 gab es nur provisorische Werte. Die Ergebnisse sind darum leicht zu gut ([`data.md`](../data.md#bekanntes-restrisiko-swissgrid-überschreibt-werte)).
 
@@ -162,12 +162,24 @@ Details und Herleitung stehen in der [Trainingspipeline](../training_pipeline.md
 
 | Punkt | Was zu tun ist |
 |---|---|
-| **Auswahl** | `make select MODEL=baseline_model`, `CHOSEN` festhalten (#51) |
+| **Auswahl** | erledigt in #51, `CHOSEN` festgehalten ([Abschnitt 8](#8-ergebnisse-neue-pipeline)) |
 | **Test** | einmal `make final-test UNLOCK_TEST=1` mit unveränderten `CHOSEN` aller Modelle (#53) |
 
 ## 8. Ergebnisse (neue Pipeline)
 
-Folgt nach den Auswahlläufen in #51.
+Validierung 01.04. bis 31.08.2026, 152 Tage (der 24.06. fehlt für alle, weil die Strahlungsprognose fehlt), täglich neu trainiert, alle auf denselben Viertelstunden (`make compare`, #51). Werte in ct/kWh, tiefer ist besser.
+
+| Modell | Einstellung | Pinball Loss (Tagesmittel) | MAE P50 | Coverage | gegenüber Referenz [95 %] |
+|---|---|---|---|---|---|
+| Referenz | 56 Tage | 3.301 | 9.943 | 76.2 % | Massstab |
+| B1: Kalender | `window_mean`, `alpha` 0 | 3.309 | 9.973 | 77.1 % | +0.008 (−0.044 bis +0.083) |
+| B2: Kalender + Sonne | `rolling_90d`, `alpha` 0 | **3.248** | **9.793** | 76.9 % | −0.053 (−0.105 bis +0.003) |
+
+- **B2 ist der beste von 30 Kandidaten** und an 67.1 % der Tage besser als die Referenz. Das 95-%-Intervall der täglichen Differenz schliesst 0 aber knapp ein: Der Vorsprung ist nicht gesichert.
+- **Die Sonne hilft:** B1 ist um 0.061 schlechter als B2 (Intervall +0.012 bis +0.112, ganz über 0).
+- **Die Bänder sind weiter zu schmal:** Coverage 76.9 % statt 80 %, im August 74.0 %.
+
+Werte je Monat und die Grafiken stehen im [Steckbrief](../../src/energy_price/models/baseline_model/README.md#4-ergebnisse-neue-pipeline), der Vergleich aller Modelle in der [Trainingspipeline](../training_pipeline.md#7-ergebnisse-auf-den-validierungsblöcken). Die Validierungszahlen sind optimistisch, eine unverzerrte Zahl liefert erst der Test (#53).
 
 ## Historie (alte Pipeline)
 
@@ -177,11 +189,11 @@ Folgt nach den Auswahlläufen in #51.
 
 **Gewählte Einstellungen:** Auf April und Mai wurden Trainingsfenster (alle Daten ab 01.01. oder nur die letzten 56 Tage) und Regularisierung verglichen. Am besten waren **alle Daten ab 01.01. ohne Regularisierung**, für B1 und B2.
 
-| Juni bis August (91 Tage) | Pinball Loss | Coverage | gegenüber Referenz |
-|---|---|---|---|
-| Referenz | **3.20** | **75 %** | – |
-| B1: Kalender | 3.25 | 73 % | −1.5 % |
-| B2: Kalender + Sonne | 3.23 | 74 % | −0.7 % |
+| Juni bis August (91 Tage) | Pinball Loss | MAE P50 | Coverage | gegenüber Referenz |
+|---|---|---|---|---|
+| Referenz | **3.20** | 9.92 | **75 %** | – |
+| B1: Kalender | 3.25 | 9.94 | 73 % | −1.5 % |
+| B2: Kalender + Sonne | 3.23 | **9.81** | 74 % | −0.7 % |
 
 - **Gleich gut, nicht besser:** B2 liegt knapp hinter der Referenz und ist an gut der Hälfte der Tage besser.
 - **Die Sonne hilft mittags:** Von 9 bis 16 Uhr und bei negativen Preisen ist B2 besser als die Referenz, abends schlechter.
