@@ -1,6 +1,6 @@
 # Quantil-LASSO mit Daten bis D−2
 
-**Status:** Auswahl in der neuen Pipeline offen (#51) · **Verantwortlich:** Luca Manna · **Issue:** #27 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
+**Status:** Auswahl abgeschlossen (#51), Test offen (#53) · **Verantwortlich:** Luca Manna · **Issue:** #27 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
 
 ## Hypothese
 
@@ -21,12 +21,36 @@ Alle Merkmale von `B3` und `B4` sind um D−1 11:00 bekannt (`known_at_issue()`,
 ## Auswahl
 
 - **Kandidaten:** `GRID` = `feature_set` `B2`, `B3`, `B4` × `alpha` 0.001, 0.003, 0.01, 0.03 (feiner als bei der Baseline), je mit `expanding`, `rolling_56d`, `rolling_90d`: 12 × 3 + 12 `window_mean` = **48 Kandidaten**, jeder mit 153 täglichen Ursprüngen und täglichem Neutraining
-- **Gewählt:** zwei Varianten, weil #27 fragt, ob Daten bis D−2 helfen: `quantile_lasso` (bester Kandidat insgesamt) und `quantile_lasso_d2` (bester mit `B3` oder `B4`). Bis #51 provisorisch `B2`, `alpha` 0.001 und `B4`, `alpha` 0.03, beide `expanding`
+- **Gewählt:** zwei Varianten, weil #27 fragt, ob Daten bis D−2 helfen: `quantile_lasso` (bester Kandidat insgesamt) und `quantile_lasso_d2` (bester mit `B3` oder `B4`). In #51 gewählt: `B2`, `alpha` 0.001, `expanding` und `B3`, `alpha` 0.01, `rolling_90d` ([Ergebnisse](#ergebnisse-neue-pipeline))
 - **Diagnose:** `diagnostics.py` vergleicht auf denselben Viertelstunden der Validierungstage mit Referenz, Baseline B2, `gbm_quantile` und `B2` ab 30.01. (Block-Bootstrap der täglichen Differenz) und zählt, wie oft ein Merkmal einen Koeffizienten behält. `--candidates best`: bester Kandidat je Feature-Set, `--candidates chosen`: `CHOSEN`. Nichts wird ausgewählt
 
 ## Ergebnisse (neue Pipeline)
 
-Folgt nach den Auswahlläufen in #51.
+> Validierung 01.04. bis 31.08.2026, 152 Tage (der 24.06. fehlt für alle, Strahlungsprognose fehlt), tägliches Neutraining. `select` auf Commit `4f73f8d` (`reports/quantile_lasso/select_scores.csv`), `compare` auf `90aec86` (`reports/compare/validation_scores.csv`). Werte in ct/kWh, tiefer ist besser. Pinball = Mittel der täglichen Pinball-Loss, MAE von P50.
+
+| Variante | Setting | Rang von 48 |
+|---|---|---|
+| `quantile_lasso` | `B2`, `alpha` 0.001, `expanding` | 1 |
+| `quantile_lasso_d2` | `B3`, `alpha` 0.01, `rolling_90d` | 4 (bester mit `B3` oder `B4`) |
+
+| Block | `quantile_lasso` Pinball | `quantile_lasso` MAE P50 | `quantile_lasso_d2` Pinball | `quantile_lasso_d2` MAE P50 | Referenz Pinball | Referenz MAE P50 |
+|---|---|---|---|---|---|---|
+| 2026-04 | 3.713 | 10.502 | 3.792 | 10.689 | 3.911 | 10.815 |
+| 2026-05 | 2.937 | 9.027 | 2.981 | 9.121 | 3.001 | 9.176 |
+| 2026-06 | 3.055 | 9.281 | 3.084 | 9.460 | 3.086 | 9.528 |
+| 2026-07 | 3.152 | 9.654 | 3.185 | 9.819 | 3.198 | 9.802 |
+| 2026-08 | 3.423 | 10.422 | 3.285 | 10.307 | 3.314 | 10.396 |
+| **alle Tage** | **3.256** | **9.779** | 3.264 | 9.879 | 3.301 | 9.943 |
+
+**Vergleich (`compare`):** `quantile_lasso` gegenüber der Referenz −0.045 (95 %: −0.098 bis +0.019), gegenüber B2 +0.008 (−0.018 bis +0.045). `quantile_lasso_d2` gegenüber der Referenz −0.037 (−0.090 bis +0.014), gegenüber B2 +0.016 (−0.022 bis +0.049). Alle Intervalle schliessen 0 ein: Keine Variante ist gesichert besser als Referenz oder B2.
+
+**Antwort auf #27:** Auf der Validierung helfen Daten bis D−2 nicht, denn die beste Variante mit `B3` oder `B4` (`quantile_lasso_d2`) hat einen höheren Pinball (3.264 statt 3.256) und MAE (9.879 statt 9.779) als `quantile_lasso` mit `B2` und liegt gegenüber B2 mit +0.016 (−0.022 bis +0.049) zurück.
+
+![Pinball-Loss pro Stunde](../../../../docs/figures/quantile_lasso/select_pinball_by_hour.png)
+
+![Coverage pro Monat](../../../../docs/figures/quantile_lasso/select_coverage_by_month.png)
+
+„B2“ in diesen Grafiken ist B2 zum Zeitpunkt der Auswahl (`expanding`), das gewählte B2 ist jetzt `rolling_90d`.
 
 ## Starten
 
