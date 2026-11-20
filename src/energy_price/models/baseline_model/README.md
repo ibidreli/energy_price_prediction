@@ -1,6 +1,6 @@
 # Baseline: lineare Quantilregression
 
-**Status:** Massstab für alle Modelle, Auswahl in der neuen Pipeline offen (#51) · **Verantwortlich:** Rodrigo Urech · **Issue:** #6 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md) · **Ausführliche Doku:** [`docs/models/baseline_model.md`](../../../../docs/models/baseline_model.md)
+**Status:** Massstab für alle Modelle, Auswahl abgeschlossen (#51), Test offen (#53) · **Verantwortlich:** Rodrigo Urech · **Issue:** #6 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md) · **Ausführliche Doku:** [`docs/models/baseline_model.md`](../../../../docs/models/baseline_model.md)
 
 ## 1. Hypothese
 
@@ -19,11 +19,35 @@ Kalendermerkmale und die Sonnenprognose bringen mehr als der Blick in die Vergan
 - **Features:** **B1** Uhrzeit, Position der Viertelstunde in der Stunde, Wochenende, Feiertage gewichtet nach PV-Leistung. **B2** zusätzlich PV-gewichtete Strahlung und ihre Änderung in der Stunde (ECMWF-Lauf D−2 18 UTC)
 - **Auswahl:** `GRID` = B1 und B2 × `alpha` 0, 0.01, 0.1. Als einziges Modell auch mit `rolling_28d`, weil es sparsam ist ([Herleitung](../../../../docs/training_pipeline.md#9-herleitung)): 6 Settings × 4 Fenster + 6 `window_mean` = **30 Kandidaten**, jeder mit 153 täglichen Ursprüngen
 - **Neutraining:** täglich (`REFIT_EVERY` nicht gesetzt)
-- **Gewählt:** `CHOSEN` hält die Varianten `B1` und `B2` fest, je der Kandidat des Feature-Sets mit dem kleinsten Wert in `select_scores.csv` (Block `all`). `B2` ist in `select` und `compare` aller anderen Modelle der Massstab. Bis #51 provisorisch: `expanding`, `alpha` 0
+- **Gewählt:** `CHOSEN` hält die Varianten `B1` und `B2` fest, je der Kandidat des Feature-Sets mit dem kleinsten Wert in `select_scores.csv` (Block `all`). `B2` ist in `select` und `compare` aller anderen Modelle der Massstab. Seit #51: `B2` mit `rolling_90d`, `B1` mit `window_mean`, beide `alpha` 0
 
 ## 4. Ergebnisse (neue Pipeline)
 
-Folgt nach den Auswahlläufen in #51.
+> Validierung 01.04. bis 31.08.2026, 152 Tage (der 24.06. fehlt für alle, Strahlungsprognose fehlt), tägliches Neutraining. `select` auf Commit `4f73f8d` (`reports/baseline_model/select_scores.csv`), `compare` auf `90aec86` (`reports/compare/validation_scores.csv`). Werte in ct/kWh, tiefer ist besser. Pinball = Mittel der täglichen Pinball-Loss, MAE von P50.
+
+**Gewählt** (Regel aus Abschnitt 3):
+
+| Variante | Feature-Set | Fenster | `alpha` | Rang von 30 |
+|---|---|---|---|---|
+| `B2` | B2 | `rolling_90d` | 0 | 1 |
+| `B1` | B1 | `window_mean` | 0 | 7 (bester B1) |
+
+| Block | B2 Pinball | B2 MAE P50 | B1 Pinball | B1 MAE P50 | Referenz Pinball | Referenz MAE P50 |
+|---|---|---|---|---|---|---|
+| 2026-04 | 3.704 | 10.511 | 3.878 | 10.957 | 3.911 | 10.815 |
+| 2026-05 | 2.972 | 9.009 | 2.981 | 9.142 | 3.001 | 9.176 |
+| 2026-06 | 3.064 | 9.304 | 3.060 | 9.506 | 3.086 | 9.528 |
+| 2026-07 | 3.167 | 9.716 | 3.178 | 9.778 | 3.198 | 9.802 |
+| 2026-08 | 3.337 | 10.417 | 3.451 | 10.483 | 3.314 | 10.396 |
+| **alle Tage** | **3.248** | **9.793** | 3.309 | 9.973 | 3.301 | 9.943 |
+
+**Vergleich (`compare`):** B2 gegenüber der Referenz −0.053 (95 %: −0.105 bis +0.003), an 67.1 % der Tage besser, Abdeckung 76.9 %. B1 gegenüber der Referenz +0.008 (−0.044 bis +0.083), gegenüber B2 +0.061 (+0.012 bis +0.112). Die Sonne hilft also: B2 ist klar besser als B1, der Vorsprung auf die Referenz ist aber nicht gesichert (Intervall schliesst 0 knapp ein). B2 bleibt der Massstab für alle Modelle.
+
+![Pinball-Loss pro Stunde](../../../../docs/figures/baseline_model/select_pinball_by_hour.png)
+
+![Coverage pro Monat](../../../../docs/figures/baseline_model/select_coverage_by_month.png)
+
+![Koeffizienten](../../../../docs/figures/baseline_model/select_coefficients.png)
 
 ## 5. Belege
 
