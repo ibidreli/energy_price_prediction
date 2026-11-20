@@ -1,6 +1,6 @@
 # Trainingspipeline: tägliches Walk-forward
 
-> Konzept zu #36, Stand 17.11.2026. Umgesetzt in #48 (Kern) und #49 (Modelle), Zahlen folgen in #51. Metriken und Referenz stehen in [`evaluation.md`](evaluation.md), die Datengrenze D−2 in [`data.md`](data.md#1-die-regel-gegen-datenlecks).
+> Konzept zu #36, Stand 17.11.2026. Umgesetzt in #48 (Kern) und #49 (Modelle), Zahlen aus #51 in [Abschnitt 6](#6-neutraining-und-rechenzeit) und [7](#7-ergebnisse-auf-den-validierungsblöcken). Metriken und Referenz stehen in [`evaluation.md`](evaluation.md), die Datengrenze D−2 in [`data.md`](data.md#1-die-regel-gegen-datenlecks).
 
 ## 1. Überblick
 
@@ -101,7 +101,7 @@ flowchart LR
 
 | Schritt | schreibt |
 |---|---|
-| `make select MODEL=<name>` | `reports/<name>/select_*`: Prognosen, `scores.csv` je Kandidat und Monat (mit Rang), `selection.json`, `runtime.csv`. Gewählt wird der kleinste mittlere Pinball über alle 153 Validierungstage, jeder Tag gleich gewichtet |
+| `make select MODEL=<name>` | `reports/<name>/select_*`: Prognosen, `scores.csv` je Kandidat und Monat (mit Rang), `selection.json`, `runtime.csv`. Gewählt wird der kleinste mittlere Pinball über alle Validierungstage (152, der 24.06. fehlt), jeder Tag gleich gewichtet |
 | `CHOSEN` festhalten | `src/energy_price/models/<name>/model.py`, inklusive Fenster; per Commit nachvollziehbar |
 | `make compare` | `reports/compare/validation_*` und Tabelle: alle `CHOSEN`, Referenz und B2 auf denselben Viertelstunden, Skill und 95-%-Intervall der täglichen Differenz |
 | Freeze | nichts: ab hier ändert sich kein Modell und kein `CHOSEN` mehr |
@@ -123,25 +123,39 @@ Optionen: `JOBS=<n>` (parallel), `TRACK=1` (W&B, siehe [`experiment_tracking.md`
 - **Ausnahme:** Dauert ein `select`-Lauf eines Modells länger als 8 h, setzt das Modell `REFIT_EVERY = k` (Entscheid je Modell durch Luca). Beispiel k = 7: Das Modell vom 01.06. (Training bis 30.05.) prognostiziert 01.06. bis 07.06.
 - **Kein Betrieb:** Läufe startet nur das Team. Im Betrieb wäre tägliches automatisches Training optimal, wird aber mangels Ressourcen nicht betrieben.
 
-**Laufzeit je Modell** (wird in #51 gefüllt, aus `runtime.csv`)
+**Laufzeit je Modell** (#51, `select_runtime.csv` und Laufprotokolle, 12 Kerne mit `JOBS=-1`)
 
-| Modell | Kandidaten | Sekunden je Fit | Dauer `select` | `REFIT_EVERY` |
-|---|---|---|---|---|
-| `baseline_model` | offen | offen | offen | offen |
-| `quantile_lasso` | offen | offen | offen | offen |
-| `gbm_quantile` | offen | offen | offen | offen |
-| `regime_mixture` | offen | offen | offen | offen |
-| `calibrated_bands` | offen | offen | offen | offen |
+| Modell | Kandidaten | Fits | Sekunden je Fit (Mittel) | Dauer `select` | `REFIT_EVERY` |
+|---|---|---|---|---|---|
+| `baseline_model` | 30 | 3'672 | 8.1 | 2'847 s (47 min) | 1 |
+| `quantile_lasso` | 48 | 5'661 | 12.5 | 6'497 s (1 h 48 min) | 1 |
+| `gbm_quantile` | 16 | 1'989 | 4.7 | 938 s (16 min) | 1 |
+| `regime_mixture` | 8 | 1'071 | 39.7 | 3'772 s (1 h 3 min) | 1 |
+| `calibrated_bands` | 14 | 2'295 | 15.9 | 3'223 s (54 min) | 1 |
+
+Kandidaten inklusive `window_mean`, das kein eigenes Training braucht. Fits = Zeilen in `select_runtime.csv`, ausser bei `baseline_model` inklusive der 153 Fits von B2 als Vergleich. `make compare` dauerte 6'390 s. **Alle Läufe bleiben unter 8 h, deshalb wird jedes Modell täglich neu trainiert (k = 1).**
 
 ## 7. Ergebnisse auf den Validierungsblöcken
 
-> Wird in #51 gefüllt, aus `reports/compare/validation_*`. Mittlerer Pinball in ct/kWh, tiefer ist besser.
+> #51, `reports/compare/validation_scores.csv` (`compare` auf Commit `90aec86`). `CHOSEN` nach der vor den Läufen festgelegten Regel (Kommentar in #51 vom 19.11.2026). 152 Validierungstage, 01.04. bis 31.08.2026: Der 24.06. fehlt für alle, weil die Strahlungsprognose fehlt. Alle Modelle auf denselben 14'592 Viertelstunden. Werte in ct/kWh, tiefer ist besser. Differenz = mittlere tägliche Pinball-Differenz mit 95-%-Intervall (Block-Bootstrap), unter 0 ist das Modell besser. B2 = `baseline_model` B2 mit `rolling_90d`. Monatswerte je Modell stehen im README des Modells.
 
-| Modell (`CHOSEN`) | 2026-04 | 2026-05 | 2026-06 | 2026-07 | 2026-08 | alle |
+| Modell (`CHOSEN`) | Pinball (Tagesmittel) | MAE P50 | Abdeckung 80 % | Bandbreite | Differenz zur Referenz [95 %] | Differenz zu B2 [95 %] |
 |---|---|---|---|---|---|---|
-| Referenz | offen | offen | offen | offen | offen | offen |
-| B2 | offen | offen | offen | offen | offen | offen |
-| weitere Modelle | offen | offen | offen | offen | offen | offen |
+| `calibrated_bands/calibrated_gbm_quantile` | **3.190** | **9.773** | 80.3 % | 27.5 | −0.111 (−0.172 bis −0.050) | −0.058 (−0.092 bis −0.025) |
+| `gbm_quantile` (= `calibrated_bands/raw_gbm_quantile`) | 3.202 | **9.773** | 76.1 % | 25.6 | −0.099 (−0.152 bis −0.044) | −0.046 (−0.069 bis −0.023) |
+| `calibrated_bands/calibrated_B2` | 3.238 | 9.793 | 80.5 % | 28.7 | −0.063 (−0.120 bis −0.006) | −0.010 (−0.037 bis +0.011) |
+| B2 (= `calibrated_bands/raw_B2`) | 3.248 | 9.793 | 76.9 % | 26.9 | −0.053 (−0.105 bis +0.003) | Massstab |
+| `regime_mixture` | 3.252 | 9.817 | 77.8 % | 27.1 | −0.049 (−0.108 bis +0.025) | +0.004 (−0.017 bis +0.032) |
+| `quantile_lasso` | 3.256 | 9.779 | 76.3 % | 25.5 | −0.045 (−0.098 bis +0.019) | +0.008 (−0.018 bis +0.045) |
+| `quantile_lasso_d2` | 3.264 | 9.879 | 78.2 % | 26.5 | −0.037 (−0.090 bis +0.014) | +0.016 (−0.022 bis +0.049) |
+| Referenz (56 Tage) | 3.301 | 9.943 | 76.2 % | 26.2 | Massstab | +0.053 (−0.003 bis +0.105) |
+| `baseline_model/B1` | 3.309 | 9.973 | 77.1 % | 27.3 | +0.008 (−0.044 bis +0.083) | +0.061 (+0.012 bis +0.112) |
+
+- **Bestes Modell ist das kalibrierte `gbm_quantile`:** Pinball 3.190, gegenüber Referenz und B2 liegen beide Intervalle ganz unter 0. An 69.7 % der Tage besser als die Referenz.
+- **Der MAE ist bei allen Modellen mit Strahlung fast gleich** (9.773 bis 9.879, Referenz 9.943). Der Gewinn liegt im Band: `gbm_quantile` gegenüber B2 hat bei P50 einen Pinball von 4.887 statt 4.897, bei P10 2.678 statt 2.766 und bei P90 2.040 statt 2.081 (`validation_model_scores.csv`).
+- **Die Kalibrierung lässt P50 und damit den MAE unverändert** (9.773 und 9.793 wie die Basis). Sie hebt die Abdeckung von 76.1 % auf 80.3 % (Boosting) und von 76.9 % auf 80.5 % (B2) und senkt den Pinball um 0.011 und 0.010.
+
+**Vorbehalt:** Die Validierungszahlen sind optimistisch, weil jedes `CHOSEN` das beste von vielen Settings auf denselben Tagen ist ([Einschränkungen](#8-einschränkungen)). Welches Modell besser ist, entscheidet der Test in #53.
 
 ## 8. Einschränkungen
 
