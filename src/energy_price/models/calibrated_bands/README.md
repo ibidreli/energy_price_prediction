@@ -1,6 +1,6 @@
 # Kalibrierte Bänder
 
-**Status:** Auswahl in der neuen Pipeline offen (#51) · **Verantwortlich:** Luca Manna · **Issue:** #19 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
+**Status:** Auswahl abgeschlossen (#51), Test offen (#53) · **Verantwortlich:** Luca Manna · **Issue:** #19 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
 
 ## 1. Hypothese
 
@@ -30,11 +30,44 @@ flowchart LR
 - Jede historische Basisprognose sieht nur Zeilen bis D−2 ihres Fold-Tags, erste nach 28 Tagen Daten. Keine Kalibrierungszeile liegt im Training ihres Prognosemodells. Wegen der Zeitabhängigkeit gibt es keine Garantie für 80 %, die Coverage wird je Monatsblock geprüft
 - **Auswahl:** 2 Basen × 28 oder 56 Fehlertage × gepoolt, 6-Stunden-Blöcke oder 24 Stunden = 12 Kandidaten, plus je Basis die unkalibrierte Basis: **14 Kandidaten**, nur `expanding` (die Basis behält ihr eigenes Fenster), deshalb kein `window_mean`
 - **Regel (`select_candidates`):** je Basis der kleinste mittlere tägliche Pinball-Loss unter den Kandidaten mit Coverage 78 bis 82 % und höchstens +1 % Loss gegenüber der unkalibrierten Basis, sonst der kleinste insgesamt. Ein verfehltes Kriterium steht in `select_selection.json` unter `chosen`
-- **Gewählt:** `CHOSEN` mit vier Varianten (`calibrated_B2`, `raw_B2`, `calibrated_gbm_quantile`, `raw_gbm_quantile`). Bis #51 provisorisch: B2 mit 56 Tagen gepoolt, Boosting mit 56 Tagen und 6-Stunden-Blöcken (aus der alten Pipeline)
+- **Gewählt:** `CHOSEN` mit vier Varianten (`calibrated_B2`, `raw_B2`, `calibrated_gbm_quantile`, `raw_gbm_quantile`). In #51 gewählt: beide Basen mit 56 Tagen gepoolt ([Ergebnisse](#4-ergebnisse-neue-pipeline))
 
 ## 4. Ergebnisse (neue Pipeline)
 
-Folgt nach den Auswahlläufen in #51.
+> Validierung 01.04. bis 31.08.2026, 152 Tage (der 24.06. fehlt für alle, Strahlungsprognose fehlt), tägliches Neutraining. `select` auf Commit `524c72f` (`reports/calibrated_bands/select_scores.csv`), `compare` auf `90aec86` (`reports/compare/validation_scores.csv`). Werte in ct/kWh, tiefer ist besser. Pinball = Mittel der täglichen Pinball-Loss, MAE von P50.
+
+**Gewählt:** für beide Basen 56 Fehlertage, gepoolt (`global`). Beide erfüllen die Regel: Abdeckung 80.5 % (B2) und 80.3 % (Boosting), Pinball tiefer als die unkalibrierte Basis. Rang 1 (Boosting) und 7 (B2) von 14. Die Basen: B2 mit `rolling_90d`, `gbm_quantile` mit `window_mean`.
+
+**Basis B2** (`calibrated_B2` gegen `raw_B2`)
+
+| Block | Pinball kalibriert | Pinball roh | MAE P50 (beide) | Abdeckung kalibriert | Abdeckung roh | Referenz Pinball | Referenz MAE P50 |
+|---|---|---|---|---|---|---|---|
+| 2026-04 | 3.708 | 3.704 | 10.511 | 80.8 % | 76.1 % | 3.911 | 10.815 |
+| 2026-05 | 3.000 | 2.972 | 9.009 | 84.7 % | 80.9 % | 3.001 | 9.176 |
+| 2026-06 | 3.053 | 3.064 | 9.304 | 77.4 % | 78.0 % | 3.086 | 9.528 |
+| 2026-07 | 3.155 | 3.167 | 9.716 | 78.7 % | 75.7 % | 3.198 | 9.802 |
+| 2026-08 | 3.275 | 3.337 | 10.417 | 80.9 % | 74.0 % | 3.314 | 10.396 |
+| **alle Tage** | **3.238** | 3.248 | 9.793 | 80.5 % | 76.9 % | 3.301 | 9.943 |
+
+**Basis `gbm_quantile`** (`calibrated_gbm_quantile` gegen `raw_gbm_quantile`)
+
+| Block | Pinball kalibriert | Pinball roh | MAE P50 (beide) | Abdeckung kalibriert | Abdeckung roh | Referenz Pinball | Referenz MAE P50 |
+|---|---|---|---|---|---|---|---|
+| 2026-04 | 3.661 | 3.671 | 10.540 | 80.6 % | 74.7 % | 3.911 | 10.815 |
+| 2026-05 | 2.982 | 2.949 | 9.011 | 84.1 % | 79.3 % | 3.001 | 9.176 |
+| 2026-06 | 2.983 | 2.993 | 9.292 | 79.2 % | 78.8 % | 3.086 | 9.528 |
+| 2026-07 | 3.138 | 3.149 | 9.707 | 78.3 % | 74.8 % | 3.198 | 9.802 |
+| 2026-08 | 3.188 | 3.248 | 10.310 | 79.4 % | 72.9 % | 3.314 | 10.396 |
+| **alle Tage** | **3.190** | 3.202 | **9.773** | 80.3 % | 76.1 % | 3.301 | 9.943 |
+
+**Vergleich (`compare`):** `calibrated_gbm_quantile` ist das beste Modell der Validierung: gegenüber der Referenz −0.111 (95 %: −0.172 bis −0.050), an 69.7 % der Tage besser, gegenüber B2 −0.058 (−0.092 bis −0.025). `calibrated_B2` gegenüber der Referenz −0.063 (−0.120 bis −0.006), gegenüber B2 −0.010 (−0.037 bis +0.011). `raw_B2` und `raw_gbm_quantile` ergeben exakt dieselben Werte wie B2 und `gbm_quantile`.
+
+- **Hypothese auf der Validierung bestätigt:** Abdeckung über alle Tage im Ziel von 78 bis 82 %, P50 und MAE unverändert, Pinball sogar tiefer als die Basis
+- **Je Monat nicht stabil:** im Mai zu breit (84.7 % und 84.1 %), im Juni bei B2 mit 77.4 % knapp darunter. Den grössten Gewinn bringt die Korrektur im August, wo die Basen auf 74.0 % und 72.9 % fallen
+
+![Pinball-Loss nach Stunde](../../../../docs/figures/calibrated_bands/select_pinball_by_hour.png)
+
+![Coverage nach Monat](../../../../docs/figures/calibrated_bands/select_coverage_by_month.png)
 
 ## 5. Belege
 
