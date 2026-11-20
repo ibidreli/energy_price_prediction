@@ -1,6 +1,6 @@
 # Gradient Boosting mit Quantil-Loss
 
-**Status:** Auswahl in der neuen Pipeline offen (#51) · **Verantwortlich:** Elias Pulver · **Issue:** #17 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
+**Status:** Auswahl abgeschlossen (#51), Test offen (#53) · **Verantwortlich:** Elias Pulver · **Issue:** #17 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
 
 ## 1. Hypothese
 
@@ -33,11 +33,30 @@ Der Einfluss der Sonnenstrahlung auf den Preis hängt von Uhrzeit und Position i
 - **Kandidaten:** 4 Konfigurationen × 3 Fenster (`expanding`, `rolling_56d`, `rolling_90d`) + 4 `window_mean` = **16 Kandidaten**, jeder mit 153 täglichen Ursprüngen. Gewählt wird der kleinste mittlere tägliche Pinball-Loss über alle Validierungstage
 - **Neutraining:** täglich (`REFIT_EVERY` nicht gesetzt). Dauert `select` länger als 8 h, entscheidet Luca über `REFIT_EVERY`
 - **Importance:** `IMPORTANCE_GROUPS` (Kalender, Feiertage, Strahlung, je 5 Permutationen) für den gewählten Kandidaten, nur in den Folds nach dem jeweiligen Training. Für ein `window_mean` entfällt sie, weil es kein einzelnes Modell gibt
-- **Gewählt:** bis #51 provisorisch `expanding`, Lernrate 0.05, 7 Blätter, mindestens 50 Werte pro Blatt (aus der alten Pipeline)
+- **Gewählt:** in #51 `window_mean`, Lernrate 0.05, 7 Blätter, mindestens 50 Werte pro Blatt ([Ergebnisse](#4-ergebnisse-neue-pipeline))
 
 ## 4. Ergebnisse (neue Pipeline)
 
-Folgt nach den Auswahlläufen in #51.
+> Validierung 01.04. bis 31.08.2026, 152 Tage (der 24.06. fehlt für alle, Strahlungsprognose fehlt), tägliches Neutraining. `select` auf Commit `4f73f8d` (`reports/gbm_quantile/select_scores.csv`), `compare` auf `90aec86` (`reports/compare/validation_scores.csv`). Werte in ct/kWh, tiefer ist besser. Pinball = Mittel der täglichen Pinball-Loss, MAE von P50.
+
+**Gewählt:** Ausgangskonfiguration (Lernrate 0.05, 7 Blätter, mindestens 50 Werte pro Blatt, 150 Iterationen, L2 1.0, Seed 0) mit `window_mean`, also das Mittel der Prognosen aus `expanding`, `rolling_56d` und `rolling_90d`. Rang 1 von 16.
+
+| Block | Pinball | MAE P50 | Referenz Pinball | Referenz MAE P50 |
+|---|---|---|---|---|
+| 2026-04 | 3.671 | 10.540 | 3.911 | 10.815 |
+| 2026-05 | 2.949 | 9.011 | 3.001 | 9.176 |
+| 2026-06 | 2.993 | 9.292 | 3.086 | 9.528 |
+| 2026-07 | 3.149 | 9.707 | 3.198 | 9.802 |
+| 2026-08 | 3.248 | 10.310 | 3.314 | 10.396 |
+| **alle Tage** | **3.202** | **9.773** | 3.301 | 9.943 |
+
+**Vergleich (`compare`):** gegenüber der Referenz −0.099 (95 %: −0.152 bis −0.044), an 68.4 % der Tage besser. Gegenüber B2 −0.046 (−0.069 bis −0.023). Beide Intervalle liegen ganz unter 0. Die Abdeckung bleibt mit 76.1 % unter 80 %, im August 72.9 %. Die kalibrierte Variante in [`calibrated_bands`](../calibrated_bands/README.md) ist mit 3.190 noch besser. Eine Permutation Importance gibt es nicht, weil `window_mean` kein einzelnes Modell ist.
+
+![Pinball-Loss pro Stunde](../../../../docs/figures/gbm_quantile/select_pinball_by_hour.png)
+
+![Coverage pro Monat](../../../../docs/figures/gbm_quantile/select_coverage_by_month.png)
+
+„B2“ in diesen Grafiken ist B2 zum Zeitpunkt der Auswahl (`expanding`), das gewählte B2 ist jetzt `rolling_90d`.
 
 ## 5. Belege
 
