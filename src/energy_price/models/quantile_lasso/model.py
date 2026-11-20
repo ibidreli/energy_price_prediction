@@ -21,11 +21,13 @@ GRID = [
     for a in (0.001, 0.003, 0.01, 0.03)
 ]
 
-# provisional until #51. Two variants: the best setting overall and, because issue #27 asks whether
-# data until D-2 help, the best setting with such data (B3 or B4).
+# Chosen by the rule fixed before the runs (#51, comment of 2026-11-19): lowest mean daily pinball over all
+# validation days 2026-04-01 to 2026-08-31 (152 days), commit 4f73f8d. Record: reports/<model>/select_selection.json.
+# Two variants: the best setting overall (3.2558) and, because issue #27 asks whether data until D-2
+# help, the best setting with such data (B3 or B4, 3.2641).
 CHOSEN = {
     "quantile_lasso": {"feature_set": "B2", "window": "expanding", "alpha": 0.001},
-    "quantile_lasso_d2": {"feature_set": "B4", "window": "expanding", "alpha": 0.03},
+    "quantile_lasso_d2": {"feature_set": "B3", "window": "rolling_90d", "alpha": 0.01},
 }
 
 RUN_INFO = {

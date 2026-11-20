@@ -128,7 +128,9 @@ ISSUE = 16
 # L1 penalty, like the CHOSEN baseline).
 GRID = [{"feature_set": fs} for fs in ("B1", "B2")]
 
-# provisional until #51
-CHOSEN = {"regime_mixture": {"feature_set": "B2", "window": "expanding"}}
+# Chosen by the rule fixed before the runs (#51, comment of 2026-11-19): lowest mean daily pinball over all
+# validation days 2026-04-01 to 2026-08-31 (152 days), commit 4f73f8d. Record: reports/<model>/select_selection.json.
+# Best candidate: 3.2522.
+CHOSEN = {"regime_mixture": {"feature_set": "B2", "window": "window_mean"}}
 
 RUN_INFO = {"deterministic": "LogisticRegression (lbfgs) and QuantileRegressor (HiGHS) have no random component"}

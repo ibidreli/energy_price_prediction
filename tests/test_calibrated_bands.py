@@ -1,5 +1,6 @@
 """Temporal isolation, base walk-forward, asymmetric correction and selection for issue #19 (#49)."""
 
+from importlib import import_module
 from types import SimpleNamespace
 
 import numpy as np
@@ -138,7 +139,8 @@ def test_window_mean_base_averages_the_per_window_forecasts(recording_base):
 
 def test_base_reads_window_and_refit_from_frozen_model(monkeypatch):
     real = calibration._base("baseline_model:B2")
-    assert real.window == "expanding" and real.windows == ("expanding",)
+    frozen = import_module("energy_price.models.baseline_model.model").CHOSEN["B2"]["window"]
+    assert real.window == frozen and real.windows == (frozen,)
     assert real.refit_every == DESIGN.refit_every
     assert "window" not in real.settings
 
