@@ -1,7 +1,7 @@
 """Settings of the baseline in models/baseline_model/model.py."""
 
-from energy_price.evaluation.design import WINDOW_DAYS
-from energy_price.evaluation.experiment import grid_settings, load, split, windows_of
+from energy_price.evaluation.design import WINDOW_MEAN
+from energy_price.evaluation.experiment import grid_settings, load, windows_of
 from energy_price.features.design import FEATURE_SETS
 
 
@@ -17,7 +17,7 @@ def test_chosen_settings_build_a_model():
     module = load("baseline_model")
 
     for variant, settings in module.CHOSEN.items():
-        window_days, params = split(settings)
+        params = {key: value for key, value in settings.items() if key != "window"}
         model = module.MODEL(**params)
-        assert settings["window"] in WINDOW_DAYS and window_days is None
+        assert settings["window"] in (*module.WINDOWS, WINDOW_MEAN)
         assert model.feature_set == variant and model.feature_set in FEATURE_SETS

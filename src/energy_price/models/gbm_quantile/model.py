@@ -14,10 +14,12 @@ GRID = [
     for rate, leaves, support in ((0.05, 7, 50), (0.1, 7, 50), (0.05, 15, 50), (0.05, 7, 100))
 ]
 
-# provisional until #51
+# Chosen by the rule fixed before the runs (#51, comment of 2026-11-19): lowest mean daily pinball over all
+# validation days 2026-04-01 to 2026-08-31 (152 days), commit 4f73f8d. Record: reports/<model>/select_selection.json.
+# Best candidate: 3.2017.
 CHOSEN = {
     "gbm_quantile": {
-        "feature_set": "B2", "window": "expanding", "learning_rate": 0.05, "max_iter": 150,
+        "feature_set": "B2", "window": "window_mean", "learning_rate": 0.05, "max_iter": 150,
         "max_leaf_nodes": 7, "min_samples_leaf": 50, "l2_regularization": 1.0, "random_state": 0,
     },
 }

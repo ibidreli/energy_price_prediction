@@ -18,10 +18,12 @@ GRID = [
 # Sparse linear model: the only one that also tries 28 days (docs/training_pipeline.md).
 WINDOWS = ("expanding", "rolling_28d", "rolling_56d", "rolling_90d")
 
-# provisional until #51
+# Chosen by the rule fixed before the runs (#51, comment of 2026-11-19): lowest mean daily pinball over all
+# validation days 2026-04-01 to 2026-08-31 (152 days), commit 4f73f8d. Record: reports/<model>/select_selection.json.
+# B1 and B2: the best candidate of each feature set (3.3092 and 3.2480).
 CHOSEN = {
-    "B1": {"feature_set": "B1", "window": "expanding", "alpha": 0.0},
-    "B2": {"feature_set": "B2", "window": "expanding", "alpha": 0.0},
+    "B1": {"feature_set": "B1", "window": "window_mean", "alpha": 0.0},
+    "B2": {"feature_set": "B2", "window": "rolling_90d", "alpha": 0.0},
 }
 
 COEFFICIENTS_SHOWN = {
