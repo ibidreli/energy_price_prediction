@@ -110,22 +110,22 @@ Einstellungen: [`tune_selection.csv`](results/tune_selection.csv). Thompson wird
 
 Test Juni bis August, 91 Tage. Differenz zu `gbm_quantile`, das auch auf April und Mai das beste Einzelmodell war. Alle Werte: [`test_results.csv`](results/test_results.csv).
 
-| Strategie | Pinball-Loss | Differenz | 95-%-Intervall (ct/kWh) | Coverage |
-|---|---|---|---|---|
-| Thompson-Bandit ohne Minimum | 3.207 | +1.37 % | +0.030 bis +0.059 | 74.0 % |
-| **Thompson-Bandit, 5 % Minimum** | **3.207** | **+1.37 %** | **+0.030 bis +0.059** | **74.0 %** |
-| Referenz | 3.202 | +1.22 % | −0.011 bis +0.095 | 75.2 % |
-| Thompson, alle Fehler sichtbar | 3.201 | +1.18 % | +0.024 bis +0.052 | 74.1 % |
-| Fester Gewinner pro Stunde aus April/Mai | 3.195 | +0.99 % | +0.019 bis +0.053 | 73.2 % |
-| Fester Gewinner pro Viertelstunde aus April/Mai | 3.180 | +0.52 % | +0.005 bis +0.031 | 73.9 % |
-| Mittel aller Modelle | 3.167 | +0.11 % | −0.011 bis +0.020 | 75.7 % |
-| **Gradient Boosting allein** | **3.163** | | | **74.1 %** |
-| Gewichte für den ganzen Tag | 3.159 | −0.13 % | −0.019 bis +0.012 | 76.2 % |
-| Gewichte pro Stunde | 3.155 | −0.27 % | −0.025 bis +0.007 | 75.9 % |
-| Laufend bester pro Viertelstunde | 3.151 | −0.38 % | −0.050 bis +0.017 | 75.1 % |
-| Gewichte pro Viertelstunde | 3.149 | −0.45 % | −0.033 bis +0.004 | 76.0 % |
-| *Gewinner pro Viertelstunde im Nachhinein* | 3.109 | −1.72 % | nicht erreichbar | 75.0 % |
-| *Bestes Modell für jede einzelne Prognose* | 2.703 | −14.55 % | nicht erreichbar | 80.7 % |
+| Strategie | Pinball-Loss | MAE P50 | Differenz | 95-%-Intervall (ct/kWh) | Coverage |
+|---|---|---|---|---|---|
+| Thompson-Bandit ohne Minimum | 3.207 | 9.851 | +1.37 % | +0.030 bis +0.059 | 74.0 % |
+| **Thompson-Bandit, 5 % Minimum** | **3.207** | **9.855** | **+1.37 %** | **+0.030 bis +0.059** | **74.0 %** |
+| Referenz | 3.202 | 9.917 | +1.22 % | −0.011 bis +0.095 | 75.2 % |
+| Thompson, alle Fehler sichtbar | 3.201 | 9.838 | +1.18 % | +0.024 bis +0.052 | 74.1 % |
+| Fester Gewinner pro Stunde aus April/Mai | 3.195 | 9.805 | +0.99 % | +0.019 bis +0.053 | 73.2 % |
+| Fester Gewinner pro Viertelstunde aus April/Mai | 3.180 | 9.787 | +0.52 % | +0.005 bis +0.031 | 73.9 % |
+| Mittel aller Modelle | 3.167 | 9.787 | +0.11 % | −0.011 bis +0.020 | 75.7 % |
+| **Gradient Boosting allein** | **3.163** | **9.792** | | | **74.1 %** |
+| Gewichte für den ganzen Tag | 3.159 | 9.782 | −0.13 % | −0.019 bis +0.012 | 76.2 % |
+| Gewichte pro Stunde | 3.155 | 9.772 | −0.27 % | −0.025 bis +0.007 | 75.9 % |
+| Laufend bester pro Viertelstunde | 3.151 | 9.770 | −0.38 % | −0.050 bis +0.017 | 75.1 % |
+| Gewichte pro Viertelstunde | 3.149 | 9.760 | −0.45 % | −0.033 bis +0.004 | 76.0 % |
+| *Gewinner pro Viertelstunde im Nachhinein* | 3.109 | 9.708 | −1.72 % | nicht erreichbar | 75.0 % |
+| *Bestes Modell für jede einzelne Prognose* | 2.703 | 8.207 | −14.55 % | nicht erreichbar | 80.7 % |
 
 ![Differenz zum Gradient Boosting pro Strategie](results/test_strategies.png)
 
