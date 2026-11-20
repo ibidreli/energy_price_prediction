@@ -28,20 +28,40 @@ The repository contains the setup, never credentials: no API key and no links to
 
 ## Logging a run
 
-For model backtests, use `make backtest MODEL=gbm_quantile STEP=tune TRACK=1 JOBS=2`
-(or `STEP=test`; daily D−2 availability was confirmed by the user on 2026-10-22). Tracking works for
-both tuning and evaluation. Each tuning candidate, the historical reference and baseline B2
-get separate runs with summary scores and daily pinball curves. `gbm_quantile` explicitly
-sets `ISSUE = 17`, so the runs share `issue-17` even when the branch name does not match
-the usual convention.
+Pipeline runs log with `TRACK=1`. Steps and their order: [`training_pipeline.md`](training_pipeline.md#4-ablauf-mit-befehlen).
 
-The selected tuning run also contains grouped permutation importance as a table and bar
-chart, score breakdowns, and an evaluation artifact with aggregate CSV/JSON results and
-an explicit snapshot of the Python source and dependency declarations. The source snapshot
-also makes uncommitted runs inspectable; `git_dirty` still records their actual state.
-Raw datasets and local settings/credentials are excluded. Run URLs remain in ignored
-`reports/<model>/<period>_wandb_urls.json`, never in committed documentation. Evaluation
-also logs the cached baseline B2 for a direct comparison in the same issue group.
+```bash
+make select MODEL=gbm_quantile TRACK=1 JOBS=2   # split "select": every candidate, the reference and B2
+make compare TRACK=1                            # split "validation": CHOSEN of every model, reference and B2
+make final-test UNLOCK_TEST=1 TRACK=1           # split "test", exactly once in #53
+```
+
+Every candidate or model, the reference and baseline B2 is its own run (job type `eval`). The summary holds the
+scores of the whole period, the history the pinball loss per delivery day and its difference to the reference. The
+group is `issue-<ISSUE>` when `model.py` sets `ISSUE` (e.g. `gbm_quantile`: 17), else it comes from the branch name.
+
+`track` in `src/energy_price/evaluation/backtest.py` adds these config keys next to the model settings:
+
+| Key | Content | Example |
+|---|---|---|
+| `split` | Pipeline step: `select`, `validation` (from `compare`) or `test` (from `final-test`) | `select` |
+| `model` | Model folder; the GRID settings are their own keys | `gbm_quantile` |
+| `window` | Training window | `rolling_56d`, `window_mean` |
+| `refit_every` | Days between refits inside the run | `1` |
+| `period` | First and last scored delivery day | `["2026-04-01", "2026-08-31"]` |
+| `design` | The whole `Design`: `first_train_day`, `validation`, `test`, `refit_every`, `windows` | |
+| `cv` | `scheme`, `n_folds`, `period_start`, `period_end`, `refit_every` | `rolling_window`, `153` |
+| `selected` | Only in `select`: this candidate was chosen | `true` |
+
+Metrics are `<split>/<metric>`, e.g. `select/mean_daily_pinball` (selection criterion), `validation/coverage_80`,
+`select/daily_pinball` (history).
+
+The selected `select` candidate also contains grouped permutation importance as a table and bar
+chart (models with `IMPORTANCE_GROUPS`, not for `window_mean`), score breakdowns, and an evaluation artifact with
+aggregate CSV/JSON results and an explicit snapshot of the Python source and dependency declarations. The source
+snapshot also makes uncommitted runs inspectable; `git_dirty` still records their actual state. Raw datasets and
+local settings/credentials are excluded. Run URLs remain in ignored `reports/<model>/select_wandb_urls.json` and
+`reports/compare/<split>_wandb_urls.json`, never in committed documentation.
 
 Use `start_run` instead of calling `wandb.init` directly. It fills in the team entity and project, groups runs by hypothesis (the GitHub issue) and records which data and code the run used.
 
@@ -51,7 +71,7 @@ One hypothesis is one issue; every candidate model is its own run in that issue'
 from energy_price.evaluation.tracking import start_run
 
 candidates = {"ridge": make_ridge(), "lgbm_quantile": make_lgbm()}
-cv = {"scheme": "expanding_window", "n_folds": 5, "test_start": "2026-07-01"}
+cv = {"scheme": "expanding_window", "n_folds": 153, "period_start": "2026-04-01", "period_end": "2026-08-31"}
 
 for model_name, model in candidates.items():
     with start_run("train", issue=15, name=model_name, config={"model": model_name, "cv": cv}) as run:
@@ -77,8 +97,8 @@ for model_name, model in candidates.items():
 | Job type | One of `eda`, `features`, `train`, `eval`, `sweep`; anything else is rejected | you |
 | `config["data_version"]` | Hash over all checksum stamps from `make data`; equal hash means equal raw data | `start_run` |
 | `config["git_commit"]`, `["git_dirty"]`, `["git_branch"]`, `["issue"]` | Code version of the run, filterable in the runs table. Passing these or `data_version` in your own `config` is an error | `start_run` |
-| `config["cv"]` | Validation scheme, at least `scheme`, `n_folds`, `test_start` | you |
-| Metrics | `<split>/<metric>`, e.g. `val/mae`, `val/pinball_q10`, `test/coverage_80`; fold means and spread as `val/<metric>_mean`, `_std` in `run.summary` | you |
+| `config["cv"]` | Validation scheme, at least `scheme`, `n_folds`, `period_start`, `period_end`. Pipeline runs also set `design`, `window`, `refit_every`, `period`, `split` (see above) | you, or `track` |
+| Metrics | `<split>/<metric>`; the pipeline splits are `select`, `validation` and `test`, e.g. `select/pinball_q10`, `test/coverage_80`. Own runs may add fold means and spread as `<split>/<metric>_mean`, `_std` in `run.summary` | you, or `track` |
 
 `git_dirty: true` means the run used code that is not committed and cannot be reproduced from `git_commit`. Commit before a run you want to compare later. W&B also records the Python version, the host name and system metrics on its own.
 

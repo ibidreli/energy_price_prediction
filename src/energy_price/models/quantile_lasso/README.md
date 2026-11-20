@@ -1,16 +1,14 @@
 # Quantil-LASSO mit Daten bis D−2
 
-**Status:** Test abgeschlossen, nicht in den Pool übernommen (Issue #27). Der Holdout ist nicht Teil dieses Issues und wurde nicht geöffnet.
+**Status:** Auswahl abgeschlossen (#51), Test offen (#53) · **Verantwortlich:** Luca Manna · **Issue:** #27 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
 
 ## Hypothese
 
-Ein Quantil-LASSO mit Preisniveau und Systembilanz bis D−2 hat einen tieferen Pinball Loss als dasselbe Modell nur mit den `B2`-Merkmalen und schlägt die Referenz. Das Tagesniveau des Preises hält sich über zwei Tage (Autokorrelation des Tagesniveaus nach 2 Tagen 0.36, gemessen auf Januar bis Mai), was den bisherigen Modellen mit Kalender und Wetter entgeht. Die L1-Strafe soll dabei nur die Merkmale behalten, die tragen, und bei rund 150 Trainingstagen eine Überanpassung verhindern.
-
-Die Frage dahinter: Helfen Preise und Systembilanz bis D−2 der Prognose überhaupt? Ein negatives Ergebnis ist gültig und spricht auch gegen ein Sequenzmodell wie ein LSTM. Erwartet wurde wenig: Das Tagesniveau erklärt grob geschätzt knapp 2 % der Varianz.
+Ein Quantil-LASSO mit Preisniveau und Systembilanz bis D−2 hat einen tieferen Pinball Loss als dasselbe Modell nur mit den `B2`-Merkmalen und schlägt die Referenz. Das Tagesniveau des Preises hält sich über zwei Tage (Autokorrelation des Tagesniveaus nach 2 Tagen 0.36, gemessen auf Januar bis Mai), was den bisherigen Modellen mit Kalender und Wetter entgeht. Die L1-Strafe soll dabei nur die Merkmale behalten, die tragen, und bei rund 150 Trainingstagen eine Überanpassung verhindern. Die Frage dahinter: Helfen Preise und Systembilanz bis D−2 der Prognose überhaupt? Ein negatives Ergebnis ist gültig und spricht auch gegen ein Sequenzmodell wie ein LSTM. Erwartet wurde wenig: Das Tagesniveau erklärt grob geschätzt knapp 2 % der Varianz.
 
 ## Modell und Features
 
-`LinearQuantileModel` aus `models/shared/linear.py`, dasselbe Modell wie die Baseline: eine lineare Quantilregression pro Quantil P10, P50 und P90 mit L1-Strafe `alpha` (scikit-learn `QuantileRegressor`, Solver HiGHS, ohne Zufall). Die Merkmale werden vor dem Fit standardisiert, damit die Strafe alle gleich stark trifft. Ein Modell gilt für alle Viertelstunden zusammen: Klassisches LEAR schätzt pro Zeitschritt ein eigenes Modell, bei rund 150 Trainingstagen hätte hier jede Viertelstunde nur rund 150 Zeilen. Der Tagesverlauf kommt wie bei `B2` über Stunden-Dummies und den Verlauf innerhalb der Stunde in das Modell.
+`LinearQuantileModel` aus `models/shared/linear.py`, dasselbe Modell wie die Baseline: eine lineare Quantilregression je Quantil mit L1-Strafe `alpha` (HiGHS, ohne Zufall) auf standardisierten Merkmalen. Ein Modell gilt für alle Viertelstunden zusammen, denn ein LEAR-Modell je Viertelstunde hätte bei rund 150 Trainingstagen nur rund 150 Zeilen.
 
 | Set | Inhalt |
 |---|---|
@@ -18,13 +16,59 @@ Die Frage dahinter: Helfen Preise und Systembilanz bis D−2 der Prognose überh
 | `B3` | `B2` plus Preisniveau: Tagesmittel an D−2, Mittel der letzten 7 Tage bis D−2, P10, P50 und P90 derselben Viertelstunde über 56 Tage bis D−2 |
 | `B4` | `B3` plus Systembilanz und Bewölkung: mittlere TSI und Anteil short an D−2, Richtung zur gleichen Uhrzeit an D−2 und D−7, Bewölkung aus dem Lauf D−2 18 UTC |
 
-Alle Merkmale von `B3` und `B4` sind um D−1 11:00 bekannt (`known_at_issue()`, [Regel gegen Datenlecks](../../../../docs/data.md#1-die-regel-gegen-datenlecks)). Die Quantile über 56 Tage brauchen mindestens 28 Tage Historie, deshalb beginnt das Training von `B3` und `B4` am 30.01. statt am 01.01. ([Mindesthistorie](../../../../docs/data.md#mindesthistorie-der-preis--und-bilanzmerkmale)). Beim ersten Fit im Tuning sind das 60 statt 89 Tage.
+Alle Merkmale von `B3` und `B4` sind um D−1 11:00 bekannt (`known_at_issue()`, [Regel gegen Datenlecks](../../../../docs/data.md#1-die-regel-gegen-datenlecks)). Die Quantile über 56 Tage brauchen mindestens 28 Tage Historie, deshalb beginnt das Training von `B3` und `B4` am 30.01. statt am 01.01. ([Mindesthistorie](../../../../docs/data.md#mindesthistorie-der-preis--und-bilanzmerkmale)). Beim ersten Ursprung (01.04.) sind das 60 statt 89 Tage.
 
-**Bekannte Grenze:** Vergangene Preise sind in unseren Dateien final, um D−1 11:00 wären sie provisorisch gewesen. Das macht `B3` und `B4` eher zu optimistisch, nicht zu pessimistisch.
+## Auswahl
 
-## Tuning April und Mai
+- **Kandidaten:** `GRID` = `feature_set` `B2`, `B3`, `B4` × `alpha` 0.001, 0.003, 0.01, 0.03 (feiner als bei der Baseline), je mit `expanding`, `rolling_56d`, `rolling_90d`: 12 × 3 + 12 `window_mean` = **48 Kandidaten**, jeder mit 153 täglichen Ursprüngen und täglichem Neutraining
+- **Gewählt:** zwei Varianten, weil #27 fragt, ob Daten bis D−2 helfen: `quantile_lasso` (bester Kandidat insgesamt) und `quantile_lasso_d2` (bester mit `B3` oder `B4`). In #51 gewählt: `B2`, `alpha` 0.001, `expanding` und `B3`, `alpha` 0.01, `rolling_90d` ([Ergebnisse](#ergebnisse-neue-pipeline))
+- **Diagnose:** `diagnostics.py` vergleicht auf denselben Viertelstunden der Validierungstage mit Referenz, Baseline B2, `gbm_quantile` und `B2` ab 30.01. (Block-Bootstrap der täglichen Differenz) und zählt, wie oft ein Merkmal einen Koeffizienten behält. `--candidates best`: bester Kandidat je Feature-Set, `--candidates chosen`: `CHOSEN`. Nichts wird ausgewählt
 
-61 Tage, 5'856 Viertelstunden, neun wöchentliche Fits, Training mit allen Daten bis D−2 (`expanding`). Raster: `feature_set` `B2`, `B3`, `B4` × `alpha` 0.001, 0.003, 0.01, 0.03. Das Raster ist feiner als bei der Baseline (0, 0.01, 0.1), die 0 gewählt hat. Alle Modelle werden auf denselben Viertelstunden bewertet; `gbm_quantile` wird mit seinem unveränderten `CHOSEN` neu gerechnet.
+## Ergebnisse (neue Pipeline)
+
+> Validierung 01.04. bis 31.08.2026, 152 Tage (der 24.06. fehlt für alle, Strahlungsprognose fehlt), tägliches Neutraining. `select` auf Commit `4f73f8d` (`reports/quantile_lasso/select_scores.csv`), `compare` auf `90aec86` (`reports/compare/validation_scores.csv`). Werte in ct/kWh, tiefer ist besser. Pinball = Mittel der täglichen Pinball-Loss, MAE von P50.
+
+| Variante | Setting | Rang von 48 |
+|---|---|---|
+| `quantile_lasso` | `B2`, `alpha` 0.001, `expanding` | 1 |
+| `quantile_lasso_d2` | `B3`, `alpha` 0.01, `rolling_90d` | 4 (bester mit `B3` oder `B4`) |
+
+| Block | `quantile_lasso` Pinball | `quantile_lasso` MAE P50 | `quantile_lasso_d2` Pinball | `quantile_lasso_d2` MAE P50 | Referenz Pinball | Referenz MAE P50 |
+|---|---|---|---|---|---|---|
+| 2026-04 | 3.713 | 10.502 | 3.792 | 10.689 | 3.911 | 10.815 |
+| 2026-05 | 2.937 | 9.027 | 2.981 | 9.121 | 3.001 | 9.176 |
+| 2026-06 | 3.055 | 9.281 | 3.084 | 9.460 | 3.086 | 9.528 |
+| 2026-07 | 3.152 | 9.654 | 3.185 | 9.819 | 3.198 | 9.802 |
+| 2026-08 | 3.423 | 10.422 | 3.285 | 10.307 | 3.314 | 10.396 |
+| **alle Tage** | **3.256** | **9.779** | 3.264 | 9.879 | 3.301 | 9.943 |
+
+**Vergleich (`compare`):** `quantile_lasso` gegenüber der Referenz −0.045 (95 %: −0.098 bis +0.019), gegenüber B2 +0.008 (−0.018 bis +0.045). `quantile_lasso_d2` gegenüber der Referenz −0.037 (−0.090 bis +0.014), gegenüber B2 +0.016 (−0.022 bis +0.049). Alle Intervalle schliessen 0 ein: Keine Variante ist gesichert besser als Referenz oder B2.
+
+**Antwort auf #27:** Auf der Validierung helfen Daten bis D−2 nicht, denn die beste Variante mit `B3` oder `B4` (`quantile_lasso_d2`) hat einen höheren Pinball (3.264 statt 3.256) und MAE (9.879 statt 9.779) als `quantile_lasso` mit `B2` und liegt gegenüber B2 mit +0.016 (−0.022 bis +0.049) zurück.
+
+![Pinball-Loss pro Stunde](../../../../docs/figures/quantile_lasso/select_pinball_by_hour.png)
+
+![Coverage pro Monat](../../../../docs/figures/quantile_lasso/select_coverage_by_month.png)
+
+„B2“ in diesen Grafiken ist B2 zum Zeitpunkt der Auswahl (`expanding`), das gewählte B2 ist jetzt `rolling_90d`.
+
+## Starten
+
+```bash
+python -m energy_price.evaluation.experiment quantile_lasso select --days 2026-04-01 2026-04-03   # Probelauf
+make select MODEL=quantile_lasso TRACK=1                                       # 48 Kandidaten
+python -m energy_price.models.quantile_lasso.diagnostics                       # beste je Feature-Set
+python -m energy_price.models.quantile_lasso.diagnostics --candidates chosen   # nach dem Festhalten von CHOSEN
+make compare
+```
+
+Ergebnisse in `reports/quantile_lasso/` (nicht versioniert): `select_*` (`scores.csv` je Kandidat und Monatsblock mit Rang, `selection.json` mit `dropped_days`, `runtime.csv`, `forecasts.parquet`, `coefficients.csv`, `breakdowns.csv`) und `diagnostics_<best|chosen>_*.csv`. Tests: `tests/test_quantile_lasso.py`, auch gegen Leakage ab D−1. W&B-Gruppe `issue-27`.
+
+## Historie (alte Pipeline)
+
+> Gewählt auf April und Mai, verglichen auf Juni bis August, wöchentlich neu trainiert, Fenster `expanding`. Juni bis August waren nicht mehr blind (#21). Ersetzt durch #36. Test-Commit `a3fc48e`, Issue #27.
+
+**Tuning April und Mai:** 61 Tage, 5'856 Viertelstunden, neun wöchentliche Fits, Training mit allen Daten bis D−2 (`expanding`). Raster: `feature_set` `B2`, `B3`, `B4` × `alpha` 0.001, 0.003, 0.01, 0.03. Das Raster ist feiner als bei der Baseline (0, 0.01, 0.1), die 0 gewählt hat. Alle Modelle werden auf denselben Viertelstunden bewertet; `gbm_quantile` wird mit seinem unveränderten `CHOSEN` neu gerechnet.
 
 | Modell | Pinball Loss | MAE P50 | Coverage | Intervallbreite |
 |---|---|---|---|---|
@@ -55,9 +99,7 @@ Preise, Fehler und Breiten in ct/kWh. Diese Zahlen gelten nur für April und Mai
 
 Laut Issue sollte `CHOSEN` das beste Setting insgesamt und das beste mit `B2` enthalten. Beides ist hier dasselbe Setting. Damit der Test die Frage nach den Daten bis D−2 trotzdem beantwortet, ist der zweite Eintrag das beste Setting mit solchen Daten. `B4` liegt nur 0.0009 vor `B3` und prüft Preise und Systembilanz zusammen, wie es die Hypothese verlangt.
 
-### Vergleich mit Unsicherheit
-
-Tägliche Differenz des Pinball Loss, Mittel über 61 Tage, 95-%-Intervall aus einem Block-Bootstrap mit 7-Tage-Blöcken und 5000 Wiederholungen (`evaluation/scores.py`, wie in #21). Unter 0 ist das erste Modell besser.
+**Vergleich mit Unsicherheit:** Tägliche Differenz des Pinball Loss, Mittel über 61 Tage, 95-%-Intervall aus einem Block-Bootstrap mit 7-Tage-Blöcken und 5000 Wiederholungen (`evaluation/scores.py`, wie in #21). Unter 0 ist das erste Modell besser.
 
 | Modell | gegen | Differenz | 95-%-Intervall |
 |---|---|---|---|
@@ -69,9 +111,7 @@ Tägliche Differenz des Pinball Loss, Mittel über 61 Tage, 95-%-Intervall aus e
 | `B4`, `alpha` 0.03 | `B2`, `alpha` 0.001, ohne Karfreitag und Ostermontag | +0.074 | +0.026 bis +0.120 |
 | `B3`, `alpha` 0.03 | `B2`, `alpha` 0.001 | +0.104 | +0.042 bis +0.166 |
 
-### Welche Merkmale das Modell nutzt
-
-Anteil der neun wöchentlichen Fits, in denen ein Merkmal einen Koeffizienten ungleich 0 behält (`reports/quantile_lasso/tune_surviving_features.csv`). Das beschreibt, was das Modell verwendet, nicht was den Preis verursacht. Korrelierte Merkmale können sich gegenseitig ersetzen.
+**Welche Merkmale das Modell nutzt:** Anteil der neun wöchentlichen Fits, in denen ein Merkmal einen Koeffizienten ungleich 0 behält (`reports/quantile_lasso/tune_surviving_features.csv`). Das beschreibt, was das Modell verwendet, nicht was den Preis verursacht. Korrelierte Merkmale können sich gegenseitig ersetzen.
 
 | Merkmal in `B4`, `alpha` 0.03 | P10 | P50 | P90 |
 |---|---|---|---|
@@ -91,8 +131,7 @@ Anteil der neun wöchentlichen Fits, in denen ein Merkmal einen Koeffizienten un
 
 `B3` mit `alpha` 0.03 nutzt dieselben Merkmale; einziger Unterschied ist das Tagesmittel an D−2, das bei P90 in einem von neun Fits bleibt. `B2` mit `alpha` 0.001 behält dagegen fast alle Merkmale in fast allen Fits, Wochenende, Feiertag und beide Strahlungsmerkmale in allen neun.
 
-## Erkenntnisse aus dem Tuning
-
+**Erkenntnisse aus dem Tuning**
 - **Auf April und Mai helfen die Daten bis D−2 nicht.** Das Tuning wählt `B2`. `B4` ist um 0.103 schlechter, das Intervall liegt ganz über 0, auch ohne die zwei Ostertage. Gegenüber der Referenz ist bei `B4` kein Vorteil belegt (Intervall schliesst 0 ein), bei `B2` schon.
 - **Systembilanz und Bewölkung werden fast nie genutzt.** Bewölkung, Anteil short und Richtung bleiben in keinem Fit. Die mittlere TSI bleibt nur in drei von neun Fits bei P90. `B4` ist dadurch praktisch `B3`.
 - **Mit Preismerkmalen ersetzt das LASSO den Tagesverlauf durch die Quantile der Referenz.** Bei `alpha` 0.03 fallen alle Stunden- und Verlaufs-Merkmale weg, P50 stützt sich auf den Median derselben Viertelstunde über 56 Tage. Diese Quantile enthalten den Tagesverlauf bereits (Schlussfolgerung, nicht gemessen). Das Modell ist damit nahe an der Referenz plus einer Korrektur durch Strahlung und Tagesniveau, und genau so liegt es auch: −0.022 gegenüber der Referenz.
@@ -100,9 +139,7 @@ Anteil der neun wöchentlichen Fits, in denen ein Merkmal einen Koeffizienten un
 - **Beide gewählten Settings liegen am Rand des Rasters.** `B2` am unteren (`alpha` 0.001, die Baseline mit 0 ist noch etwas besser), `B3` und `B4` am oberen (0.03). Ein stärkeres `alpha` könnte `B3` und `B4` noch verbessern. Das wurde nicht geprüft; das Raster aus dem Issue bleibt unverändert.
 - **Gegenüber der Baseline bringt das LASSO mit `B2` nichts Neues:** +0.012, Intervall schliesst 0 ein.
 
-### Ungleicher Trainingsbeginn und Ostern
-
-`B3` und `B4` beginnen am 30.01., `B2` am 01.01. Um das zu trennen, rechnet `diagnostics.py` zusätzlich `B2` ab dem 30.01. Diese Variante wird nur berichtet, nie ausgewählt.
+**Ungleicher Trainingsbeginn und Ostern:** `B3` und `B4` beginnen am 30.01., `B2` am 01.01. Um das zu trennen, rechnet `diagnostics.py` zusätzlich `B2` ab dem 30.01. Diese Variante wird nur berichtet, nie ausgewählt.
 
 | Pinball Loss April und Mai | alle 61 Tage | ohne 03.04. und 06.04. |
 |---|---|---|
@@ -119,9 +156,7 @@ Der spätere Beginn macht `B2` scheinbar stark schlechter. Die Ursache ist fast 
 
 Der ungleiche Beginn erklärt den Rückstand von `B3` und `B4` also nur zu einem kleinen Teil. Im Test ist der Effekt fast verschwunden, weil das Training dann Ostern enthält: `B2` ab dem 30.01. liegt dort nur 0.006 hinter `B2` ab dem 01.01. (3.2229 zu 3.2165). Der Feiertagseffekt wird nicht nachträglich korrigiert: Eine Änderung nach Sichtung der Tuning-Ergebnisse wäre eine Anpassung an genau diese Ergebnisse.
 
-## Ergebnis (Test Juni bis August)
-
-Lauf vom 12.11.2026 mit dem unveränderten `CHOSEN`, 14 wöchentliche Fits, Commit `a3fc48e` mit sauberem Git-Stand, Daten `60431b5b921f`. 91 Tage, 8'736 Viertelstunden, für alle Modelle dieselben (der 24.06. fehlt wegen unvollständiger Wetterdaten). Referenz, Baseline B2 und `gbm_quantile` ergeben dieselben Werte wie in ihren eigenen Läufen.
+**Ergebnis (Test Juni bis August):** Lauf vom 12.11.2026 mit dem unveränderten `CHOSEN`, 14 wöchentliche Fits, Commit `a3fc48e` mit sauberem Git-Stand, Daten `60431b5b921f`. 91 Tage, 8'736 Viertelstunden, für alle Modelle dieselben (der 24.06. fehlt wegen unvollständiger Wetterdaten). Referenz, Baseline B2 und `gbm_quantile` ergeben dieselben Werte wie in ihren eigenen Läufen.
 
 | Modell | MAE P50 | Pinball Loss | Coverage | Intervallbreite |
 |---|---|---|---|---|
@@ -161,8 +196,7 @@ Aufgeteilt (`reports/quantile_lasso/test_breakdowns.csv`), Pinball Loss:
 
 **Genutzte Merkmale im Test** (Anteil der 14 Fits, `test_surviving_features.csv`): `quantile_lasso_d2` nutzt wieder keine Stunden-, Verlaufs-, Systembilanz- oder Bewölkungsmerkmale. P50 stützt sich in allen Fits auf den Median derselben Viertelstunde über 56 Tage, P10 auf deren P10. **P90 hat in den ersten 7 Fits kein einziges Merkmal** und ist damit für alle Viertelstunden gleich; ab Mitte Juli nutzt es nur das P90 über 56 Tage. `quantile_lasso` behält 46 bis 50 der 51 Merkmale.
 
-## Einordnung
-
+**Einordnung**
 - **Schlägt das Modell die Referenz? Nein.** `quantile_lasso` liegt 0.015 über der Referenz, das Intervall schliesst 0 ein; `quantile_lasso_d2` ist klar schlechter (Intervall ganz über 0). Wie bei der Baseline und dem Regime-Modell war das Tuning zu optimistisch: Dort lag `B2` 0.126 unter der Referenz.
 - **Helfen Daten bis D−2? Nein, nicht in diesem Modell.** `quantile_lasso_d2` ist um 0.050 schlechter als `quantile_lasso`, das Intervall liegt ganz über 0. Mit gleichem Trainingsbeginn ist der Rückstand ähnlich gross (+0.044), das Intervall schliesst 0 knapp ein. Ein Vorteil der neuen Merkmale zeigt sich in keinem der beiden Vergleiche.
 - **Wo `B4` hilft, hilft es wenig.** Bei short (3.231 zu 3.257), im August und an Feiertagen ist `quantile_lasso_d2` besser als `quantile_lasso`, bei long und im Juni deutlich schlechter. Das passt dazu, dass es die Referenz nachbildet: Die Referenz ist bei short und im August ebenfalls besser.
@@ -173,14 +207,3 @@ Aufgeteilt (`reports/quantile_lasso/test_breakdowns.csv`), Pinball Loss:
 **Grenze der Aussage:** Getestet ist ein lineares Modell mit einer gemeinsamen Strafe. Ein nichtlineares Modell könnte die Daten bis D−2 anders nutzen, etwa im Zusammenspiel mit der Uhrzeit. Vergangene Preise sind in unseren Daten final, um 11:00 wären sie provisorisch gewesen; das hätte die Merkmale vermutlich eher noch schlechter gemacht (Schlussfolgerung, Korrekturen nicht gemessen). Der Test ist nicht blind, Juni bis August wurden schon für andere Modelle ausgewertet.
 
 **Entscheid:** nicht in den Pool von #25 aufgenommen, weil kein Setting die Referenz schlägt. Die Merkmale bis D−2 werden nicht als Kandidat für andere Modelle empfohlen. Das ist ein schwacher Hinweis gegen ein Sequenzmodell wie ein LSTM: Die Information der letzten Tage, die ein solches Modell nutzen würde, bringt hier im linearen Fall nichts. `CHOSEN` wird anhand dieses Tests nicht geändert.
-
-## Starten
-
-```bash
-make backtest MODEL=quantile_lasso STEP=tune TRACK=1    # 12 Settings auf April und Mai
-python -m energy_price.models.quantile_lasso.diagnostics --period tune
-make backtest MODEL=quantile_lasso STEP=test TRACK=1    # CHOSEN auf Juni bis August, mit Grafiken
-python -m energy_price.models.quantile_lasso.diagnostics --period test
-```
-
-Tuning und Test dauerten auf einem Laptop je knapp 5 Minuten. Der Test vergleicht nur dann mit der Baseline B2, wenn `reports/baseline_model/test_forecasts.parquet` existiert. Für diesen Lauf wurde die Datei mit `evaluate_period("baseline_model", ...)` erzeugt, ohne Grafiken und ohne W&B, damit die Grafiken der Baseline unverändert bleiben. `diagnostics.py` setzt die Prognosen des Backtests voraus, auch die der Baseline B2, und bricht sonst ab. Auf `tune` passt es die beste Variante pro Feature-Set neu an und prüft, dass die Prognosen mit dem Backtest übereinstimmen. Ergebnisse stehen in `reports/quantile_lasso/` (nicht versioniert). W&B enthält in der Gruppe `issue-27` die 12 Tuning-Varianten und die Baseline B2 sowie vier Testläufe (Referenz, `quantile_lasso`, `quantile_lasso_d2`, Baseline B2). Tests: `tests/test_quantile_lasso.py`, darunter ein Test, dass eine Änderung von Preisen und Systembilanz ab D−1 00:00 die Prognose für D nicht verändert.
