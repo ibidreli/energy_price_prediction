@@ -1,6 +1,6 @@
 # Regime-Modell short/long
 
-**Status:** Auswahl in der neuen Pipeline offen (#51) · **Verantwortlich:** Rodrigo Urech · **Issue:** #16 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
+**Status:** Auswahl abgeschlossen (#51), Test offen (#53) · **Verantwortlich:** Rodrigo Urech · **Issue:** #16 · **Ablauf:** [`docs/training_pipeline.md`](../../../../docs/training_pipeline.md)
 
 ## 1. Hypothese
 
@@ -25,13 +25,32 @@ Ein Modell, das zuerst schätzt, ob die Regelzone short oder long ist, und den P
 - **Features:** B1 (Kalender) oder B2 (Kalender plus Sonne) für beide Teile, wie die Baseline. Zusätzlich liefert das Modell `p_short`
 - **Auswahl:** `GRID` = B1 und B2 (logistisch C = 1, ohne L1-Strafe), je mit `expanding`, `rolling_56d`, `rolling_90d`: 2 × 3 + 2 `window_mean` = **8 Kandidaten**, jeder mit 153 täglichen Ursprüngen. Gewählt wird der kleinste mittlere tägliche Pinball-Loss über alle Validierungstage
 - **Neutraining:** täglich (`REFIT_EVERY` nicht gesetzt). Je Fit 27 Schätzungen (1 logistisch, 26 Quantilregressionen). Dauert `select` länger als 8 h, entscheidet Luca über `REFIT_EVERY`
-- **Gewählt:** bis #51 provisorisch B2 mit `expanding` (Variante `regime_mixture`, aus der alten Pipeline)
+- **Gewählt:** in #51 B2 mit `window_mean` (Variante `regime_mixture`, [Ergebnisse](#4-ergebnisse-neue-pipeline))
 
 **Wert der Richtung:** `diagnostics.py` behält die Preisteile des `select`-Laufs und tauscht nur $p$ aus: konstant, Anteil je Viertelstunde, Modell, bekannte Richtung (Schranke, am Vortag nicht verfügbar). Nur Validierungstage, keine Auswahl. Braucht ein einzelnes Fenster in `CHOSEN`, kein `window_mean`.
 
 ## 4. Ergebnisse (neue Pipeline)
 
-Folgt nach den Auswahlläufen in #51.
+> Validierung 01.04. bis 31.08.2026, 152 Tage (der 24.06. fehlt für alle, Strahlungsprognose fehlt), tägliches Neutraining. `select` auf Commit `4f73f8d` (`reports/regime_mixture/select_scores.csv`), `compare` auf `90aec86` (`reports/compare/validation_scores.csv`). Werte in ct/kWh, tiefer ist besser. Pinball = Mittel der täglichen Pinball-Loss, MAE von P50.
+
+**Gewählt:** B2 mit `window_mean`, also das Mittel der Prognosen aus `expanding`, `rolling_56d` und `rolling_90d`. Rang 1 von 8.
+
+| Block | Pinball | MAE P50 | Referenz Pinball | Referenz MAE P50 |
+|---|---|---|---|---|
+| 2026-04 | 3.714 | 10.534 | 3.911 | 10.815 |
+| 2026-05 | 2.978 | 9.050 | 3.001 | 9.176 |
+| 2026-06 | 3.038 | 9.251 | 3.086 | 9.528 |
+| 2026-07 | 3.145 | 9.677 | 3.198 | 9.802 |
+| 2026-08 | 3.387 | 10.558 | 3.314 | 10.396 |
+| **alle Tage** | **3.252** | **9.817** | 3.301 | 9.943 |
+
+**Vergleich (`compare`):** gegenüber der Referenz −0.049 (95 %: −0.108 bis +0.025), an 64.5 % der Tage besser. Gegenüber B2 +0.004 (−0.017 bis +0.032). Beide Intervalle schliessen 0 ein, das Modell ist also nicht gesichert besser als B2 oder die Referenz. Abdeckung 77.8 %. Die Diagnose zum Wert der Richtung gibt es für die Validierung nicht: `diagnostics.py` braucht ein einzelnes Fenster und bricht bei `window_mean` ab.
+
+![Pinball-Loss pro Stunde](../../../../docs/figures/regime_mixture/select_pinball_by_hour.png)
+
+![Coverage pro Monat](../../../../docs/figures/regime_mixture/select_coverage_by_month.png)
+
+„B2“ in diesen Grafiken ist B2 zum Zeitpunkt der Auswahl (`expanding`), das gewählte B2 ist jetzt `rolling_90d`.
 
 ## 5. Belege
 
