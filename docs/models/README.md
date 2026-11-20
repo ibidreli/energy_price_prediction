@@ -4,16 +4,16 @@ Jedes Modell ist ein eigener Ordner in `src/energy_price/models/`. Daten, Backte
 
 ## 1. Übersicht
 
-Jeder Steckbrief folgt derselben Vorlage ([`_template/README.md`](../../src/energy_price/models/_template/README.md)). Kandidaten = Settings in `GRID` × Fenster + je Setting ein `window_mean`, jeder auf 153 Validierungstagen. Ergebnisse folgen nach den Auswahlläufen in #51, die alten Zahlen stehen in der [Historie](#historie-alte-pipeline).
+Jeder Steckbrief folgt derselben Vorlage ([`_template/README.md`](../../src/energy_price/models/_template/README.md)). Kandidaten = Settings in `GRID` × Fenster + je Setting ein `window_mean`, jeder auf 153 Validierungstagen. Pinball (Mittel der täglichen Pinball-Loss) und MAE von P50 in ct/kWh aus `make compare` (#51): Validierung, alle 152 Tage (der 24.06. fehlt), dieselben Viertelstunden für alle. Details und Intervalle in der [Trainingspipeline](../training_pipeline.md#7-ergebnisse-auf-den-validierungsblöcken), die alten Zahlen in der [Historie](#historie-alte-pipeline).
 
-| Modell | Verantwortlich | Warum dieses Modell | Fenster | Kandidaten |
-|---|---|---|---|---|
-| Referenz (letzte 56 Tage, [`reference.py`](../../src/energy_price/models/shared/reference.py)) | Team | einfachste Prognose ohne Modell, Fenster aus EDA H11 | 56 Tage, fest | Massstab |
-| [Baseline B1, B2](../../src/energy_price/models/baseline_model/README.md) | Rodrigo Urech | Kalender und Sonne (H1, H3, H8), lineare Quantilregression ist erklärbar | `expanding`, 28, 56, 90 | 6 × 4 + 6 = 30 |
-| [Gradient Boosting](../../src/energy_price/models/gbm_quantile/README.md) | Elias Pulver | findet Wechselwirkungen von Sonne, Uhrzeit und Saison selbst (H3, H7, H8) | `expanding`, 56, 90 | 4 × 3 + 4 = 16 |
-| [Regime-Modell short/long](../../src/energy_price/models/regime_mixture/README.md) | Rodrigo Urech | zwei Preiswolken je Richtung, Richtung zuerst schätzen | `expanding`, 56, 90 | 2 × 3 + 2 = 8 |
-| [Kalibrierte Bänder](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | Bänder zu schmal, Korrektur von P10 und P90 aus vergangenen Fehlern bis D−2, auf B2 und Boosting | nur `expanding`, Basis mit eigenem Fenster | 14 |
-| [Quantil-LASSO](../../src/energy_price/models/quantile_lasso/README.md) | Luca Manna | L1-Strafe wählt die Merkmale selbst, prüft ob Daten bis D−2 helfen (`B3`, `B4`) | `expanding`, 56, 90 | 12 × 3 + 12 = 48 |
+| Modell | Verantwortlich | Warum dieses Modell | Fenster | Kandidaten | Pinball | MAE P50 |
+|---|---|---|---|---|---|---|
+| Referenz (letzte 56 Tage, [`reference.py`](../../src/energy_price/models/shared/reference.py)) | Team | einfachste Prognose ohne Modell, Fenster aus EDA H11 | 56 Tage, fest | Massstab | 3.301 | 9.943 |
+| [Baseline B1, B2](../../src/energy_price/models/baseline_model/README.md) | Rodrigo Urech | Kalender und Sonne (H1, H3, H8), lineare Quantilregression ist erklärbar | `expanding`, 28, 56, 90 | 6 × 4 + 6 = 30 | B1 3.309, B2 3.248 | B1 9.973, B2 9.793 |
+| [Gradient Boosting](../../src/energy_price/models/gbm_quantile/README.md) | Elias Pulver | findet Wechselwirkungen von Sonne, Uhrzeit und Saison selbst (H3, H7, H8) | `expanding`, 56, 90 | 4 × 3 + 4 = 16 | 3.202 | **9.773** |
+| [Regime-Modell short/long](../../src/energy_price/models/regime_mixture/README.md) | Rodrigo Urech | zwei Preiswolken je Richtung, Richtung zuerst schätzen | `expanding`, 56, 90 | 2 × 3 + 2 = 8 | 3.252 | 9.817 |
+| [Kalibrierte Bänder](../../src/energy_price/models/calibrated_bands/README.md) | Luca Manna | Bänder zu schmal, Korrektur von P10 und P90 aus vergangenen Fehlern bis D−2, auf B2 und Boosting | nur `expanding`, Basis mit eigenem Fenster | 14 | auf B2 3.238, auf Boosting **3.190** | auf B2 9.793, auf Boosting **9.773** |
+| [Quantil-LASSO](../../src/energy_price/models/quantile_lasso/README.md) | Luca Manna | L1-Strafe wählt die Merkmale selbst, prüft ob Daten bis D−2 helfen (`B3`, `B4`) | `expanding`, 56, 90 | 12 × 3 + 12 = 48 | `B2` 3.256, `B3` 3.264 | `B2` 9.779, `B3` 9.879 |
 
 Ein neues Modell muss die Referenz schlagen.
 
