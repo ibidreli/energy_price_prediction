@@ -14,15 +14,17 @@ GRID = [
 # The calibration itself keeps all rows; the base runs with its own window and refit frequency.
 WINDOWS = ("expanding",)
 
-# provisional until #51: settings selected with the old pipeline, rerun `make select MODEL=calibrated_bands`.
+# Chosen by select_candidates, the rule fixed before the runs (#51, comment of 2026-11-19), on all validation
+# days 2026-04-01 to 2026-08-31 (152 days), bases B2 rolling_90d and gbm_quantile window_mean, commit 524c72f.
+# Both calibrated variants meet the success rule (coverage 80.5 % and 80.3 %, pinball below the raw base).
+# Record: reports/calibrated_bands/select_selection.json.
 CHOSEN = {
     "calibrated_B2": {"base": "baseline_model:B2", "calibration_days": 56, "grouping": "global",
-                      "window": "expanding"},  # provisional until #51
-    "raw_B2": {"base": "baseline_model:B2", "calibrated": False, "window": "expanding"},  # provisional until #51
-    "calibrated_gbm_quantile": {"base": "gbm_quantile:gbm_quantile", "calibration_days": 56, "grouping": "6h",
-                                "window": "expanding"},  # provisional until #51
-    "raw_gbm_quantile": {"base": "gbm_quantile:gbm_quantile", "calibrated": False,
-                         "window": "expanding"},  # provisional until #51
+                      "window": "expanding"},
+    "raw_B2": {"base": "baseline_model:B2", "calibrated": False, "window": "expanding"},
+    "calibrated_gbm_quantile": {"base": "gbm_quantile:gbm_quantile", "calibration_days": 56, "grouping": "global",
+                                "window": "expanding"},
+    "raw_gbm_quantile": {"base": "gbm_quantile:gbm_quantile", "calibrated": False, "window": "expanding"},
 }
 
 
