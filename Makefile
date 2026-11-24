@@ -123,7 +123,7 @@ ENTSOE_STAMP  := $(OUT_DIR)/.entsoe_checksums
 
 $(ENTSOE_STAMP): FORCE | $(ENV_READY)
 	@mkdir -p $(OUT_DIR)
-	@$(PY) -m energy_price.data.checksums $(ENTSOE_DIR) --pattern '*.xml' > $@.tmp
+	@$(PY) -m energy_price.data.checksums $(ENTSOE_DIR) --pattern '*Z.*' > $@.tmp
 	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(ENTSOE_DATA); fi
 
 $(ENTSOE_DATA): $(ENTSOE_STAMP) $(SOURCES) | $(ENV_READY)
