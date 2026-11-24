@@ -12,13 +12,14 @@ Every feature is known when the forecast for delivery day D is issued (D-1, 11:0
   end of D-2. Every value is computed per delivery day through ``known_at_issue``, never with a
   fixed lag. Past prices are final here but were provisional at the issue time, so a backtest with
   them is slightly optimistic (docs/data.md, section 1).
-- ENTSO-E (``entsoe_features``, issue #37): the day-ahead load forecast for D and its change over
-  the hour, the week-ahead load forecast for D, the mean actual load of D-2, the solar and wind
-  forecast for D and the residual load, the Swiss day-ahead price of D-1 at the same clock time
-  and its daily mean, and the spreads of the daily means to DE-LU, FR, IT-North and AT. Every value
-  comes from ``known_at_issue_entsoe``: in the live period only what our job had fetched by D-1
-  11:00, before that only the series whose availability the live check confirmed. The price of D
-  itself is never used (docs/data.md, section 7).
+- Load, generation and day-ahead prices (``entsoe_features``, issue #37, from Energy-Charts): the
+  day-ahead load forecast for D and its change over the hour, the week-ahead load forecast for D
+  (ENTSO-E API only), the mean actual load of D-2, the solar and wind forecast for D and the
+  residual load, the Swiss day-ahead price of D-1 at the same clock time and its daily mean, and the
+  spreads of the daily means to DE-LU, FR, IT-North and AT. Every value comes from
+  ``known_at_issue_entsoe``: in the live period only what our job had fetched by D-1 11:00, before
+  that only the series whose availability the live check confirmed. The price of D itself is never
+  used (docs/data.md, section 7).
 
 The target ``aep_ct_kwh`` is the price of the quarter hour itself and never a feature of that
 quarter hour. The same holds for the direction label ``short`` (1 if the control area was short,
@@ -37,7 +38,7 @@ import numpy as np
 import pandas as pd
 
 from energy_price.availability import known_at_issue
-from energy_price.data.entsoe import known_at_issue_entsoe, live_start
+from energy_price.data.entsoe import known_at_issue_entsoe, live_starts
 from energy_price.paths import ROOT
 
 TZ = "Europe/Zurich"
@@ -62,7 +63,9 @@ HISTORY_COLUMNS = [*PRICE_COLUMNS, *BALANCE_COLUMNS]
 
 SPREAD_ZONES = {"DE_LU": "da_spread_de_lu_d1", "FR": "da_spread_fr_d1", "IT_NORTH": "da_spread_it_north_d1",
                 "AT": "da_spread_at_d1"}
-SOLAR, WIND = {"B16"}, {"B18", "B19"}  # ENTSO-E production types: solar, wind offshore and onshore
+GENERATION = {"solar_day_ahead", "wind_day_ahead"}
+# The source of the issue #37 features; "entsoe_api" once the ENTSO-E API proved its availability.
+ENTSOE_PROVIDER = "energy_charts"
 ENTSOE_COLUMNS = [
     "load_forecast_mw", "load_forecast_change_mw", "load_week_ahead_mw", "load_actual_mean_d2_mw",
     "solar_forecast_mw", "wind_forecast_mw", "residual_load_mw", "residual_load_change_mw",
@@ -290,17 +293,14 @@ def day_grid(day: pd.Timestamp) -> pd.DatetimeIndex:
     return pd.date_range(start, end, freq="15min", inclusive="left")
 
 
-def series_values(known: pd.DataFrame, series: str, zone: str = "CH", psr_types: set[str] | None = None) -> pd.Series:
-    """Values of one ENTSO-E series per quarter hour (UTC).
+def series_values(known: pd.DataFrame, series: str, zone: str = "CH") -> pd.Series:
+    """Values of one series per quarter hour (UTC), from the groups of the series.
 
-    With ``psr_types`` (generation by production type) the matching groups are summed, otherwise the
-    groups are averaged: one group for the load, minimum and maximum for the week-ahead forecast.
+    Generation is summed over its groups (ENTSO-E splits wind into onshore and offshore); the other
+    series are averaged: one group for the load, minimum and maximum for the week-ahead forecast.
     """
-    rows = known[(known["series"] == series) & (known["zone"] == zone)]
-    if psr_types is not None:
-        rows = rows[rows["group"].map(lambda group: group.partition("/")[2]).isin(psr_types)]
-        return rows.groupby("timestamp_utc")["value"].sum(min_count=1)
-    return rows.groupby("timestamp_utc")["value"].mean()
+    values = known.loc[(known["series"] == series) & (known["zone"] == zone)].groupby("timestamp_utc")["value"]
+    return values.sum(min_count=1) if series in GENERATION else values.mean()
 
 
 def whole_day_values(values: pd.Series, day: pd.Timestamp) -> pd.Series | None:
@@ -330,8 +330,8 @@ def entsoe_day(known: pd.DataFrame, day: pd.Timestamp, rows: pd.DataFrame) -> pd
         return values.reindex(stamps).to_numpy()
 
     load = series_values(known, "load_day_ahead").reindex(grid)
-    solar = series_values(known, "wind_solar_day_ahead", psr_types=SOLAR).reindex(grid)
-    wind = series_values(known, "wind_solar_day_ahead", psr_types=WIND).reindex(grid)
+    solar = series_values(known, "solar_day_ahead").reindex(grid)
+    wind = series_values(known, "wind_day_ahead").reindex(grid)
     residual = load - solar - wind
     out["load_forecast_mw"] = on_rows(load)
     out["load_forecast_change_mw"] = on_rows(change_over_hour(load))
@@ -363,12 +363,15 @@ def entsoe_day(known: pd.DataFrame, day: pd.Timestamp, rows: pd.DataFrame) -> pd
 def entsoe_features(table: pd.DataFrame, entsoe: pd.DataFrame | None) -> pd.DataFrame:
     """``ENTSOE_COLUMNS`` for the rows of ``table``, each delivery day from ``known_at_issue_entsoe``.
 
-    The features need only the local days D-2 to D, so each day gets only that window of the table,
-    with the start of the live period taken from the whole table.
+    Only the source ``ENTSOE_PROVIDER`` is used, so a column never mixes two sources. The features need
+    only the local days D-2 to D, so each day gets only that window of the table, with the start of
+    the live period taken from the whole table.
     """
+    if entsoe is not None:
+        entsoe = entsoe[entsoe["provider"] == ENTSOE_PROVIDER]
     if entsoe is None or entsoe.empty:
         return pd.DataFrame(np.nan, index=table.index, columns=ENTSOE_COLUMNS)
-    start = live_start(entsoe)
+    start = live_starts(entsoe)
     by_day = dict(tuple(entsoe.groupby("local_day")))
     frames = []
     for day, rows in table.groupby("delivery_day"):

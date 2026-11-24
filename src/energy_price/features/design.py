@@ -11,16 +11,16 @@ list of blocks; a new block is a function ``table -> dict of columns`` registere
   the same clock time over 56 days. Rows before 2026-01-30 have no value (minimum history, 28 days).
 - ``B4`` B3 plus system balance until D-2 (mean TSI per 100 MW, share of short quarter hours,
   direction at the same clock time on D-2 and D-7) and cloud cover of the run D-2 18 UTC (per 100 %).
-- ``B5`` B4 plus the ENTSO-E load (issue #37): day-ahead forecast for D in GW, its change over the
-  hour x position (the consumption part of H8) and the mean actual load of D-2.
+- ``B5`` B4 plus the Swiss load (issue #37, from Energy-Charts): day-ahead forecast for D in GW, its
+  change over the hour x position (the consumption part of H8) and the mean actual load of D-2.
 - ``B6`` B5 plus the day-ahead prices of D-1 per 100 EUR/MWh: CH at the same clock time, the CH daily
   mean and the spreads of the daily means to DE-LU, FR, IT-North and AT. Never the price of D.
 
 B5 and B6 only have values where ``known_at_issue_entsoe`` allows them: in the history only once the
 live check confirmed a series (``entsoe.HISTORY_RULES``, docs/data.md, section 7). Until then the
 load columns are missing before the live period, and ``complete_days`` drops those days. The block
-``residual_load`` is registered but in no set yet, because whether ENTSO-E has a solar and wind
-forecast for Switzerland is only known from the live fetch.
+``residual_load`` is registered but in no set yet: in a test fetch on 2026-11-24 at 13:56 the solar
+and wind forecast for the next day was still missing, so it may not be known at 11:00.
 
 Every column comes from ``features.dataset.build_table`` and is known at D-1, 11:00.
 """

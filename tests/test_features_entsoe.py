@@ -1,4 +1,4 @@
-"""ENTSO-E features of the modelling table (issue #37): values and the D-1 11:00 limit."""
+"""Features of the issue #37 data in the modelling table: values and the D-1 11:00 limit."""
 
 from dataclasses import replace
 from datetime import date, timedelta
@@ -9,15 +9,14 @@ import pytest
 
 from energy_price.data import entsoe
 from energy_price.data.entsoe import load_entsoe
-from energy_price.data.entsoe_xml import local_day_bounds
-from energy_price.features.dataset import ENTSOE_COLUMNS, build_table
+from energy_price.features.dataset import ENTSOE_COLUMNS, ENTSOE_PROVIDER, build_table
 from energy_price.features.design import FEATURE_SETS, design_matrix
-from entsoe_fixtures import gl_document, period, time_series
-from test_entsoe import hourly, local, store
+from entsoe_store import local, store
 from test_features_dataset import inputs, weather_for
 
 D = date(2026, 11, 25)
 BEFORE = local(D - timedelta(days=1), 10, 37)
+ZONES = ["CH", "DE_LU", "FR", "IT_NORTH", "AT"]
 
 
 def table(root, day: date = D) -> pd.DataFrame:
@@ -30,14 +29,17 @@ def at(frame: pd.DataFrame, hour: int, minute: int = 0) -> pd.Series:
     return frame[(stamps.dt.hour == hour) & (stamps.dt.minute == minute)].iloc[0]
 
 
-def store_prices(root, day: date, fetched=BEFORE, values=None):
-    """Day-ahead prices of all five zones for the local day ``day``; ``values`` maps zone to a value per hour."""
-    for zone in ["CH", "DE_LU", "FR", "IT_NORTH", "AT"]:
-        value = (values or {}).get(zone, lambda h: 100.0)
-        store(root, "price_day_ahead", zone, fetched, hourly(day, value=value, price=True), day=day)
+def store_prices(root, day: date, fetched=BEFORE, values=None, last: date | None = None):
+    """Day-ahead prices of all five zones; ``values`` maps zone to a value per hour index."""
+    for zone in ZONES:
+        store(root, "price_day_ahead", zone, fetched, day, last, value=(values or {}).get(zone, lambda h: 100.0))
 
 
-def test_without_entsoe_data_every_column_exists_and_is_missing(tmp_path):
+def test_the_features_come_from_energy_charts():
+    assert ENTSOE_PROVIDER == "energy_charts"
+
+
+def test_without_data_every_column_exists_and_is_missing(tmp_path):
     frame = table(tmp_path)
     assert frame[ENTSOE_COLUMNS].isna().all().all()
     for feature_set in ["B5", "B6"]:
@@ -45,15 +47,21 @@ def test_without_entsoe_data_every_column_exists_and_is_missing(tmp_path):
 
 
 def test_load_forecast_is_the_live_version_fetched_before_11(tmp_path):
-    store(tmp_path, "load_day_ahead", "CH", BEFORE, hourly(D, value=lambda h: 7000.0 + h), day=D)
-    store(tmp_path, "load_day_ahead", "CH", local(D - timedelta(days=1), 11, 30), hourly(D, value=lambda h: 1.0), day=D)
+    store(tmp_path, "load_day_ahead", "CH", BEFORE, D, value=lambda h: 7000.0 + h)
+    store(tmp_path, "load_day_ahead", "CH", local(D - timedelta(days=1), 11, 30), D, value=lambda h: 1.0)
     frame = table(tmp_path)
     assert at(frame, 0)["load_forecast_mw"] == 7000.0
     assert at(frame, 23, 45)["load_forecast_mw"] == 7023.0
 
 
+def test_values_of_the_other_source_never_mix_in(tmp_path):
+    store(tmp_path, "load_day_ahead", "CH", BEFORE, D, value=lambda h: 7000.0)
+    store(tmp_path, "load_day_ahead", "CH", BEFORE, D, value=lambda h: 1.0, provider="entsoe_api")
+    assert (table(tmp_path)["load_forecast_mw"] == 7000.0).all()
+
+
 def test_load_change_is_the_centred_difference_over_the_hour(tmp_path):
-    store(tmp_path, "load_day_ahead", "CH", BEFORE, hourly(D, value=lambda h: 100.0 * h ** 2), day=D)
+    store(tmp_path, "load_day_ahead", "CH", BEFORE, D, value=lambda h: 100.0 * h ** 2)
     frame = table(tmp_path)
     # hour 5: (36 - 16) * 100 / 2 = 1000 MW per hour; one-sided at the first and last hour
     assert at(frame, 5, 30)["load_forecast_change_mw"] == 1000.0
@@ -65,20 +73,13 @@ def test_load_change_is_the_centred_difference_over_the_hour(tmp_path):
 
 
 def test_actual_load_is_the_mean_of_a_whole_d_minus_2(tmp_path):
-    store(tmp_path, "load_actual", "CH", BEFORE, hourly(D - timedelta(days=2), value=lambda h: 6000.0 + h),
-          day=D - timedelta(days=2))
-    store(tmp_path, "load_actual", "CH", BEFORE, hourly(D - timedelta(days=1), value=lambda h: 1e6),
-          day=D - timedelta(days=1))
+    store(tmp_path, "load_actual", "CH", BEFORE, D - timedelta(days=2), D - timedelta(days=1),
+          value=lambda h: 6000.0 + h if h < 24 else 1e6)
     assert (table(tmp_path)["load_actual_mean_d2_mw"] == 6011.5).all()
 
 
 def test_actual_load_with_a_gap_on_d_minus_2_gives_no_mean(tmp_path):
-    day = D - timedelta(days=2)
-    start, end = local_day_bounds(day)
-    values = [6000.0] * 24
-    values[10] = None
-    store(tmp_path, "load_actual", "CH", BEFORE, gl_document([time_series([period(start, end, "PT60M", values)])]),
-          day=day)
+    store(tmp_path, "load_actual", "CH", BEFORE, D - timedelta(days=2), value=lambda h: None if h == 10 else 6000.0)
     assert table(tmp_path)["load_actual_mean_d2_mw"].isna().all()
 
 
@@ -95,11 +96,10 @@ def test_price_features_come_from_d_minus_1(tmp_path):
 
 def test_the_prices_of_the_delivery_day_change_no_feature(tmp_path):
     store_prices(tmp_path, D - timedelta(days=1), values={"CH": lambda h: 80.0 + h})
-    store(tmp_path, "load_day_ahead", "CH", BEFORE, hourly(D, value=lambda h: 7000.0), day=D)
+    store(tmp_path, "load_day_ahead", "CH", BEFORE, D, value=lambda h: 7000.0)
     before = table(tmp_path)
-    store_prices(tmp_path, D, fetched=local(D - timedelta(days=1), 9, 17), values={zone: lambda h: 1e6 for zone in
-                                                                                    ["CH", "DE_LU", "FR", "IT_NORTH", "AT"]})
-    store_prices(tmp_path, D + timedelta(days=1), fetched=local(D - timedelta(days=1), 9, 17))
+    early = local(D - timedelta(days=1), 9, 17)
+    store_prices(tmp_path, D, fetched=early, last=D + timedelta(days=1), values={zone: lambda h: 1e6 for zone in ZONES})
     after = table(tmp_path)
     pd.testing.assert_frame_equal(before[ENTSOE_COLUMNS], after[ENTSOE_COLUMNS])
     assert before[["da_price_ch_d1", "load_forecast_mw"]].notna().all().all()
@@ -107,31 +107,28 @@ def test_the_prices_of_the_delivery_day_change_no_feature(tmp_path):
 
 def test_a_gap_in_the_live_period_is_not_filled(tmp_path):
     store_prices(tmp_path, D - timedelta(days=4), fetched=local(D - timedelta(days=5), 10, 17))
-    first, last = date(2026, 11, 1), D + timedelta(days=1)
-    store(tmp_path, "load_day_ahead", "CH", local(D + timedelta(days=2), 12, 0), hourly(first, last),
-          period_days=(first, last), source="backfill")
+    store(tmp_path, "load_day_ahead", "CH", local(D + timedelta(days=2), 12, 0), date(2026, 11, 1),
+          D + timedelta(days=1), source="backfill")
     assert table(tmp_path)[ENTSOE_COLUMNS].isna().all().all()
 
 
 def test_history_load_forecast_waits_for_the_rule(tmp_path, monkeypatch):
     day, first, last = date(2026, 2, 10), date(2026, 2, 1), date(2026, 2, 28)
     fetched = local(date(2026, 11, 19), 12, 0)
-    store(tmp_path, "load_day_ahead", "CH", fetched, hourly(first, last, value=lambda h: 7000.0),
-          period_days=(first, last), source="backfill")
-    store(tmp_path, "price_day_ahead", "CH", fetched, hourly(first, last, value=lambda h: 50.0, price=True),
-          period_days=(first, last), source="backfill")
+    store(tmp_path, "load_day_ahead", "CH", fetched, first, last, value=lambda h: 7000.0, source="backfill")
+    store(tmp_path, "price_day_ahead", "CH", fetched, first, last, value=lambda h: 50.0, source="backfill")
     frame = table(tmp_path, day)
     assert frame["load_forecast_mw"].isna().all()
     assert (frame["da_price_ch_mean_d1"] == 50.0).all()
 
-    monkeypatch.setitem(entsoe.HISTORY_RULES, "load_day_ahead", True)
+    monkeypatch.setitem(entsoe.HISTORY_RULES["energy_charts"], "load_day_ahead", True)
     assert (table(tmp_path, day)["load_forecast_mw"] == 7000.0).all()
 
 
 def test_after_the_short_day_02_xx_takes_the_daily_mean(tmp_path):
     first, last = date(2026, 3, 28), date(2026, 3, 30)
-    store(tmp_path, "price_day_ahead", "CH", local(date(2026, 11, 19), 12, 0),
-          hourly(first, last, value=lambda h: float(h), price=True), period_days=(first, last), source="backfill")
+    store(tmp_path, "price_day_ahead", "CH", local(date(2026, 11, 19), 12, 0), first, last, value=float,
+          source="backfill")
     frame = table(tmp_path, date(2026, 3, 30))
     # 29 March runs from hour index 24 (00:00) to 46 (23:00), 23 hours without 02:00
     assert at(frame, 1)["da_price_ch_d1"] == 25.0
@@ -140,9 +137,8 @@ def test_after_the_short_day_02_xx_takes_the_daily_mean(tmp_path):
 
 
 def test_after_the_long_day_02_xx_averages_both_passes(tmp_path):
-    first, last = date(2026, 10, 25), date(2026, 10, 25)
-    store(tmp_path, "price_day_ahead", "CH", local(date(2026, 11, 19), 12, 0),
-          hourly(first, last, value=lambda h: float(h), price=True), period_days=(first, last), source="backfill")
+    day = date(2026, 10, 25)
+    store(tmp_path, "price_day_ahead", "CH", local(date(2026, 11, 19), 12, 0), day, value=float, source="backfill")
     frame = table(tmp_path, date(2026, 10, 26))
     # hour index 2 is 02:00 summer time, 3 is 02:00 winter time
     assert at(frame, 2, 15)["da_price_ch_d1"] == 2.5
@@ -150,21 +146,15 @@ def test_after_the_long_day_02_xx_averages_both_passes(tmp_path):
 
 
 def test_residual_load_subtracts_solar_and_wind(tmp_path):
-    start, end = local_day_bounds(D)
-    doc = gl_document([
-        time_series([period(start, end, "PT60M", [300.0] * 24)], business_type="A94", psr_type="B16",
-                    domain="inBiddingZone_Domain.mRID"),
-        time_series([period(start, end, "PT60M", [20.0] * 24)], business_type="A94", psr_type="B19",
-                    domain="inBiddingZone_Domain.mRID"),
-    ])
-    store(tmp_path, "wind_solar_day_ahead", "CH", BEFORE, doc, day=D)
-    store(tmp_path, "load_day_ahead", "CH", BEFORE, hourly(D, value=lambda h: 7000.0), day=D)
+    store(tmp_path, "solar_day_ahead", "CH", BEFORE, D, value=lambda h: 300.0)
+    store(tmp_path, "wind_day_ahead", "CH", BEFORE, D, value=lambda h: 20.0)
+    store(tmp_path, "load_day_ahead", "CH", BEFORE, D, value=lambda h: 7000.0)
     frame = table(tmp_path)
     assert (frame["solar_forecast_mw"] == 300.0).all() and (frame["wind_forecast_mw"] == 20.0).all()
     assert (frame["residual_load_mw"] == 6680.0).all()
     assert (frame["residual_load_change_mw"] == 0.0).all()
 
 
-def test_b5_and_b6_add_the_entsoe_blocks_to_b4():
+def test_b5_and_b6_add_the_blocks_to_b4():
     assert FEATURE_SETS["B5"] == [*FEATURE_SETS["B4"], "load_forecast"]
     assert FEATURE_SETS["B6"] == [*FEATURE_SETS["B5"], "day_ahead_prices"]

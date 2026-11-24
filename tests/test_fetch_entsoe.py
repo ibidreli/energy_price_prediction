@@ -56,7 +56,7 @@ def run_once(tmp_path, responses, requests=None, token=TOKEN, start=datetime(202
             raise response
         return response
 
-    requests = requests or [Request(LOAD, *local_day_bounds(DAY), delivery_day=DAY)]
+    requests = requests or [Request(LOAD, *local_day_bounds(DAY), days=(DAY,))]
     rows = run(requests, tmp_path, "live", token, get=get, now=Clock(start), sleep=lambda s: None)
     return rows, calls
 
@@ -77,12 +77,12 @@ def test_fetch_module_needs_only_the_standard_library():
 def test_a_live_run_asks_for_d_minus_2_to_d_of_the_next_forecast():
     requests = live_requests(date(2026, 11, 18))
     assert len(requests) == len(SERIES) * 3
-    days = {r.delivery_day for r in requests if r.series == LOAD}
+    days = {r.days[0] for r in requests if r.series == LOAD}
     assert days == {date(2026, 11, 17), date(2026, 11, 18), date(2026, 11, 19)}
 
 
 def test_request_periods_are_local_days_in_utc():
-    request = next(r for r in live_requests(date(2026, 3, 28)) if r.delivery_day == date(2026, 3, 29))
+    request = next(r for r in live_requests(date(2026, 3, 28)) if r.days == (date(2026, 3, 29),))
     params = request_params(request)
     assert (params["periodStart"], params["periodEnd"]) == ("202603282300", "202603292200")
 
@@ -102,7 +102,7 @@ def test_history_comes_in_local_calendar_months():
         ("2026-01-31T23:00:00+00:00", "2026-02-28T23:00:00+00:00"),
         ("2026-02-28T23:00:00+00:00", "2026-03-15T23:00:00+00:00"),
     ]
-    assert all(r.delivery_day is None for r in requests)
+    assert all(r.days == () for r in requests)
 
 
 def test_a_new_response_is_stored_with_manifest_and_log(tmp_path):
@@ -112,7 +112,7 @@ def test_a_new_response_is_stored_with_manifest_and_log(tmp_path):
     assert len(manifest) == 1 and len(log) == 1
     assert (tmp_path / manifest[0]["file"]).read_bytes() == load_response()
     assert manifest[0]["file"] == "load_day_ahead_CH_2026-11-19_2026-11-18T09-37-01Z.xml"
-    assert manifest[0]["delivery_day"] == "2026-11-19" and manifest[0]["points"] == "24"
+    assert manifest[0]["delivery_days"] == "2026-11-19" and manifest[0]["points"] == "24"
     assert log[0]["status"] == "ok" and log[0]["complete"] == "True" and log[0]["changed"] == "True"
     assert log[0]["fetched_at_local"] == "2026-11-18T10:37:01+01:00"
 
@@ -172,7 +172,7 @@ def test_the_token_is_never_written(tmp_path):
 
 
 def test_the_public_url_has_no_token():
-    url = public_url(request_params(Request(LOAD, *local_day_bounds(DAY), delivery_day=DAY)))
+    url = public_url(request_params(Request(LOAD, *local_day_bounds(DAY), days=(DAY,))))
     assert "securityToken" not in url and "documentType=A65" in url
 
 

@@ -36,14 +36,15 @@ WEATHER_DATA := $(OUT_DIR)/weather_forecasts.parquet
 RESERVOIR_DIR := data/reservoirs/snapshots
 RESERVOIR_YEARS ?=
 RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
-# ENTSO-E (issue #37): live snapshots of the scheduled job in snapshots/, the one-time history in backfill/
+# Issue #37 data, one folder per source (energy_charts without key, entsoe_api with token), each with
+# the live snapshots of the scheduled job in snapshots/ and the one-time history in backfill/
 ENTSOE_DIR   := data/entsoe
 ENTSOE_FROM  ?= 2026-01-01
 ENTSOE_DATA  := $(OUT_DIR)/entsoe.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs fetch-entsoe fetch-entsoe-history entsoe-availability sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
+.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs fetch-energy-charts fetch-energy-charts-history fetch-entsoe-api fetch-entsoe-api-history entsoe-availability sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -86,15 +87,21 @@ fetch-weather: $(ENV_READY) ## Download weather forecast runs that are not store
 	$(PY) -m energy_price.data.fetch_weather --sites $(SITES) --out $(WEATHER_DIR) --start $(WEATHER_FROM)
 
 # The live series is written by the scheduled GitHub Actions job (.github/workflows/fetch-entsoe.yml).
-# A local `make fetch-entsoe` is for testing: committing its log would conflict with the job's commits.
-fetch-entsoe: $(ENV_READY) ## Fetch ENTSO-E load, generation and day-ahead prices once (needs ENTSOE_API_TOKEN)
-	$(PY) -m energy_price.data.fetch_entsoe --out $(ENTSOE_DIR)/snapshots
+# A local live fetch is for testing: committing its log would conflict with the job's commits.
+fetch-energy-charts: $(ENV_READY) ## Fetch load, generation forecasts and day-ahead prices once from Energy-Charts (no key)
+	$(PY) -m energy_price.data.fetch_energy_charts --out $(ENTSOE_DIR)/energy_charts/snapshots
 
-fetch-entsoe-history: $(ENV_READY) ## Download the ENTSO-E history from ENTSOE_FROM (default 2026-01-01)
-	$(PY) -m energy_price.data.fetch_entsoe --out $(ENTSOE_DIR)/backfill --history-from $(ENTSOE_FROM)
+fetch-energy-charts-history: $(ENV_READY) ## Download the Energy-Charts history from ENTSOE_FROM (default 2026-01-01)
+	$(PY) -m energy_price.data.fetch_energy_charts --out $(ENTSOE_DIR)/energy_charts/backfill --history-from $(ENTSOE_FROM)
 
-entsoe-availability: $(ENV_READY) ## Evaluate the ENTSO-E fetch log against the availability criterion (docs/data.md, section 7)
-	$(PY) -m energy_price.data.entsoe --log $(ENTSOE_DIR)/snapshots/fetch_log.csv --out $(ENTSOE_DIR)/availability.csv
+fetch-entsoe-api: $(ENV_READY) ## Fetch the same data once from the ENTSO-E API (needs ENTSOE_API_TOKEN)
+	$(PY) -m energy_price.data.fetch_entsoe --out $(ENTSOE_DIR)/entsoe_api/snapshots
+
+fetch-entsoe-api-history: $(ENV_READY) ## Download the ENTSO-E API history from ENTSOE_FROM (needs ENTSOE_API_TOKEN)
+	$(PY) -m energy_price.data.fetch_entsoe --out $(ENTSOE_DIR)/entsoe_api/backfill --history-from $(ENTSOE_FROM)
+
+entsoe-availability: $(ENV_READY) ## Evaluate the fetch logs of both sources against the availability criterion (docs/data.md, section 7)
+	$(PY) -m energy_price.data.entsoe --log $(wildcard $(ENTSOE_DIR)/*/snapshots/fetch_log.csv) --out $(ENTSOE_DIR)/availability.csv
 
 $(REGISTER):
 	mkdir -p $(dir $@)
