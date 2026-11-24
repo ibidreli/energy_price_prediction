@@ -1,9 +1,13 @@
-"""Synthetic ENTSO-E responses in the structure of the Transparency Platform REST API."""
+"""Synthetic responses in the structure of the ENTSO-E REST API and the Energy-Charts API v2."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from datetime import datetime, timezone
+import json
+from collections.abc import Callable, Sequence
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+ZURICH = ZoneInfo("Europe/Zurich")
 
 GL_NAMESPACE = "urn:iec62325.351:tc57wg16:451-6:generationloaddocument:3:0"
 PUBLICATION_NAMESPACE = "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:3"
@@ -59,3 +63,23 @@ def acknowledgement(code: str = "999", message: str = "No matching data found") 
             f"<mRID>x</mRID><createdDateTime>2026-11-18T09:00:00Z</createdDateTime>"
             f"<Reason><code>{code}</code><text>{message}</text></Reason>"
             f"</Acknowledgement_MarketDocument>").encode("utf-8")
+
+
+def ec_document(start: datetime, end: datetime, step: timedelta, value: Callable[[int], float | None] = lambda i: 1.0,
+                series_id: str = "load", resolution: str | None = None,
+                generated: str = "2026-11-24T10:00:00+01:00") -> bytes:
+    """An Energy-Charts v2 response with one row per ``step`` from ``start`` to ``end`` (local offsets).
+
+    ``value`` gets the row index; ``None`` writes a null value. ``resolution`` overrides the header.
+    """
+    rows, stamp, i = [], start, 0
+    while stamp < end:
+        rows.append({"timestamp": stamp.astimezone(ZURICH).isoformat(), "values": {series_id: value(i)}})
+        stamp, i = stamp + step, i + 1
+    minutes = int(step.total_seconds() // 60)
+    header = resolution or f"PT{minutes}M"
+    return json.dumps({
+        "schema_version": "2.0", "endpoint": "public_power_forecast", "country": "ch", "timezone": "Europe/Zurich",
+        "resolution": header, "interval_minutes": minutes, "unit": "MW", "generated_at": generated,
+        "series": [{"id": series_id, "name": series_id}], "data": rows,
+    }).encode("utf-8")
