@@ -442,7 +442,12 @@ Das Issue sah die ENTSO-E-Transparenzplattform vor. Deren API verlangt aber eine
 | Energy-Charts | keiner | `data/entsoe/energy_charts/` | immer |
 | ENTSO-E-API | Token (`ENTSOE_API_TOKEN`) | `data/entsoe/entsoe_api/` | nur, wenn das Repository-Secret gesetzt ist |
 
-Last und Erzeugung übernimmt Energy-Charts vermutlich von ENTSO-E. Die Preise tragen die Lizenzangabe „CC BY 4.0 from Bundesnetzagentur | SMARD.de“. Bei den Prognosen fehlt in der Antwort eine Lizenzangabe; Quelle ist bei jeder Verwendung „Energy-Charts.info“ anzugeben. Kommt der Token später, läuft die ENTSO-E-API zusätzlich. So lässt sich auch messen, ob ENTSO-E früher publiziert als Energy-Charts.
+Herkunft und Lizenz stehen im Feld `license` jeder Antwort (Stand 25.11.2026):
+
+- **Preise:** „CC BY 4.0 from Bundesnetzagentur | SMARD.de“. Laut API-Dokumentation übernimmt Energy-Charts sie für CH, DE-LU, FR, IT-North und AT unverändert von SMARD; die Preise selbst stammen aus der Day-Ahead-Auktion.
+- **Lastprognose, Solar- und Windprognose, tatsächliche Last:** „CC BY 4.0, attribution: energy-charts.info“. Die ursprüngliche Quelle nennen weder die Antwort noch die API-Dokumentation. Vermutlich ist es die ENTSO-E-Transparenzplattform, belegt ist das nicht.
+
+Kommt der Token später, läuft die ENTSO-E-API zusätzlich. So lässt sich auch messen, ob ENTSO-E früher publiziert als Energy-Charts.
 
 ### Was abgerufen wird
 
