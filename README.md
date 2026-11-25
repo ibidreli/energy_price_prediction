@@ -48,7 +48,7 @@ src/energy_price/
 ├── availability.py    what is known at the issue time D-1 11:00 (leakage rules)
 ├── data/              1. download and read the raw data, build data/processed/ and the data figures
 │                         (make fetch, make data, make figures)
-├── features/          2. model input table and feature sets (B1 to B6, B5 and B6 with load and day-ahead prices, #37)
+├── features/          2. model input table and feature sets (B1 to B6; B5 adds the day-ahead prices, B6 the load, #37)
 ├── models/            3. one folder per model
 │   ├── shared/           code all models use: base.py, linear.py, reference.py
 │   ├── _template/        copy to start a new model (docs/models/README.md)

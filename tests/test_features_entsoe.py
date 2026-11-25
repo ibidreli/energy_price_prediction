@@ -67,7 +67,7 @@ def test_load_change_is_the_centred_difference_over_the_hour(tmp_path):
     assert at(frame, 5, 30)["load_forecast_change_mw"] == 1000.0
     assert at(frame, 0)["load_forecast_change_mw"] == 100.0
     assert at(frame, 23)["load_forecast_change_mw"] == 100.0 * (23 ** 2 - 22 ** 2)
-    columns = design_matrix(frame, "B5")
+    columns = design_matrix(frame, "B6")
     row = frame.index[(frame["timestamp_local"].dt.hour == 5) & (frame["timestamp_local"].dt.minute == 45)][0]
     assert columns.loc[row, "load_forecast_change_gw_x_position"] == pytest.approx(1.0 * 1.5)
 
@@ -125,6 +125,20 @@ def test_history_load_forecast_waits_for_the_rule(tmp_path, monkeypatch):
     assert (table(tmp_path, day)["load_forecast_mw"] == 7000.0).all()
 
 
+def test_b5_is_complete_in_the_history_before_the_decision(tmp_path):
+    # B5 adds only the prices of D-1, which the history may use, so it does not wait for the live check.
+    day, first, last = date(2026, 2, 10), date(2026, 2, 1), date(2026, 2, 28)
+    fetched = local(date(2026, 11, 19), 12, 0)
+    store(tmp_path, "load_day_ahead", "CH", fetched, first, last, value=lambda h: 7000.0, source="backfill")
+    for zone in ZONES:
+        store(tmp_path, "price_day_ahead", zone, fetched, first, last, value=lambda h: 50.0, source="backfill")
+    frame = table(tmp_path, day)
+
+    b4, b5 = design_matrix(frame, "B4"), design_matrix(frame, "B5")
+    assert b5.drop(columns=b4.columns).notna().all().all()
+    assert design_matrix(frame, "B6")["load_forecast_gw"].isna().all()
+
+
 def test_after_the_short_day_02_xx_takes_the_daily_mean(tmp_path):
     first, last = date(2026, 3, 28), date(2026, 3, 30)
     store(tmp_path, "price_day_ahead", "CH", local(date(2026, 11, 19), 12, 0), first, last, value=float,
@@ -155,6 +169,6 @@ def test_residual_load_subtracts_solar_and_wind(tmp_path):
     assert (frame["residual_load_change_mw"] == 0.0).all()
 
 
-def test_b5_and_b6_add_the_blocks_to_b4():
-    assert FEATURE_SETS["B5"] == [*FEATURE_SETS["B4"], "load_forecast"]
-    assert FEATURE_SETS["B6"] == [*FEATURE_SETS["B5"], "day_ahead_prices"]
+def test_b5_adds_the_prices_and_b6_the_load():
+    assert FEATURE_SETS["B5"] == [*FEATURE_SETS["B4"], "day_ahead_prices"]
+    assert FEATURE_SETS["B6"] == [*FEATURE_SETS["B5"], "load_forecast"]

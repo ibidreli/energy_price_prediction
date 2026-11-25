@@ -520,13 +520,14 @@ Was für den Liefertag D bekannt war, wählt `known_at_issue_entsoe(tabelle, lie
 
 | Block | Spalten | Set |
 |---|---|---|
-| `load_forecast` | Day-Ahead-Lastprognose für D in GW; ihre Änderung über die Stunde × Position, als Gegenstück zur Strahlung für den Verbrauchsanteil von H8; Mittel der tatsächlichen Last von D−2 | B5 = B4 + `load_forecast` |
-| `day_ahead_prices` | CH-Preis von D−1 zur gleichen Uhrzeit; CH-Tagesmittel von D−1; Abstand des CH-Tagesmittels zu DE-LU, FR, IT-Nord und AT; alle pro 100 EUR/MWh | B6 = B5 + `day_ahead_prices` |
-| `residual_load` | Last − Solar − Wind und ihre Änderung über die Stunde × Position | noch in keinem Set: Am 24.11. um 13:56 fehlte die Solar- und Windprognose für den Folgetag noch, sie könnte das Kriterium verfehlen |
+| `day_ahead_prices` | CH-Preis von D−1 zur gleichen Uhrzeit; CH-Tagesmittel von D−1; Abstand des CH-Tagesmittels zu DE-LU, FR, IT-Nord und AT; alle pro 100 EUR/MWh | B5 = B4 + `day_ahead_prices` |
+| `load_forecast` | Day-Ahead-Lastprognose für D in GW; ihre Änderung über die Stunde × Position, als Gegenstück zur Strahlung für den Verbrauchsanteil von H8; Mittel der tatsächlichen Last von D−2 | B6 = B5 + `load_forecast` |
+| `residual_load` | Last − Solar − Wind und ihre Änderung über die Stunde × Position | noch in keinem Set: Am 24.11. um 13:56 und um 16:48 fehlte die Solar- und Windprognose für den Folgetag noch, sie könnte das Kriterium verfehlen |
 
 - **Tagesmittel** gibt es nur für vollständige Tage, nie ein Mittel über einen Teil des Tages.
 - **Zeitumstellung:** Eine Uhrzeit, die D−1 nicht hat (02:xx nach dem kurzen Tag), erhält das Tagesmittel von D−1. Bei der doppelten Stunde des langen Tags gilt das Mittel beider Durchgänge, wie bei `direction_at_clock`.
-- **Bis zum Entscheid** fehlen in der Historie die Lastspalten. B5 und B6 haben deshalb vor dem Live-Zeitraum keine vollständigen Tage. Die Modelle bleiben vorerst bei B1 bis B4. Ein Vergleich von B5 und B6 mit B4 gehört in ein eigenes Experiment-Issue, das den Holdout September/Oktober nicht berührt.
+- **Reihenfolge der Sets:** B5 nimmt zuerst die Preise auf, weil sie sicher bekannt sind. Die Auktion für D−1 schliesst an D−2, und die Historie darf die Preise verwenden. Mit dem Backfill ab 01.01.2026 hat B5 deshalb dieselben Tage wie B4. Die Last kommt erst in B6, weil ihre Verfügbarkeit um 11:00 noch offen ist.
+- **Bis zum Entscheid** fehlen in der Historie die Lastspalten. B6 hat deshalb vor dem Live-Zeitraum keine vollständigen Tage. Die Modelle bleiben vorerst bei B1 bis B4. Ein Vergleich von B5 und B6 mit B4 gehört in ein eigenes Experiment-Issue, das den Holdout September/Oktober nicht berührt.
 - **Tests:** `tests/test_entsoe.py` und `tests/test_features_entsoe.py` halten die Grenze fest. Dazu gehören die Abrufzeit 11:00:00 gegenüber 11:00:01, ein Störtest mit den Preisen von D, die Lücke im Live-Zeitraum, getrennte Live-Zeiträume der beiden Quellen und beide Umstellungstage.
 
 ---
