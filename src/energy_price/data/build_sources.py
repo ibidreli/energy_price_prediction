@@ -3,6 +3,7 @@
 Usage:
 ``python -m energy_price.data.build_sources cab --src data/control_area_balance/snapshots --out data/processed/control_area_balance.parquet``
 ``python -m energy_price.data.build_sources weather --src data/weather/ecmwf_ifs --out data/processed/weather_forecasts.parquet``
+``python -m energy_price.data.build_sources entsoe --src data/entsoe --out data/processed/entsoe.parquet``
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from energy_price.data.control_area_balance import latest_snapshot, read_snapshot
+from energy_price.data.entsoe import load_entsoe
 from energy_price.data.reservoir import load_reservoirs
 from energy_price.data.weather import load_weather, missing_values
 
@@ -30,7 +32,7 @@ def write_parquet(frame: pd.DataFrame, out: Path) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("kind", choices=["cab", "weather", "reservoirs"])
+    parser.add_argument("kind", choices=["cab", "weather", "reservoirs", "entsoe"])
     parser.add_argument("--src", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -45,6 +47,12 @@ def main(argv: list[str] | None = None) -> None:
         write_parquet(table, args.out)
         print(f"wrote {args.out}: {table['timestamp_utc'].nunique()} weeks, "
               f"{table['snapshot'].nunique()} snapshots, {len(table)} rows")
+    elif args.kind == "entsoe":
+        # Before the first fetch the table is empty, so `make data` still works without ENTSO-E data.
+        table = load_entsoe(args.src)
+        write_parquet(table, args.out)
+        print(f"wrote {args.out}: {table['snapshot'].nunique()} snapshots, {len(table)} rows"
+              + ("" if len(table) else " (no ENTSO-E snapshots yet, docs/data.md, section 7)"))
     else:
         table = load_weather(args.src)
         write_parquet(table, args.out)

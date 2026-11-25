@@ -48,7 +48,7 @@ src/energy_price/
 ├── availability.py    what is known at the issue time D-1 11:00 (leakage rules)
 ├── data/              1. download and read the raw data, build data/processed/ and the data figures
 │                         (make fetch, make data, make figures)
-├── features/          2. model input table and feature sets (B1 to B4)
+├── features/          2. model input table and feature sets (B1 to B6; B5 adds the day-ahead prices, B6 the load, #37)
 ├── models/            3. one folder per model
 │   ├── shared/           code all models use: base.py, linear.py, reference.py
 │   ├── _template/        copy to start a new model (docs/models/README.md)
@@ -70,6 +70,8 @@ Tests are in `tests/`: `test_<package>_<module>.py` for the shared parts, `test_
 | `data/control_area_balance/snapshots/` | Swissgrid control area balance, every downloaded version plus `manifest.csv` (`make fetch-cab`) |
 | `data/weather/ecmwf_ifs/` | Archived ECMWF weather forecasts for six sites, one JSON per model run (`make fetch-weather`) |
 | `data/reservoirs/snapshots/` | Swiss reservoir filling levels directly from the BFE CSV, versioned JSON snapshots with `manifest.csv` and `fetch_log.csv` (`make fetch-reservoirs`) |
+| `data/entsoe/<source>/snapshots/` | Load and generation forecasts and day-ahead prices (#37) from Energy-Charts (`energy_charts`, no key) and, with a token, the ENTSO-E API (`entsoe_api`): every changed response with `manifest.csv` and `fetch_log.csv`, committed by the scheduled job [`.github/workflows/fetch-entsoe.yml`](.github/workflows/fetch-entsoe.yml) |
+| `data/entsoe/<source>/backfill/` | The same from 2026-01-01, downloaded once (`make fetch-energy-charts-history` or "Run workflow") |
 | `data/meta/` | Weather sites, PV capacity per canton, cantonal holidays (`make sites`, `make holidays`) |
 | `data/external/` | Large third-party downloads (BFE plant register), not in git |
 | `data/processed/` | Generated, not in git. Rebuild with `make data` |

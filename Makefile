@@ -36,10 +36,15 @@ WEATHER_DATA := $(OUT_DIR)/weather_forecasts.parquet
 RESERVOIR_DIR := data/reservoirs/snapshots
 RESERVOIR_YEARS ?=
 RESERVOIR_DATA := $(OUT_DIR)/reservoir_filling.parquet
+# Issue #37 data, one folder per source (energy_charts without key, entsoe_api with token), each with
+# the live snapshots of the scheduled job in snapshots/ and the one-time history in backfill/
+ENTSOE_DIR   := data/entsoe
+ENTSOE_FROM  ?= 2026-01-01
+ENTSOE_DATA  := $(OUT_DIR)/entsoe.parquet
 # Python version the lock file was created with, read from its first line "# python X.Y".
 LOCK_PY   := $(shell sed -n '1s/^\# python //p' $(LOCK) 2>/dev/null)
 
-.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
+.PHONY: help venv check-venv lock data fetch fetch-cab fetch-weather fetch-reservoirs fetch-energy-charts fetch-energy-charts-history fetch-entsoe-api fetch-entsoe-api-history entsoe-availability sites holidays figures figures-reservoirs profile notebook test test-all tracking-check baseline baseline-tune backtest bandit-exploration clean-data FORCE
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -68,7 +73,7 @@ lock: ## Write the package versions installed in .venv to requirements.lock
 	$(PY) -m pip freeze --exclude-editable >> $(LOCK).tmp
 	@mv $(LOCK).tmp $(LOCK)
 
-data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) $(RESERVOIR_DATA) ## Build all processed tables (only if inputs changed)
+data: $(DATASET) $(CAB_DATA) $(WEATHER_DATA) $(RESERVOIR_DATA) $(ENTSOE_DATA) ## Build all processed tables (only if inputs changed)
 
 fetch: fetch-cab fetch-weather fetch-reservoirs ## Download new Swissgrid, weather and reservoir data (network)
 
@@ -80,6 +85,23 @@ fetch-cab: $(ENV_READY) ## Store a new Swissgrid control area balance snapshot i
 
 fetch-weather: $(ENV_READY) ## Download weather forecast runs that are not stored yet
 	$(PY) -m energy_price.data.fetch_weather --sites $(SITES) --out $(WEATHER_DIR) --start $(WEATHER_FROM)
+
+# The live series is written by the scheduled GitHub Actions job (.github/workflows/fetch-entsoe.yml).
+# A local live fetch is for testing: committing its log would conflict with the job's commits.
+fetch-energy-charts: $(ENV_READY) ## Fetch load, generation forecasts and day-ahead prices once from Energy-Charts (no key)
+	$(PY) -m energy_price.data.fetch_energy_charts --out $(ENTSOE_DIR)/energy_charts/snapshots
+
+fetch-energy-charts-history: $(ENV_READY) ## Download the Energy-Charts history from ENTSOE_FROM (default 2026-01-01)
+	$(PY) -m energy_price.data.fetch_energy_charts --out $(ENTSOE_DIR)/energy_charts/backfill --history-from $(ENTSOE_FROM)
+
+fetch-entsoe-api: $(ENV_READY) ## Fetch the same data once from the ENTSO-E API (needs ENTSOE_API_TOKEN)
+	$(PY) -m energy_price.data.fetch_entsoe --out $(ENTSOE_DIR)/entsoe_api/snapshots
+
+fetch-entsoe-api-history: $(ENV_READY) ## Download the ENTSO-E API history from ENTSOE_FROM (needs ENTSOE_API_TOKEN)
+	$(PY) -m energy_price.data.fetch_entsoe --out $(ENTSOE_DIR)/entsoe_api/backfill --history-from $(ENTSOE_FROM)
+
+entsoe-availability: $(ENV_READY) ## Evaluate the fetch logs of both sources against the availability criterion (docs/data.md, section 7)
+	$(PY) -m energy_price.data.entsoe --log $(wildcard $(ENTSOE_DIR)/*/snapshots/fetch_log.csv) --out $(ENTSOE_DIR)/availability.csv
 
 $(REGISTER):
 	mkdir -p $(dir $@)
@@ -97,6 +119,15 @@ holidays: $(ENV_READY) ## Write the legal holidays of all cantons
 CAB_STAMP     := $(OUT_DIR)/.cab_checksums
 WEATHER_STAMP := $(OUT_DIR)/.weather_checksums
 RESERVOIR_STAMP := $(OUT_DIR)/.reservoir_checksums
+ENTSOE_STAMP  := $(OUT_DIR)/.entsoe_checksums
+
+$(ENTSOE_STAMP): FORCE | $(ENV_READY)
+	@mkdir -p $(OUT_DIR)
+	@$(PY) -m energy_price.data.checksums $(ENTSOE_DIR) --pattern '*Z.*' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; rm -f $(ENTSOE_DATA); fi
+
+$(ENTSOE_DATA): $(ENTSOE_STAMP) $(SOURCES) | $(ENV_READY)
+	$(PY) -m energy_price.data.build_sources entsoe --src $(ENTSOE_DIR) --out $@
 
 $(RESERVOIR_STAMP): FORCE | $(ENV_READY)
 	@mkdir -p $(OUT_DIR)

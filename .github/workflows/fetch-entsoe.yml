@@ -1,0 +1,100 @@
+# Scheduled download of the issue #37 data (docs/data.md, section 7): load and generation forecasts,
+# actual load and day-ahead prices.
+#
+# Source 1, always: Energy-Charts, public API, no key. Source 2, only when the repository secret
+# ENTSOE_API_TOKEN exists: the ENTSO-E REST API. Every run stores changed responses as snapshots and
+# appends every request to fetch_log.csv, then commits both to the branch it runs on. A failed request
+# turns the run red, but only after the log was committed, so a failure is visible in the log and in
+# the Actions tab (GitHub also emails the person who last changed the schedule).
+#
+# Scheduled workflows run only from the default branch. GitHub uses UTC; until 28.03.2027 Switzerland
+# is on CET (UTC+1). Odd minutes, because runs at the full hour are often delayed. The availability
+# check counts the logged fetch time, not the planned one: a delayed run after 11:00 proves nothing.
+#
+# Backfill: "Run workflow" with history_from (e.g. 2026-01-01) downloads the history once into
+# data/entsoe/<source>/backfill.
+
+name: ENTSO-E fetch
+
+on:
+  schedule:
+    - cron: "17 7 * * *"   # 08:17 CET
+    - cron: "17 8 * * *"   # 09:17 CET
+    - cron: "17 9 * * *"   # 10:17 CET
+    - cron: "37 9 * * *"   # 10:37 CET, last run before the issue time 11:00
+    - cron: "17 14 * * *"  # 15:17 CET, day-ahead prices of the next day and revisions
+  workflow_dispatch:
+    inputs:
+      history_from:
+        description: "Backfill from this local day (YYYY-MM-DD). Empty: a normal live run."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: entsoe-fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ENTSOE_API_TOKEN: ${{ secrets.ENTSOE_API_TOKEN }}
+      HISTORY_FROM: ${{ github.event.inputs.history_from }}
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Standard library only (tests/test_fetch_*.py), so nothing is installed.
+      - name: Fetch Energy-Charts
+        id: energy_charts
+        continue-on-error: true
+        run: |
+          if [ -n "$HISTORY_FROM" ]; then
+            python -m energy_price.data.fetch_energy_charts --out data/entsoe/energy_charts/backfill --history-from "$HISTORY_FROM"
+          else
+            python -m energy_price.data.fetch_energy_charts --out data/entsoe/energy_charts/snapshots
+          fi
+
+      - name: Fetch ENTSO-E API (only with the secret ENTSOE_API_TOKEN)
+        id: entsoe_api
+        if: env.ENTSOE_API_TOKEN != ''
+        continue-on-error: true
+        run: |
+          if [ -n "$HISTORY_FROM" ]; then
+            python -m energy_price.data.fetch_entsoe --out data/entsoe/entsoe_api/backfill --history-from "$HISTORY_FROM"
+          else
+            python -m energy_price.data.fetch_entsoe --out data/entsoe/entsoe_api/snapshots
+          fi
+
+      - name: Commit snapshots and log
+        env:
+          OUTCOME: ${{ steps.energy_charts.outcome }}/${{ steps.entsoe_api.outcome || 'skipped' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/entsoe
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git commit -m "data: issue 37 fetch $(date -u +%Y-%m-%dT%H:%MZ), $OUTCOME (#37)"
+          for attempt in 1 2 3; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep 15
+          done
+          echo "::error::could not push the snapshots"
+          exit 1
+
+      - name: Fail when a request failed
+        if: steps.energy_charts.outcome == 'failure' || steps.entsoe_api.outcome == 'failure'
+        run: |
+          echo "::error::at least one request failed, see the status column of data/entsoe/*/*/fetch_log.csv"
+          exit 1
